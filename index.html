@@ -958,6 +958,7 @@
                         <button class="btn btn-success btn-sm" onclick="openTreasuryInModal()"><i class="fas fa-arrow-down"></i> سند قبض</button>
                         <button class="btn btn-danger btn-sm" onclick="openTreasuryOutModal()"><i class="fas fa-arrow-up"></i> سند صرف</button>
                         <button class="btn btn-warning btn-sm" onclick="openTreasuryOpeningModal()"><i class="fas fa-cog"></i> رصيد افتتاحي</button>
+                        <button class="btn btn-secondary btn-sm" onclick="undoLastTreasuryEntry()"><i class="fas fa-undo"></i> تراجع عن آخر حركة</button>
                     </div>
                 </div>
                 <div class="search-box"><i class="fas fa-search"></i><input type="text" id="treasurySearch" placeholder="بحث في حركات الخزنة..." oninput="filterTreasury()"></div>
@@ -1344,6 +1345,9 @@
 
         <!-- Reports Section -->
         <section id="reports-section" class="section">
+            <div style="display:flex;justify-content:flex-end;margin-bottom:15px;">
+                <button class="btn btn-success" onclick="exportAllReportsToExcel()"><i class="fas fa-file-excel"></i> تصدير كل التقارير في ملف إكسيل واحد</button>
+            </div>
             <div class="stats-grid">
                 <div class="stat-card sales"><div class="stat-icon"><i class="fas fa-coins"></i></div><div class="stat-value" id="reportTotalSales">0 ر.س</div><div class="stat-label">إجمالي قيمة المبيعات</div></div>
                 <div class="stat-card purchases"><div class="stat-icon"><i class="fas fa-cart-plus"></i></div><div class="stat-value" id="reportTotalPurchases">0 ر.س</div><div class="stat-label">إجمالي قيمة المشتريات</div></div>
@@ -1351,15 +1355,38 @@
                 <div class="stat-card invoices"><div class="stat-icon"><i class="fas fa-shopping-cart"></i></div><div class="stat-value" id="reportTotalQty">0</div><div class="stat-label">إجمالي الكمية المباعة</div></div>
             </div>
             <div class="card">
-                <div class="card-header"><div class="card-title"><i class="fas fa-chart-pie"></i> تجميع المبيعات حسب الصنف</div></div>
+                <div class="card-header"><div class="card-title"><i class="fas fa-chart-pie"></i> تجميع المبيعات حسب الصنف</div>
+                    <button class="btn btn-primary btn-sm" onclick="exportTableToExcel('salesSummaryTable', 'مبيعات_حسب_الصنف')"><i class="fas fa-file-excel"></i> تصدير</button>
+                </div>
                 <div class="table-container"><table><thead><tr><th>اسم الصنف</th><th>الوحدة</th><th>سعر البيع</th><th>إجمالي الكمية المباعة</th><th>إجمالي قيمة المبيعات</th></tr></thead><tbody id="salesSummaryTable"></tbody></table></div>
             </div>
             <div class="card">
-                <div class="card-header"><div class="card-title"><i class="fas fa-user-chart"></i> تجميع المبيعات حسب المندوب</div></div>
+                <div class="card-header"><div class="card-title"><i class="fas fa-truck-loading"></i> تقرير نهاية اليوم — كميات الأصناف المرسلة اليوم</div>
+                    <div style="display:flex;gap:10px;">
+                        <button class="btn btn-primary btn-sm" onclick="exportTableToExcel('dailyShipmentTable', 'بيان_آخر_اليوم')"><i class="fas fa-file-excel"></i> تصدير</button>
+                        <button class="btn btn-secondary btn-sm" onclick="printDailyShipmentReport()"><i class="fas fa-print"></i> طباعة</button>
+                    </div>
+                </div>
+                <div id="dailyShipmentDate" style="padding:0 20px 10px;color:var(--text-light);font-size:14px;"></div>
+                <div class="table-container"><table><thead><tr><th>الصنف</th><th>الوحدة</th><th>إجمالي الكمية المرسلة اليوم</th><th>إجمالي القيمة</th></tr></thead><tbody id="dailyShipmentTable"></tbody></table></div>
+                <div style="text-align:left;padding:15px 20px;font-size:18px;font-weight:700;color:var(--accent);">الإجمالي المالي لليوم: <span id="dailyShipmentGrandTotal">0.00</span> ر.س</div>
+            </div>
+            <div class="card">
+                <div class="card-header"><div class="card-title"><i class="fas fa-layer-group"></i> تجميع المبيعات حسب القسم</div>
+                    <button class="btn btn-primary btn-sm" onclick="exportTableToExcel('categorySummaryTable', 'مبيعات_حسب_القسم')"><i class="fas fa-file-excel"></i> تصدير</button>
+                </div>
+                <div class="table-container"><table><thead><tr><th>القسم</th><th>إجمالي الكمية</th><th>إجمالي قيمة المبيعات</th><th>النسبة من الإجمالي</th></tr></thead><tbody id="categorySummaryTable"></tbody></table></div>
+            </div>
+            <div class="card">
+                <div class="card-header"><div class="card-title"><i class="fas fa-user-chart"></i> تجميع المبيعات حسب المندوب</div>
+                    <button class="btn btn-primary btn-sm" onclick="exportTableToExcel('salesmanSummaryTable', 'مبيعات_حسب_المندوب')"><i class="fas fa-file-excel"></i> تصدير</button>
+                </div>
                 <div class="table-container"><table><thead><tr><th>اسم المندوب</th><th>عدد الفواتير</th><th>إجمالي المبيعات</th></tr></thead><tbody id="salesmanSummaryTable"></tbody></table></div>
             </div>
             <div class="card">
-                <div class="card-header"><div class="card-title"><i class="fas fa-warehouse"></i> تجميع المشتريات حسب الصنف</div></div>
+                <div class="card-header"><div class="card-title"><i class="fas fa-warehouse"></i> تجميع المشتريات حسب الصنف</div>
+                    <button class="btn btn-primary btn-sm" onclick="exportTableToExcel('purchaseSummaryTable', 'مشتريات_حسب_الصنف')"><i class="fas fa-file-excel"></i> تصدير</button>
+                </div>
                 <div class="table-container"><table><thead><tr><th>اسم الصنف</th><th>الوحدة</th><th>إجمالي الكمية المشتراة</th><th>إجمالي قيمة المشتريات</th></tr></thead><tbody id="purchaseSummaryTable"></tbody></table></div>
             </div>
 
@@ -1389,25 +1416,33 @@
 
             <!-- Top Selling Products -->
             <div class="card">
-                <div class="card-header"><div class="card-title"><i class="fas fa-trophy" style="color:var(--secondary);"></i> تقرير أكثر الأصناف مبيعًا</div></div>
+                <div class="card-header"><div class="card-title"><i class="fas fa-trophy" style="color:var(--secondary);"></i> تقرير أكثر الأصناف مبيعًا</div>
+                    <button class="btn btn-primary btn-sm" onclick="exportTableToExcel('topSellingReportTable', 'الأكثر_مبيعًا')"><i class="fas fa-file-excel"></i> تصدير</button>
+                </div>
                 <div class="table-container"><table><thead><tr><th>الترتيب</th><th>اسم الصنف</th><th>الوحدة</th><th>الكمية المباعة</th><th>قيمة المبيعات</th></tr></thead><tbody id="topSellingReportTable"></tbody></table></div>
             </div>
 
             <!-- Least Moving Products -->
             <div class="card">
-                <div class="card-header"><div class="card-title"><i class="fas fa-box" style="color:var(--text-light);"></i> تقرير أقل الأصناف حركة</div></div>
+                <div class="card-header"><div class="card-title"><i class="fas fa-box" style="color:var(--text-light);"></i> تقرير أقل الأصناف حركة</div>
+                    <button class="btn btn-primary btn-sm" onclick="exportTableToExcel('leastMovingReportTable', 'الأقل_حركة')"><i class="fas fa-file-excel"></i> تصدير</button>
+                </div>
                 <div class="table-container"><table><thead><tr><th>اسم الصنف</th><th>الوحدة</th><th>الكمية المباعة</th><th>المخزون الحالي</th></tr></thead><tbody id="leastMovingReportTable"></tbody></table></div>
             </div>
 
             <!-- Expenses Report -->
             <div class="card">
-                <div class="card-header"><div class="card-title"><i class="fas fa-wallet"></i> تقرير المصروفات</div></div>
+                <div class="card-header"><div class="card-title"><i class="fas fa-wallet"></i> تقرير المصروفات</div>
+                    <button class="btn btn-primary btn-sm" onclick="exportTableToExcel('expensesReportTable', 'المصروفات')"><i class="fas fa-file-excel"></i> تصدير</button>
+                </div>
                 <div class="table-container"><table><thead><tr><th>نوع المصروف</th><th>عدد المرات</th><th>إجمالي المبلغ</th><th>النسبة من الإجمالي</th></tr></thead><tbody id="expensesReportTable"></tbody></table></div>
             </div>
 
             <!-- Treasury Movement Report -->
             <div class="card">
-                <div class="card-header"><div class="card-title"><i class="fas fa-coins"></i> تقرير حركة الخزنة</div></div>
+                <div class="card-header"><div class="card-title"><i class="fas fa-coins"></i> تقرير حركة الخزنة</div>
+                    <button class="btn btn-primary btn-sm" onclick="exportTableToExcel('treasuryReportTable', 'حركة_الخزنة')"><i class="fas fa-file-excel"></i> تصدير</button>
+                </div>
                 <div class="stats-grid" style="margin-bottom:15px;">
                     <div class="stat-card sales"><div class="stat-icon"><i class="fas fa-arrow-down"></i></div><div class="stat-value" id="treasReportTotalIn">0 ر.س</div><div class="stat-label">إجمالي الوارد</div></div>
                     <div class="stat-card credit"><div class="stat-icon"><i class="fas fa-arrow-up"></i></div><div class="stat-value" id="treasReportTotalOut">0 ر.س</div><div class="stat-label">إجمالي المنصرف</div></div>
@@ -1418,7 +1453,9 @@
 
             <!-- Debts & Collections Report -->
             <div class="card">
-                <div class="card-header"><div class="card-title"><i class="fas fa-hand-holding-usd"></i> تقرير الديون والتحصيلات</div></div>
+                <div class="card-header"><div class="card-title"><i class="fas fa-hand-holding-usd"></i> تقرير الديون والتحصيلات</div>
+                    <button class="btn btn-primary btn-sm" onclick="exportTableToExcel('debtsReportTable', 'الديون_والتحصيلات')"><i class="fas fa-file-excel"></i> تصدير</button>
+                </div>
                 <div class="stats-grid" style="margin-bottom:15px;">
                     <div class="stat-card credit"><div class="stat-icon"><i class="fas fa-users"></i></div><div class="stat-value" id="debtsReportCustomers">0 ر.س</div><div class="stat-label">إجمالي ديون العملاء</div></div>
                     <div class="stat-card suppliers"><div class="stat-icon"><i class="fas fa-truck"></i></div><div class="stat-value" id="debtsReportSuppliers">0 ر.س</div><div class="stat-label">إجمالي ديون الموردين (علينا)</div></div>
@@ -1607,6 +1644,38 @@
     </div>
 
     <!-- Customer Modal -->
+    <!-- View Invoice Modal (Professional Layout) -->
+    <div class="modal-overlay" id="viewInvoiceModal">
+        <div class="modal" style="max-width:650px;">
+            <div class="modal-header"><h3 class="modal-title">عرض الفاتورة</h3><button class="modal-close" onclick="closeModal('viewInvoiceModal')">&times;</button></div>
+            <div class="modal-body">
+                <div id="viewInvoiceContent" style="background:#fff;padding:5px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('viewInvoiceModal')">إغلاق</button>
+                <button class="btn btn-success" onclick="printCurrentViewedInvoice()"><i class="fas fa-file-pdf"></i> طباعة / تصدير PDF</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Invoice Modal -->
+    <div class="modal-overlay" id="editInvoiceModal">
+        <div class="modal" style="max-width:700px;">
+            <div class="modal-header"><h3 class="modal-title" id="editInvoiceModalTitle">تعديل الفاتورة</h3><button class="modal-close" onclick="closeModal('editInvoiceModal')">&times;</button></div>
+            <div class="modal-body">
+                <div class="inventory-alert no-print" style="margin-bottom:15px;">
+                    <i class="fas fa-info-circle"></i>
+                    <span>عند حفظ التعديل، سيتم تلقائيًا تصحيح المخزون والخزنة ليطابقوا الكميات الجديدة (استرجاع الكميات القديمة ثم خصم الجديدة).</span>
+                </div>
+                <div class="table-container">
+                    <table><thead><tr><th>الصنف</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th><th></th></tr></thead><tbody id="editInvoiceItemsTable"></tbody></table>
+                </div>
+                <div style="text-align:left;margin-top:12px;font-size:18px;font-weight:700;color:var(--accent);">الإجمالي الجديد: <span id="editInvoiceGrandTotal">0.00</span> ر.س</div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('editInvoiceModal')">إلغاء</button><button class="btn btn-success" onclick="saveInvoiceEdit()">حفظ التعديلات</button></div>
+        </div>
+    </div>
+
     <div class="modal-overlay" id="customerModal">
         <div class="modal">
             <div class="modal-header"><h3 class="modal-title">إضافة / تعديل عميل</h3><button class="modal-close" onclick="closeModal('customerModal')">&times;</button></div>
@@ -2497,6 +2566,7 @@
             try { renderInvoices(); } catch(e) { console.error('renderInvoices error:', e); }
             try { renderRecentInvoices(); } catch(e) { console.error('renderRecentInvoices error:', e); }
             try { renderSalesSummary(); } catch(e) { console.error('renderSalesSummary error:', e); }
+            try { renderDailyShipmentReport(); } catch(e) { console.error('renderDailyShipmentReport error:', e); }
             try { updateDashboardStats(); } catch(e) { console.error('updateDashboardStats error:', e); }
             try { updateInvoiceDropdowns(); } catch(e) { console.error('updateInvoiceDropdowns error:', e); }
             try { renderTopProducts(); } catch(e) { console.error('renderTopProducts error:', e); }
@@ -2606,7 +2676,7 @@
                 'users': 'المستخدمون والصلاحيات', 'audit-log': 'سجل العمليات'
             };
             document.getElementById('pageTitle').textContent = titles[sectionName] || sectionName;
-            if (sectionName === 'reports') { renderSalesSummary(); renderAdvancedReports(); }
+            if (sectionName === 'reports') { renderSalesSummary(); renderAdvancedReports(); renderDailyShipmentReport(); }
             if (sectionName === 'dashboard') { updateDashboardStats(); renderTopProducts(); renderPaymentSummary(); updateSalesChart(); renderLowStock(); applyDashboardRoleFilters(); }
             if (sectionName === 'inventory') { renderInventory(); renderMovements(); }
             if (sectionName === 'profit') { renderProfitData(); }
@@ -3512,6 +3582,23 @@
             renderTreasury(); updateDashboardStats(); showToast('تم حذف الحركة');
         }
 
+        function undoLastTreasuryEntry() {
+            if (treasury.length === 0) { showToast('لا توجد حركات لإلغائها', 'error'); return; }
+            const last = treasury.slice().sort((a, b) => b.id - a.id)[0];
+            const partyName = last.partyType === 'customer' ? (customers.find(c => c.code === last.party)?.name || last.party) :
+                               last.partyType === 'supplier' ? (suppliers.find(s => s.code === last.party)?.name || last.party) : last.party;
+            if (!confirm(`تراجع عن آخر حركة؟\nالنوع: ${last.type === 'in' ? 'قبض' : 'صرف'}\nالمبلغ: ${last.amount.toFixed(2)} ر.س\nالجهة: ${partyName}`)) return;
+            treasury = treasury.filter(t => t.id !== last.id);
+            let balance = 0;
+            treasury = treasury.reverse().map(t => {
+                balance = t.type === 'in' ? balance + t.amount : balance - t.amount;
+                return { ...t, balanceAfter: balance };
+            }).reverse();
+            saveTreasury();
+            logAction('تراجع عن حركة خزنة', `تم التراجع عن حركة ${last.type === 'in' ? 'قبض' : 'صرف'} بمبلغ ${last.amount.toFixed(2)} ر.س (${partyName})`);
+            renderTreasury(); updateDashboardStats(); showToast('تم التراجع عن آخر حركة');
+        }
+
         // ==================== SALES INVOICE ====================
         function initInvoice() {
             document.getElementById('invoiceDate').textContent = new Date().toLocaleDateString('ar-SA');
@@ -3889,6 +3976,7 @@
                 <td>${typeBadge}</td><td>${date}</td><td><strong>${party}</strong></td>
                 <td>${salesman}</td><td>${inv.items.length}</td><td><strong style="color:${isSale ? 'var(--accent)' : 'var(--teal)'};">${inv.grandTotal.toFixed(2)} ر.س</strong></td>
                 <td><button class="btn btn-primary btn-icon btn-sm" onclick='viewInvoice(${inv.id}, "${inv.type}")'><i class="fas fa-eye"></i></button>
+                <button class="btn btn-warning btn-icon btn-sm" onclick='openEditInvoiceModal(${inv.id}, "${inv.type}")'><i class="fas fa-edit"></i></button>
                 <button class="btn btn-danger btn-icon btn-sm" onclick="deleteAnyInvoice(${inv.id}, '${inv.type}')"><i class="fas fa-trash"></i></button></td></tr>`;
             }).join('');
         }
@@ -3960,19 +4048,184 @@
             showToast('تم حذف الفاتورة');
         }
 
+        // ==================== EDIT INVOICE (بدون بوظان المخزون) ====================
+        let editingInvoiceId = null, editingInvoiceType = null, editInvoiceItems = [];
+
+        function openEditInvoiceModal(id, type) {
+            const invoice = type === 'sale' ? invoices.find(i => i.id === id) : purchaseInvoices.find(i => i.id === id);
+            if (!invoice) return;
+            editingInvoiceId = id;
+            editingInvoiceType = type;
+            editInvoiceItems = JSON.parse(JSON.stringify(invoice.items));
+            document.getElementById('editInvoiceModalTitle').textContent = `تعديل فاتورة ${type === 'sale' ? 'بيع' : 'شراء'} #${invoice.number}`;
+            renderEditInvoiceItems();
+            openModal('editInvoiceModal');
+        }
+
+        function renderEditInvoiceItems() {
+            const tbody = document.getElementById('editInvoiceItemsTable');
+            let grandTotal = 0;
+            tbody.innerHTML = editInvoiceItems.map((item, idx) => {
+                const total = item.qty * item.price;
+                grandTotal += total;
+                return `<tr><td><strong>${item.productName}</strong></td>
+                <td><input type="number" class="form-control" style="width:90px;" value="${item.qty}" min="0" onchange="updateEditInvoiceItemQty(${idx}, this.value)"></td>
+                <td>${item.price.toFixed(2)} ر.س</td>
+                <td>${total.toFixed(2)} ر.س</td>
+                <td><button class="btn btn-danger btn-icon btn-sm" onclick="removeEditInvoiceItem(${idx})"><i class="fas fa-trash"></i></button></td></tr>`;
+            }).join('') || `<tr><td colspan="5" class="empty-state"><h3>لا توجد أصناف</h3></td></tr>`;
+            document.getElementById('editInvoiceGrandTotal').textContent = grandTotal.toFixed(2);
+        }
+
+        function updateEditInvoiceItemQty(idx, val) {
+            const qty = parseFloat(val) || 0;
+            editInvoiceItems[idx].qty = qty;
+            editInvoiceItems[idx].total = qty * editInvoiceItems[idx].price;
+            if (editInvoiceItems[idx].cost != null) editInvoiceItems[idx].profit = (editInvoiceItems[idx].price - editInvoiceItems[idx].cost) * qty;
+            renderEditInvoiceItems();
+        }
+
+        function removeEditInvoiceItem(idx) {
+            editInvoiceItems.splice(idx, 1);
+            renderEditInvoiceItems();
+        }
+
+        function saveInvoiceEdit() {
+            editInvoiceItems = editInvoiceItems.filter(i => i.qty > 0);
+            if (editInvoiceItems.length === 0) { showToast('لا يمكن حفظ فاتورة بدون أصناف', 'error'); return; }
+            if (!confirm('تأكيد حفظ التعديلات؟ سيتم تصحيح المخزون والخزنة تلقائيًا.')) return;
+
+            if (editingInvoiceType === 'sale') {
+                const inv = invoices.find(i => i.id === editingInvoiceId);
+                if (!inv) return;
+                // استرجاع الكميات القديمة للمخزون أولاً
+                inv.items.forEach(item => {
+                    if (inventory[item.productCode]) {
+                        inventory[item.productCode].qty += item.qty;
+                        addStockMovement(item.productCode, item.productName, 'in', item.qty, inventory[item.productCode].qty, 'تعديل فاتورة', 'استرجاع مخزون قبل تعديل فاتورة بيع #' + inv.number);
+                    }
+                });
+                if (inv.paymentMethod === 'نقدي' || inv.paymentMethod === 'بطاقة' || inv.paymentMethod === 'تحويل بنكي') {
+                    addTreasuryEntry('out', inv.grandTotal, inv.customerCode || 'عميل', 'customer', 'عكس المبلغ القديم قبل تعديل فاتورة بيع #' + inv.number, 'تعديل', false);
+                }
+                // خصم الكميات الجديدة
+                editInvoiceItems.forEach(item => {
+                    if (inventory[item.productCode]) {
+                        inventory[item.productCode].qty -= item.qty;
+                        addStockMovement(item.productCode, item.productName, 'out', -item.qty, inventory[item.productCode].qty, 'تعديل فاتورة', 'خصم مخزون بعد تعديل فاتورة بيع #' + inv.number);
+                    }
+                });
+                const newGrandTotal = editInvoiceItems.reduce((s, i) => s + i.total, 0);
+                if (inv.paymentMethod === 'نقدي' || inv.paymentMethod === 'بطاقة' || inv.paymentMethod === 'تحويل بنكي') {
+                    addTreasuryEntry('in', newGrandTotal, inv.customerCode || 'عميل', 'customer', 'المبلغ الجديد بعد تعديل فاتورة بيع #' + inv.number, 'تعديل', false);
+                }
+                inv.items = editInvoiceItems;
+                inv.grandTotal = newGrandTotal;
+                inv.totalCost = editInvoiceItems.reduce((s, i) => s + ((i.cost || 0) * i.qty), 0);
+                inv.totalProfit = editInvoiceItems.reduce((s, i) => s + (i.profit || 0), 0);
+                localStorage.setItem('invoices', JSON.stringify(invoices));
+                saveInventory();
+                logAction('تعديل فاتورة بيع', `تم تعديل الفاتورة #${inv.number} وتصحيح المخزون تلقائيًا`);
+            } else {
+                const inv = purchaseInvoices.find(i => i.id === editingInvoiceId);
+                if (!inv) return;
+                inv.items.forEach(item => {
+                    if (inventory[item.productCode]) {
+                        inventory[item.productCode].qty -= item.qty;
+                        addStockMovement(item.productCode, item.productName, 'out', -item.qty, inventory[item.productCode].qty, 'تعديل فاتورة', 'عكس مخزون قبل تعديل فاتورة شراء #' + inv.number);
+                    }
+                });
+                if (inv.paymentMethod === 'نقدي' || inv.paymentMethod === 'تحويل بنكي') {
+                    addTreasuryEntry('in', inv.grandTotal, inv.supplierCode || 'مورد', 'supplier', 'عكس المبلغ القديم قبل تعديل فاتورة شراء #' + inv.number, 'تعديل', false);
+                }
+                editInvoiceItems.forEach(item => {
+                    if (inventory[item.productCode]) {
+                        inventory[item.productCode].qty += item.qty;
+                        addStockMovement(item.productCode, item.productName, 'in', item.qty, inventory[item.productCode].qty, 'تعديل فاتورة', 'إضافة مخزون بعد تعديل فاتورة شراء #' + inv.number);
+                    }
+                });
+                const newGrandTotal = editInvoiceItems.reduce((s, i) => s + i.total, 0);
+                if (inv.paymentMethod === 'نقدي' || inv.paymentMethod === 'تحويل بنكي') {
+                    addTreasuryEntry('out', newGrandTotal, inv.supplierCode || 'مورد', 'supplier', 'المبلغ الجديد بعد تعديل فاتورة شراء #' + inv.number, 'تعديل', false);
+                }
+                inv.items = editInvoiceItems;
+                inv.grandTotal = newGrandTotal;
+                localStorage.setItem('purchaseInvoices', JSON.stringify(purchaseInvoices));
+                saveInventory();
+                logAction('تعديل فاتورة شراء', `تم تعديل الفاتورة #${inv.number} وتصحيح المخزون تلقائيًا`);
+            }
+
+            closeModal('editInvoiceModal');
+            renderInvoices(); renderRecentInvoices(); updateDashboardStats(); renderTopProducts(); renderPaymentSummary(); updateSalesChart(); renderInventory(); renderMovements(); renderLowStock(); renderTreasury();
+            showToast('تم حفظ التعديلات وتصحيح المخزون بنجاح');
+        }
+
+        let currentlyViewedInvoice = null;
+
+        function buildInvoiceHtml(invoice, type) {
+            const typeName = type === 'sale' ? 'فاتورة بيع' : 'فاتورة شراء';
+            const partyLabel = type === 'sale' ? 'العميل' : 'المورد';
+            const partyName = type === 'sale' ? (invoice.customerName || '-') : (invoice.supplier || '-');
+            const dateStr = new Date(invoice.date).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+            const itemsRows = invoice.items.map((item, idx) => `
+                <tr>
+                    <td style="text-align:center;">${idx + 1}</td>
+                    <td>${item.productName}</td>
+                    <td style="text-align:center;">${item.unit}</td>
+                    <td style="text-align:center;">${item.qty}</td>
+                    <td style="text-align:center;">${(item.price || item.cost || 0).toFixed(2)}</td>
+                    <td style="text-align:center;font-weight:700;">${item.total.toFixed(2)}</td>
+                </tr>`).join('');
+            return `
+            <div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;border:1px solid #ddd;border-radius:10px;overflow:hidden;">
+                <div style="background:linear-gradient(135deg,#8b1e1e,#5e1414);color:#fff;padding:20px;text-align:center;">
+                    <h2 style="margin:0;font-size:26px;">المعلم</h2>
+                    <div style="font-size:13px;opacity:0.9;">لتجارة وتوزيع المواد الغذائية</div>
+                </div>
+                <div style="padding:20px;">
+                    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;margin-bottom:15px;border-bottom:2px dashed #ddd;padding-bottom:15px;">
+                        <div><strong>${typeName}</strong><br><span style="color:#8b1e1e;font-weight:700;font-size:18px;">#${invoice.number}</span></div>
+                        <div style="text-align:left;"><strong>التاريخ:</strong> ${dateStr}</div>
+                    </div>
+                    <div style="margin-bottom:15px;"><strong>${partyLabel}:</strong> ${partyName}</div>
+                    <table style="width:100%;border-collapse:collapse;font-size:14px;">
+                        <thead><tr style="background:#f5f0e8;">
+                            <th style="padding:8px;border:1px solid #ddd;">م</th>
+                            <th style="padding:8px;border:1px solid #ddd;">الصنف</th>
+                            <th style="padding:8px;border:1px solid #ddd;">الوحدة</th>
+                            <th style="padding:8px;border:1px solid #ddd;">الكمية</th>
+                            <th style="padding:8px;border:1px solid #ddd;">السعر</th>
+                            <th style="padding:8px;border:1px solid #ddd;">الإجمالي</th>
+                        </tr></thead>
+                        <tbody>${itemsRows}</tbody>
+                    </table>
+                    <div style="text-align:left;margin-top:20px;padding-top:15px;border-top:2px dashed #ddd;font-size:20px;font-weight:800;color:#8b1e1e;">
+                        الإجمالي الكلي: ${invoice.grandTotal.toFixed(2)} ر.س
+                    </div>
+                    ${invoice.notes ? `<div style="margin-top:10px;font-size:13px;color:#888;">ملاحظات: ${invoice.notes}</div>` : ''}
+                </div>
+                <div style="background:#f9f9f9;text-align:center;padding:10px;font-size:12px;color:#999;">شكرًا لتعاملكم مع المعلم</div>
+            </div>`;
+        }
+
         function viewInvoice(id, type) {
             let invoice;
             if (type === 'sale') invoice = invoices.find(i => i.id === id);
             else invoice = purchaseInvoices.find(i => i.id === id);
             if (!invoice) return;
-            const typeName = type === 'sale' ? 'فاتورة بيع' : 'فاتورة شراء';
-            const party = type === 'sale' ? ('العميل: ' + invoice.customerName) : ('المورد: ' + invoice.supplier);
-            alert(`${typeName} #${invoice.number}
-${party}
-الإجمالي: ${invoice.grandTotal.toFixed(2)} ر.س
+            currentlyViewedInvoice = { invoice, type };
+            document.getElementById('viewInvoiceContent').innerHTML = buildInvoiceHtml(invoice, type);
+            openModal('viewInvoiceModal');
+        }
 
-الأصناف:
-${invoice.items.map(item => `- ${item.productName}: ${item.qty} ${item.unit} × ${item.price || item.cost} = ${item.total.toFixed(2)}`).join('\n')}`);
+        function printCurrentViewedInvoice() {
+            if (!currentlyViewedInvoice) return;
+            const html = buildInvoiceHtml(currentlyViewedInvoice.invoice, currentlyViewedInvoice.type);
+            const win = window.open('', '_blank');
+            win.document.write(`<html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>فاتورة #${currentlyViewedInvoice.invoice.number}</title>
+                <style>body{margin:0;padding:20px;background:#fff;}</style></head>
+                <body>${html}<script>window.print();</script></body></html>`);
+            win.document.close();
         }
 
         // ==================== SALES RETURNS ====================
@@ -4781,6 +5034,44 @@ ${invoice.items.map(item => `- ${item.productName}: ${item.qty} ${item.unit} × 
         }
 
         // ==================== REPORTS ====================
+        function renderDailyShipmentReport() {
+            const todayStr = new Date().toDateString();
+            document.getElementById('dailyShipmentDate').textContent = 'بيانات يوم: ' + new Date().toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            const summary = {};
+            invoices.filter(inv => new Date(inv.date).toDateString() === todayStr).forEach(inv => {
+                inv.items.forEach(item => {
+                    if (!summary[item.productCode]) summary[item.productCode] = { name: item.productName, unit: item.unit, qty: 0, total: 0 };
+                    summary[item.productCode].qty += item.qty;
+                    summary[item.productCode].total += item.total;
+                });
+            });
+            const tbody = document.getElementById('dailyShipmentTable');
+            const values = Object.values(summary).sort((a, b) => b.total - a.total);
+            let grandTotal = 0;
+            if (values.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="empty-state"><i class="fas fa-truck-loading"></i><h3>لا توجد شحنات مسجلة اليوم</h3></td></tr>`;
+            } else {
+                tbody.innerHTML = values.map(s => {
+                    grandTotal += s.total;
+                    return `<tr><td><strong>${s.name}</strong></td><td>${s.unit}</td><td><strong style="color:var(--primary);">${s.qty}</strong></td><td><strong style="color:var(--accent);">${s.total.toFixed(2)} ر.س</strong></td></tr>`;
+                }).join('');
+            }
+            document.getElementById('dailyShipmentGrandTotal').textContent = grandTotal.toFixed(2);
+        }
+
+        function printDailyShipmentReport() {
+            const tableHtml = document.getElementById('dailyShipmentTable').outerHTML;
+            const dateLabel = document.getElementById('dailyShipmentDate').textContent;
+            const grandTotal = document.getElementById('dailyShipmentGrandTotal').textContent;
+            const win = window.open('', '_blank');
+            win.document.write(`<html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>بيان آخر اليوم</title>
+                <style>body{font-family:Tajawal,Arial,sans-serif;padding:20px;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #ccc;padding:8px;text-align:right;} th{background:#f0f0f0;} h2{text-align:center;}</style></head>
+                <body><h2>بيان نهاية اليوم - كميات الأصناف المرسلة</h2><p>${dateLabel}</p><table>${tableHtml}</table>
+                <h3 style="text-align:left;">الإجمالي المالي: ${grandTotal} ر.س</h3>
+                <script>window.print();</script></body></html>`);
+            win.document.close();
+        }
+
         function renderSalesSummary() {
             const summary = {}; let totalSales = 0; let totalQty = 0;
             invoices.forEach(inv => {
@@ -4844,6 +5135,32 @@ ${invoice.items.map(item => `- ${item.productName}: ${item.qty} ${item.unit} × 
             } else {
                 pTbody.innerHTML = pValues.map(s => `<tr><td><strong>${s.name}</strong></td><td>${s.unit}</td><td><strong style="color:var(--teal);">${s.qty}</strong></td><td><strong style="color:var(--teal);">${s.total.toFixed(2)} ر.س</strong></td></tr>`).join('');
             }
+
+            // تقرير المبيعات حسب القسم
+            const categorySummary = {};
+            invoices.forEach(inv => {
+                inv.items.forEach(item => {
+                    const prod = products.find(p => p.code === item.productCode);
+                    const cat = (prod && prod.category) ? prod.category : 'بدون قسم';
+                    if (!categorySummary[cat]) categorySummary[cat] = { qty: 0, total: 0, invoiceItemCount: 0 };
+                    categorySummary[cat].qty += item.qty;
+                    categorySummary[cat].total += item.total;
+                    categorySummary[cat].invoiceItemCount++;
+                });
+            });
+            const catTbody = document.getElementById('categorySummaryTable');
+            if (catTbody) {
+                const catValues = Object.entries(categorySummary).sort((a, b) => b[1].total - a[1].total);
+                if (catValues.length === 0) {
+                    catTbody.innerHTML = `<tr><td colspan="4" class="empty-state"><i class="fas fa-layer-group"></i><h3>لا توجد بيانات</h3></td></tr>`;
+                } else {
+                    const grandTotal = catValues.reduce((s, [, v]) => s + v.total, 0);
+                    catTbody.innerHTML = catValues.map(([cat, v]) => {
+                        const pct = grandTotal > 0 ? ((v.total / grandTotal) * 100).toFixed(1) : 0;
+                        return `<tr><td><strong>${cat}</strong></td><td>${v.qty}</td><td><strong style="color:var(--accent);">${v.total.toFixed(2)} ر.س</strong></td><td>${pct}%</td></tr>`;
+                    }).join('');
+                }
+            }
         }
 
         // ==================== ADVANCED REPORTS ====================
@@ -4858,6 +5175,40 @@ ${invoice.items.map(item => `- ${item.productName}: ${item.qty} ${item.unit} × 
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'تقرير');
             XLSX.writeFile(wb, `${filename}.xlsx`);
+        }
+
+        function exportAllReportsToExcel() {
+            const reportTables = [
+                { id: 'salesSummaryTable', name: 'مبيعات حسب الصنف' },
+                { id: 'dailyShipmentTable', name: 'بيان آخر اليوم' },
+                { id: 'categorySummaryTable', name: 'مبيعات حسب القسم' },
+                { id: 'salesmanSummaryTable', name: 'مبيعات حسب المندوب' },
+                { id: 'purchaseSummaryTable', name: 'مشتريات حسب الصنف' },
+                { id: 'profitPeriodTable', name: 'الأرباح حسب الفترة' },
+                { id: 'customerSalesReportTable', name: 'مبيعات حسب العميل' },
+                { id: 'topSellingReportTable', name: 'الأكثر مبيعًا' },
+                { id: 'leastMovingReportTable', name: 'الأقل حركة' },
+                { id: 'expensesReportTable', name: 'المصروفات' },
+                { id: 'treasuryReportTable', name: 'حركة الخزنة' },
+                { id: 'debtsReportTable', name: 'الديون والتحصيلات' }
+            ];
+            const wb = XLSX.utils.book_new();
+            let addedAny = false;
+            reportTables.forEach(rep => {
+                const table = document.getElementById(rep.id);
+                if (!table) return;
+                const rows = [];
+                table.querySelectorAll('tr').forEach(row => {
+                    rows.push(Array.from(row.children).map(td => td.textContent.trim()));
+                });
+                if (rows.length === 0) return;
+                const ws = XLSX.utils.aoa_to_sheet(rows);
+                XLSX.utils.book_append_sheet(wb, ws, rep.name.substring(0, 31));
+                addedAny = true;
+            });
+            if (!addedAny) { showToast('لا توجد بيانات لتصديرها', 'error'); return; }
+            XLSX.writeFile(wb, `تقارير_المعلم_${new Date().toISOString().slice(0,10)}.xlsx`);
+            showToast('تم تصدير جميع التقارير بنجاح');
         }
 
         function renderAdvancedReports() {
