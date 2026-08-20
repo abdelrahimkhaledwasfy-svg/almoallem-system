@@ -358,6 +358,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 </head>
 <body>
     <!-- Login Overlay -->
@@ -393,6 +394,7 @@
         </div>
         <ul class="nav-menu">
             <li class="nav-item" data-section="dashboard"><a class="nav-link active" onclick="showSection('dashboard')"><i class="fas fa-chart-line"></i><span class="menu-text">الواجهة الرئيسية</span></a></li>
+            <li class="nav-item" data-section="customer-orders"><a class="nav-link" href="javascript:void(0)" onclick="showSection('customer-orders')"><i class="fas fa-shopping-basket"></i><span class="menu-text">طلبات العملاء</span> <span id="pendingOrdersBadge" class="badge badge-danger" style="display:none;margin-right:6px;"></span></a></li>
             <li class="nav-item" data-section="invoice"><a class="nav-link" href="javascript:void(0)" onclick="showSection('invoice')"><i class="fas fa-file-invoice"></i><span class="menu-text">فاتورة بيع جديدة</span></a></li>
             <li class="nav-item" data-section="purchase-invoice"><a class="nav-link" href="javascript:void(0)" onclick="showSection('purchase-invoice')"><i class="fas fa-cart-plus"></i><span class="menu-text">فاتورة شراء جديدة</span></a></li>
             <li class="nav-item" data-section="invoices"><a class="nav-link" href="javascript:void(0)" onclick="showSection('invoices')"><i class="fas fa-list-alt"></i><span class="menu-text">سجل الفواتير</span></a></li>
@@ -1233,6 +1235,16 @@
             </div>
         </section>
 
+        <!-- Customer Orders Section -->
+        <section id="customer-orders-section" class="section">
+            <div class="card">
+                <div class="card-header"><div class="card-title"><i class="fas fa-shopping-basket"></i> طلبات العملاء (من الأبليكشن)</div></div>
+                <div class="table-container">
+                    <table><thead><tr><th>رقم الطلب</th><th>العميل</th><th>الأصناف</th><th>الإجمالي</th><th>وقت الطلب</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="customerOrdersTable"></tbody></table>
+                </div>
+            </div>
+        </section>
+
         <!-- Products Section -->
         <section id="products-section" class="section">
             <div class="card">
@@ -1259,7 +1271,7 @@
                 </div>
                 <div class="search-box"><i class="fas fa-search"></i><input type="text" id="customerSearch" placeholder="بحث في العملاء..." oninput="filterCustomers()"></div>
                 <div class="table-container">
-                    <table><thead><tr><th>الكود</th><th>اسم العميل</th><th>رقم الهاتف</th><th>العنوان</th><th>الرصيد</th><th>الإجراءات</th></tr></thead><tbody id="customersTable"></tbody></table>
+                    <table><thead><tr><th>الكود</th><th>اسم العميل</th><th>رقم الهاتف</th><th>العنوان</th><th>الرصيد</th><th>الحد الائتماني</th><th>الإجراءات</th></tr></thead><tbody id="customersTable"></tbody></table>
                 </div>
             </div>
             <div class="card" id="customerStatementCard">
@@ -1533,6 +1545,15 @@
             <div class="modal-header"><h3 class="modal-title">إضافة / تعديل صنف</h3><button class="modal-close" onclick="closeModal('productModal')">&times;</button></div>
             <div class="modal-body">
                 <div class="form-group"><label class="form-label">كود الصنف</label><input type="text" class="form-control" id="productCode" placeholder="مثال: P001"></div>
+                <div class="form-group">
+                    <label class="form-label">صورة الصنف</label>
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <img id="productImagePreview" src="" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:1px solid var(--border);display:none;">
+                        <input type="file" accept="image/*" class="form-control" id="productImageFile" onchange="previewProductImage()">
+                    </div>
+                    <div id="productImageUploadStatus" style="font-size:12px;color:var(--text-light);margin-top:4px;"></div>
+                    <input type="hidden" id="productImageUrl">
+                </div>
                 <div class="form-group"><label class="form-label">اسم الصنف</label><input type="text" class="form-control" id="productName" placeholder="اسم الصنف"></div>
                 <div class="form-group"><label class="form-label">الوحدة</label><input type="text" class="form-control" id="productUnit" placeholder="مثال: قطعة، كرتونة، كيلو"></div>
                 <div class="form-group"><label class="form-label">القسم</label>
@@ -1557,6 +1578,14 @@
                 <div class="form-group"><label class="form-label">المخزون الافتتاحي</label><input type="number" class="form-control" id="productInitialStock" placeholder="0" value="0"></div>
                 <div class="form-group"><label class="form-label">الحد الأدنى للمخزون</label><input type="number" class="form-control" id="productMinStock" placeholder="0" value="0"></div>
                 <div class="form-group"><label class="form-label">الحد الأقصى للطلب الواحد (أبليكشن العملاء)</label><input type="number" class="form-control" id="productMaxOrderQty" placeholder="اتركه فارغاً لعدم وضع حد" min="0"></div>
+                <div class="form-group">
+                    <label class="form-label"><input type="checkbox" id="productHasSecondaryUnit" onchange="toggleSecondaryUnitFields()"> السماح ببيع الصنف بوحدة تانية كمان (مثال: قطاعي جنب الكرتونة)</label>
+                </div>
+                <div id="secondaryUnitFields" style="display:none;padding:12px;background:#f8f5f0;border-radius:8px;margin-bottom:12px;">
+                    <div class="form-group"><label class="form-label">اسم الوحدة الثانية</label><input type="text" class="form-control" id="productSecondaryUnitName" placeholder="مثال: قطعة"></div>
+                    <div class="form-group"><label class="form-label">كام وحدة ثانية في الوحدة الأساسية</label><input type="number" class="form-control" id="productSecondaryUnitFactor" placeholder="مثال: 24 (يعني الكرتونة فيها 24 قطعة)" min="1"></div>
+                    <div class="form-group"><label class="form-label">سعر بيع الوحدة الثانية</label><input type="number" class="form-control" id="productSecondaryUnitPrice" placeholder="0.00"></div>
+                </div>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('productModal')">إلغاء</button><button class="btn btn-success" onclick="saveProduct()">حفظ</button></div>
         </div>
@@ -1586,6 +1615,7 @@
                 <div class="form-group"><label class="form-label">اسم العميل</label><input type="text" class="form-control" id="customerName" placeholder="اسم العميل الكامل"></div>
                 <div class="form-group"><label class="form-label">رقم الهاتف</label><input type="text" class="form-control" id="customerPhone" placeholder="05xxxxxxxx"></div>
                 <div class="form-group"><label class="form-label">العنوان</label><input type="text" class="form-control" id="customerAddress" placeholder="عنوان العميل"></div>
+                <div class="form-group"><label class="form-label">الحد الائتماني الأقصى (أقصى دين مسموح به)</label><input type="number" class="form-control" id="customerCreditLimit" placeholder="اتركه فارغاً لعدم وضع حد" min="0"></div>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('customerModal')">إلغاء</button><button class="btn btn-success" onclick="saveCustomer()">حفظ</button></div>
         </div>
@@ -1755,9 +1785,9 @@
 
         const ROLES = {
             admin: { label: 'مدير النظام', sections: ['*'] },
-            sales_manager: { label: 'مدير مبيعات', sections: ['dashboard', 'invoice', 'invoices', 'sales-returns', 'collections', 'sales-tracking', 'smart-analytics', 'profit', 'profit-target', 'customers', 'salesmen', 'reports'] },
+            sales_manager: { label: 'مدير مبيعات', sections: ['dashboard', 'customer-orders', 'invoice', 'invoices', 'sales-returns', 'collections', 'sales-tracking', 'smart-analytics', 'profit', 'profit-target', 'customers', 'salesmen', 'reports'] },
             accountant: { label: 'محاسب', sections: ['dashboard', 'invoices', 'purchase-invoice', 'purchase-returns', 'collections', 'treasury', 'expenses', 'profit', 'profit-target', 'products', 'customers', 'suppliers', 'reports'] },
-            warehouse_keeper: { label: 'أمين مخزن', sections: ['dashboard', 'purchase-invoice', 'purchase-returns', 'inventory', 'products', 'suppliers'] },
+            warehouse_keeper: { label: 'أمين مخزن', sections: ['dashboard', 'customer-orders', 'purchase-invoice', 'purchase-returns', 'inventory', 'products', 'suppliers'] },
             salesman: { label: 'مندوب', sections: ['dashboard', 'invoice', 'invoices', 'sales-returns', 'customers'] }
         };
         let editingProduct = null;
@@ -1816,6 +1846,8 @@
                 db = firebase.firestore();
                 hookLocalStorageForCloudSync();
                 startCloudListener();
+                startOrdersListener();
+                scheduleStockLevelsSync();
             } catch (e) {
                 console.error('Firebase init error:', e);
                 updateSyncBadge('error');
@@ -1902,6 +1934,162 @@
                 console.error('Cloud listener error:', err);
                 updateSyncBadge('error');
             });
+        }
+
+        // ==================== CUSTOMER ORDERS (من أبليكشن العملاء) ====================
+        // كل طلب بييجي من الأبليكشن بيتخزن كـ Document منفصل في Collection مستقلة "customerOrders"
+        // (مش جوه الـ storeData الكبيرة) عشان طلبات كتير تقدر توصل في نفس اللحظة من غير ما تدوس على بعض.
+        let customerOrders = [];
+        let ordersListenerStarted = false;
+        let stockLevelsSyncTimer = null;
+
+        // "stockLevels" هي نسخة حية من كميات المخزون، كل صنف Document لوحده، وده اللي الأبليكشن
+        // هيقرا منه المتاح فعليًا وهيستخدمها في معاملة آمنة (transaction) وقت تنفيذ الطلب، عشان
+        // مايحصلش نفس مشكلة "مندوبك سمارت": طلبين بياخدوا آخر كمية في نفس اللحظة.
+        function scheduleStockLevelsSync() {
+            if (!db) return;
+            clearTimeout(stockLevelsSyncTimer);
+            stockLevelsSyncTimer = setTimeout(pushStockLevelsToCloud, 900);
+        }
+
+        function pushStockLevelsToCloud() {
+            if (!db) return;
+            const batch = db.batch();
+            Object.keys(inventory).forEach(code => {
+                const ref = db.collection('stockLevels').doc(code);
+                batch.set(ref, { code, qty: inventory[code].qty || 0, updatedAt: Date.now() });
+            });
+            batch.commit().catch(err => console.error('Stock levels sync failed:', err));
+        }
+
+        function startOrdersListener() {
+            if (!db || ordersListenerStarted) return;
+            ordersListenerStarted = true;
+            db.collection('customerOrders').orderBy('createdAt', 'desc').onSnapshot(function(snap) {
+                customerOrders = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+                renderCustomerOrders();
+                updatePendingOrdersBadge();
+            }, function(err) {
+                console.error('Orders listener error:', err);
+            });
+        }
+
+        function updatePendingOrdersBadge() {
+            const badge = document.getElementById('pendingOrdersBadge');
+            if (!badge) return;
+            const count = customerOrders.filter(o => o.status === 'pending').length;
+            if (count > 0) { badge.textContent = count; badge.style.display = 'inline-block'; }
+            else { badge.style.display = 'none'; }
+        }
+
+        function renderCustomerOrders() {
+            const tbody = document.getElementById('customerOrdersTable');
+            if (!tbody) return;
+            if (customerOrders.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="empty-state"><i class="fas fa-shopping-basket"></i><h3>لا توجد طلبات حالياً</h3></td></tr>`;
+                return;
+            }
+            const statusMap = {
+                pending: { label: 'جديد', cls: 'badge-warning' },
+                fulfilled: { label: 'تم التجهيز', cls: 'badge-success' },
+                rejected: { label: 'مرفوض', cls: 'badge-danger' }
+            };
+            tbody.innerHTML = customerOrders.map(o => {
+                const st = statusMap[o.status] || statusMap.pending;
+                const itemsSummary = (o.items || []).map(i => `${i.productName} × ${i.qty}`).join('، ');
+                const time = o.createdAt ? new Date(o.createdAt).toLocaleString('ar-EG') : '-';
+                const actions = o.status === 'pending'
+                    ? `<button class="btn btn-success btn-sm" onclick="fulfillOrder('${o.id}')"><i class="fas fa-check"></i> تجهيز الطلب</button>
+                       <button class="btn btn-danger btn-sm" onclick="rejectOrder('${o.id}')"><i class="fas fa-times"></i> رفض</button>`
+                    : '-';
+                return `<tr><td><span class="badge badge-primary">${o.id.slice(-6)}</span></td><td>${o.customerName || o.customerCode || '-'}</td>
+                <td style="max-width:280px;">${itemsSummary}</td>
+                <td><strong style="color:var(--accent);">${(o.total || 0).toFixed(2)} ر.س</strong></td>
+                <td>${time}</td><td><span class="badge ${st.cls}">${st.label}</span></td>
+                <td>${actions}</td></tr>`;
+            }).join('');
+        }
+
+        // تنفيذ الطلب: تحويله لفاتورة بيع + خصم المخزون بمعاملة آمنة (transaction) تمنع نقص الكمية عن الصفر
+        function fulfillOrder(orderId) {
+            const order = customerOrders.find(o => o.id === orderId);
+            if (!order) return;
+            const cust = customers.find(c => c.code === order.customerCode);
+            if (cust && cust.creditLimit != null) {
+                const currentBalance = getCustomerBalance(order.customerCode);
+                const orderTotal = order.total || (order.items || []).reduce((s, it) => s + (it.total || it.price * it.qty || 0), 0);
+                const balanceAfter = currentBalance + orderTotal;
+                if (balanceAfter > cust.creditLimit) {
+                    if (!confirm(`تنبيه: هذا الطلب سيتجاوز الحد الائتماني للعميل "${cust.name}"\nالرصيد الحالي: ${currentBalance.toFixed(2)} ر.س\nالحد الائتماني: ${cust.creditLimit.toFixed(2)} ر.س\nالرصيد بعد الطلب: ${balanceAfter.toFixed(2)} ر.س\n\nهل تريد المتابعة رغم ذلك؟`)) {
+                        return;
+                    }
+                }
+            }
+            if (!confirm('تأكيد تجهيز هذا الطلب؟ سيتم خصم الأصناف من المخزون وإنشاء فاتورة بيع.')) return;
+            if (!db) { showToast('لا يوجد اتصال بالسحابة، لا يمكن تنفيذ الطلب الآن', 'error'); return; }
+
+            const refs = (order.items || []).map(item => db.collection('stockLevels').doc(item.productCode));
+            db.runTransaction(function(t) {
+                return Promise.all(refs.map(r => t.get(r))).then(function(snaps) {
+                    for (let i = 0; i < snaps.length; i++) {
+                        const item = order.items[i];
+                        const currentQty = snaps[i].exists ? (snaps[i].data().qty || 0) : 0;
+                        if (currentQty < item.qty) {
+                            throw new Error('الكمية غير متوفرة حاليًا للصنف: ' + item.productName + ' (المتاح: ' + currentQty + ')');
+                        }
+                    }
+                    for (let i = 0; i < snaps.length; i++) {
+                        const item = order.items[i];
+                        const newQty = (snaps[i].data().qty || 0) - item.qty;
+                        t.set(refs[i], { code: item.productCode, qty: newQty, updatedAt: Date.now() });
+                    }
+                });
+            }).then(function() {
+                // نجحت المعاملة على السحابة: دلوقتي نعكس نفس الخصم محليًا وننشئ الفاتورة
+                order.items.forEach(item => {
+                    if (inventory[item.productCode]) {
+                        const unitCost = inventory[item.productCode].cost || (products.find(p => p.code === item.productCode) || {}).cost || 0;
+                        inventory[item.productCode].qty -= item.qty;
+                        item.cost = unitCost;
+                        item.profit = (item.price - unitCost) * item.qty;
+                        addStockMovement(item.productCode, item.productName, 'out', -item.qty, inventory[item.productCode].qty, 'طلب أبليكشن #' + order.id.slice(-6), 'خصم تلقائي من طلب عميل عبر الأبليكشن');
+                    }
+                });
+                localStorage.setItem('inventory', JSON.stringify(inventory));
+
+                const grandTotal = order.items.reduce((sum, it) => sum + (it.total || (it.price * it.qty) || 0), 0);
+                const invoice = {
+                    id: Date.now(), number: getNextDocNumber(invoices.filter(i => i.type === 'sale')).toString().padStart(4, '0'),
+                    type: 'sale', date: new Date().toISOString(),
+                    customerCode: order.customerCode || '', customerName: order.customerName || '',
+                    salesmanCode: '', salesmanName: '',
+                    paymentMethod: 'دفع عند الاستلام',
+                    notes: 'طلب وارد من أبليكشن العملاء #' + order.id.slice(-6),
+                    items: order.items, grandTotal: grandTotal,
+                    totalCost: order.items.reduce((sum, it) => sum + ((it.cost || 0) * it.qty), 0),
+                    totalProfit: order.items.reduce((sum, it) => sum + (it.profit || 0), 0),
+                    sourceOrderId: order.id
+                };
+                invoices.push(invoice);
+                localStorage.setItem('invoices', JSON.stringify(invoices));
+                logAction('تجهيز طلب أبليكشن', `تم تجهيز الطلب #${order.id.slice(-6)} للعميل ${invoice.customerName} وتحويله لفاتورة بيع #${invoice.number}`);
+
+                return db.collection('customerOrders').doc(order.id).update({ status: 'fulfilled', fulfilledAt: Date.now(), fulfilledBy: DEVICE_ID, invoiceNumber: invoice.number });
+            }).then(function() {
+                showToast('تم تجهيز الطلب وخصم المخزون بنجاح');
+                updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderInventory(); renderMovements(); renderLowStock();
+            }).catch(function(err) {
+                console.error('Fulfill order failed:', err);
+                showToast(err.message || 'تعذر تنفيذ الطلب، الكمية غير متوفرة أو حدث خطأ في الاتصال', 'error');
+            });
+        }
+
+        function rejectOrder(orderId) {
+            if (!db) return;
+            if (!confirm('تأكيد رفض هذا الطلب؟')) return;
+            db.collection('customerOrders').doc(orderId).update({ status: 'rejected', rejectedAt: Date.now(), rejectedBy: DEVICE_ID })
+                .then(() => showToast('تم رفض الطلب'))
+                .catch(err => { console.error(err); showToast('تعذر رفض الطلب', 'error'); });
         }
 
         // ==================== INITIALIZATION ====================
@@ -2213,7 +2401,7 @@
             saveInventory();
         }
 
-        function saveInventory() { localStorage.setItem('inventory', JSON.stringify(inventory)); }
+        function saveInventory() { localStorage.setItem('inventory', JSON.stringify(inventory)); scheduleStockLevelsSync(); }
         function saveStockMovements() { localStorage.setItem('stockMovements', JSON.stringify(stockMovements)); }
         function saveExpenses() { localStorage.setItem('expenses', JSON.stringify(expenses)); }
         function saveTreasury() { localStorage.setItem('treasury', JSON.stringify(treasury)); }
@@ -2408,7 +2596,7 @@
                 }
             });
             const titles = {
-                'dashboard': 'المعلم | الواجهة الرئيسية', 'invoice': 'فاتورة بيع جديدة', 'purchase-invoice': 'فاتورة شراء جديدة',
+                'dashboard': 'المعلم | الواجهة الرئيسية', 'customer-orders': 'طلبات العملاء (من الأبليكشن)', 'invoice': 'فاتورة بيع جديدة', 'purchase-invoice': 'فاتورة شراء جديدة',
                 'invoices': 'سجل الفواتير', 'treasury': 'الخزنة اليومية', 'expenses': 'التكاليف والمصروفات',
                 'inventory': 'إدارة المخزون', 'profit': 'الربحية', 'profit-target': 'تحديد الربحية والتارجت', 'products': 'قاعدة الأصناف',
                 'customers': 'قاعدة العملاء', 'suppliers': 'قاعدة الموردين', 'salesmen': 'قاعدة المناديب',
@@ -2469,10 +2657,57 @@
             document.getElementById('productInitialStock').value = product ? (inventory[product.code]?.qty || 0) : 0;
             document.getElementById('productMinStock').value = product ? (product.minStock || 0) : 0;
             document.getElementById('productMaxOrderQty').value = product ? (product.maxOrderQty || '') : '';
+            document.getElementById('productImageUrl').value = product ? (product.imageUrl || '') : '';
+            document.getElementById('productImageFile').value = '';
+            const preview = document.getElementById('productImagePreview');
+            if (product && product.imageUrl) { preview.src = product.imageUrl; preview.style.display = 'inline-block'; }
+            else { preview.style.display = 'none'; preview.src = ''; }
+            document.getElementById('productImageUploadStatus').textContent = '';
+            const hasSecondary = !!(product && product.secondaryUnit);
+            document.getElementById('productHasSecondaryUnit').checked = hasSecondary;
+            document.getElementById('productSecondaryUnitName').value = hasSecondary ? product.secondaryUnit.name : '';
+            document.getElementById('productSecondaryUnitFactor').value = hasSecondary ? product.secondaryUnit.factor : '';
+            document.getElementById('productSecondaryUnitPrice').value = hasSecondary ? product.secondaryUnit.price : '';
+            toggleSecondaryUnitFields();
             openModal('productModal');
         }
 
+        function toggleSecondaryUnitFields() {
+            const checked = document.getElementById('productHasSecondaryUnit').checked;
+            document.getElementById('secondaryUnitFields').style.display = checked ? 'block' : 'none';
+        }
+
+        function previewProductImage() {
+            const file = document.getElementById('productImageFile').files[0];
+            if (!file) return;
+            const preview = document.getElementById('productImagePreview');
+            const reader = new FileReader();
+            reader.onload = e => { preview.src = e.target.result; preview.style.display = 'inline-block'; };
+            reader.readAsDataURL(file);
+        }
+
         function saveProduct() {
+            const code = document.getElementById('productCode').value.trim();
+            const file = document.getElementById('productImageFile').files[0];
+            if (!code) { showToast('الرجاء إدخال كود الصنف أولاً', 'error'); return; }
+            if (file) {
+                if (!db || !firebase.storage) { showToast('لا يوجد اتصال بالسحابة، لا يمكن رفع الصورة الآن', 'error'); return; }
+                document.getElementById('productImageUploadStatus').textContent = 'جاري رفع الصورة...';
+                const ref = firebase.storage().ref('products/' + code + '_' + Date.now() + '.jpg');
+                ref.put(file).then(snap => snap.ref.getDownloadURL()).then(url => {
+                    document.getElementById('productImageUploadStatus').textContent = 'تم رفع الصورة';
+                    completeSaveProduct(url);
+                }).catch(err => {
+                    console.error('Image upload failed:', err);
+                    document.getElementById('productImageUploadStatus').textContent = '';
+                    showToast('تعذر رفع صورة الصنف', 'error');
+                });
+            } else {
+                completeSaveProduct(document.getElementById('productImageUrl').value || null);
+            }
+        }
+
+        function completeSaveProduct(imageUrl) {
             const code = document.getElementById('productCode').value.trim();
             const name = document.getElementById('productName').value.trim();
             const unit = document.getElementById('productUnit').value.trim();
@@ -2483,13 +2718,21 @@
             const minStock = parseFloat(document.getElementById('productMinStock').value) || 0;
             const maxOrderQtyRaw = document.getElementById('productMaxOrderQty').value;
             const maxOrderQty = maxOrderQtyRaw === '' ? null : parseFloat(maxOrderQtyRaw);
+            let secondaryUnit = null;
+            if (document.getElementById('productHasSecondaryUnit').checked) {
+                const secName = document.getElementById('productSecondaryUnitName').value.trim();
+                const secFactor = parseFloat(document.getElementById('productSecondaryUnitFactor').value);
+                const secPrice = parseFloat(document.getElementById('productSecondaryUnitPrice').value);
+                if (!secName || !secFactor || !secPrice) { showToast('الرجاء إكمال بيانات الوحدة الثانية بالكامل', 'error'); return; }
+                secondaryUnit = { name: secName, factor: secFactor, price: secPrice };
+            }
             if (!code || !name || !unit || !price) { showToast('الرجاء ملء جميع الحقول الإلزامية', 'error'); return; }
 
             if (editingProduct) {
                 const idx = products.findIndex(p => p.code === editingProduct.code);
                 if (idx !== -1) {
                     const oldCode = editingProduct.code;
-                    products[idx] = { code, name, unit, category, price, cost, minStock, maxOrderQty };
+                    products[idx] = { code, name, unit, category, price, cost, minStock, maxOrderQty, secondaryUnit, imageUrl };
                     if (oldCode !== code && inventory[oldCode]) {
                         inventory[code] = { ...inventory[oldCode], code };
                         delete inventory[oldCode];
@@ -2503,7 +2746,7 @@
                 }
             } else {
                 if (products.find(p => p.code === code)) { showToast('كود الصنف موجود مسبقاً', 'error'); return; }
-                products.push({ code, name, unit, category, price, cost, minStock, maxOrderQty });
+                products.push({ code, name, unit, category, price, cost, minStock, maxOrderQty, secondaryUnit, imageUrl });
                 inventory[code] = { code, qty: initialStock, cost, minStock };
                 if (initialStock > 0) addStockMovement(code, name, 'initial', initialStock, initialStock, 'إضافة صنف', 'رصيد أولي');
             }
@@ -2535,7 +2778,7 @@
             tbody.innerHTML = products.map(p => {
                 const profit = p.price - (p.cost || 0);
                 const margin = p.cost > 0 ? ((profit / p.price) * 100).toFixed(1) : 0;
-                return `<tr><td><span class="badge badge-primary">${p.code}</span></td><td><strong>${p.name}</strong></td><td>${p.unit}</td><td>${p.category || '-'}</td>
+                return `<tr><td><span class="badge badge-primary">${p.code}</span></td><td>${p.imageUrl ? `<img src="${p.imageUrl}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-left:8px;">` : ''}<strong>${p.name}</strong></td><td>${p.unit}${p.secondaryUnit ? ' / ' + p.secondaryUnit.name : ''}</td><td>${p.category || '-'}</td>
                 <td><strong style="color:var(--accent);">${p.price.toFixed(2)} ر.س</strong></td>
                 <td><span class="cost-highlight">${(p.cost || 0).toFixed(2)} ر.س</span></td>
                 <td><span class="profit-highlight">${profit.toFixed(2)} ر.س</span> <span class="margin-badge ${margin >= 30 ? 'high' : (margin >= 15 ? 'medium' : 'low')}">${margin}%</span></td>
@@ -2708,6 +2951,7 @@
             document.getElementById('customerName').value = customer ? customer.name : '';
             document.getElementById('customerPhone').value = customer ? customer.phone : '';
             document.getElementById('customerAddress').value = customer ? customer.address : '';
+            document.getElementById('customerCreditLimit').value = customer ? (customer.creditLimit ?? '') : '';
             openModal('customerModal');
         }
 
@@ -2716,13 +2960,15 @@
             const name = document.getElementById('customerName').value.trim();
             const phone = document.getElementById('customerPhone').value.trim();
             const address = document.getElementById('customerAddress').value.trim();
+            const creditLimitRaw = document.getElementById('customerCreditLimit').value;
+            const creditLimit = creditLimitRaw === '' ? null : parseFloat(creditLimitRaw);
             if (!code || !name) { showToast('الرجاء ملء الحقول الإلزامية', 'error'); return; }
             if (editingCustomer) {
                 const idx = customers.findIndex(c => c.code === editingCustomer.code);
-                if (idx !== -1) customers[idx] = { code, name, phone, address };
+                if (idx !== -1) customers[idx] = { code, name, phone, address, creditLimit };
             } else {
                 if (customers.find(c => c.code === code)) { showToast('كود العميل موجود مسبقاً', 'error'); return; }
-                customers.push({ code, name, phone, address });
+                customers.push({ code, name, phone, address, creditLimit });
             }
             localStorage.setItem('customers', JSON.stringify(customers));
             logAction(editingCustomer ? 'تعديل عميل' : 'إضافة عميل', `${editingCustomer ? 'تم تعديل' : 'تم إضافة'} العميل "${name}" (${code})`);
@@ -2743,7 +2989,7 @@
         function renderCustomers() {
             const tbody = document.getElementById('customersTable');
             if (customers.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;"><div style="color:var(--text-light);"><i class="fas fa-users" style="font-size:48px;margin-bottom:15px;display:block;opacity:0.4;"></i><h3 style="color:var(--text);margin-bottom:8px;">قاعدة العملاء فارغة</h3><p style="margin-bottom:15px;">لم يتم إضافة أي عملاء بعد</p><button class="btn btn-success btn-sm" onclick="openCustomerModal()"><i class="fas fa-plus"></i> إضافة عميل جديد</button></div></td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;"><div style="color:var(--text-light);"><i class="fas fa-users" style="font-size:48px;margin-bottom:15px;display:block;opacity:0.4;"></i><h3 style="color:var(--text);margin-bottom:8px;">قاعدة العملاء فارغة</h3><p style="margin-bottom:15px;">لم يتم إضافة أي عملاء بعد</p><button class="btn btn-success btn-sm" onclick="openCustomerModal()"><i class="fas fa-plus"></i> إضافة عميل جديد</button></div></td></tr>`;
                 return;
             }
             tbody.innerHTML = customers.map(c => {
@@ -2754,6 +3000,7 @@
                 else balanceText = '0.00 ر.س';
                 return `<tr><td><span class="badge badge-warning">${c.code}</span></td><td><strong>${c.name}</strong></td><td>${c.phone || '-'}</td><td>${c.address || '-'}</td>
                 <td><span class="customer-balance ${balanceClass}">${balanceText}</span></td>
+                <td>${c.creditLimit != null ? c.creditLimit.toFixed(2) + ' ر.س' : '-'}</td>
                 <td><button class="btn btn-primary btn-icon btn-sm" onclick='openCustomerModal(${JSON.stringify(c).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
                 <button class="btn btn-danger btn-icon btn-sm" onclick="deleteCustomer('${c.code}')"><i class="fas fa-trash"></i></button></td></tr>`;
             }).join('');
@@ -3433,6 +3680,20 @@
 
             const paymentMethod = document.getElementById('paymentMethod').value;
             const grandTotal = items.reduce((sum, item) => sum + item.total, 0);
+
+            const isCashSettled = (paymentMethod === 'نقدي' || paymentMethod === 'بطاقة' || paymentMethod === 'تحويل بنكي');
+            if (!isCashSettled) {
+                const cust = customers.find(c => c.code === customerCode);
+                if (cust && cust.creditLimit != null) {
+                    const currentBalance = getCustomerBalance(customerCode);
+                    const balanceAfter = currentBalance + grandTotal;
+                    if (balanceAfter > cust.creditLimit) {
+                        if (!confirm(`تنبيه: هذه الفاتورة ستتجاوز الحد الائتماني للعميل "${cust.name}"\nالرصيد الحالي: ${currentBalance.toFixed(2)} ر.س\nالحد الائتماني: ${cust.creditLimit.toFixed(2)} ر.س\nالرصيد بعد الفاتورة: ${balanceAfter.toFixed(2)} ر.س\n\nهل تريد المتابعة رغم ذلك؟`)) {
+                            return;
+                        }
+                    }
+                }
+            }
 
             // Deduct from inventory and calculate cost
             items.forEach(item => {
