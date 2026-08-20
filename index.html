@@ -184,7 +184,10 @@
             .section { display: none !important; }
             #invoice-section.section.active, #purchase-invoice-section.section.active, #customers-section.section.active { display: block !important; }
             #customers-section.section.active .card:not(#customerStatementCard) { display: none !important; }
-            body { background: white; } .card { box-shadow: none; border: 1px solid #ddd; } }
+            body { background: white; } .card { box-shadow: none; border: 1px solid #ddd; }
+            body.printing-invoice-mode > *:not(#printInvoiceArea) { display: none !important; }
+            body.printing-invoice-mode #printInvoiceArea { display: block !important; position: static; }
+        }
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
         .modal-overlay.active { display: flex; }
         .modal { background: white; border-radius: var(--radius); width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg); animation: modalSlide 0.3s ease; }
@@ -4221,11 +4224,13 @@
         function printCurrentViewedInvoice() {
             if (!currentlyViewedInvoice) return;
             const html = buildInvoiceHtml(currentlyViewedInvoice.invoice, currentlyViewedInvoice.type);
-            const win = window.open('', '_blank');
-            win.document.write(`<html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>فاتورة #${currentlyViewedInvoice.invoice.number}</title>
-                <style>body{margin:0;padding:20px;background:#fff;}</style></head>
-                <body>${html}<script>window.print();</script></body></html>`);
-            win.document.close();
+            const area = document.getElementById('printInvoiceArea');
+            area.innerHTML = html;
+            document.body.classList.add('printing-invoice-mode');
+            setTimeout(function() {
+                window.print();
+                setTimeout(function() { document.body.classList.remove('printing-invoice-mode'); }, 500);
+            }, 100);
         }
 
         // ==================== SALES RETURNS ====================
@@ -5063,13 +5068,18 @@
             const tableHtml = document.getElementById('dailyShipmentTable').outerHTML;
             const dateLabel = document.getElementById('dailyShipmentDate').textContent;
             const grandTotal = document.getElementById('dailyShipmentGrandTotal').textContent;
-            const win = window.open('', '_blank');
-            win.document.write(`<html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>بيان آخر اليوم</title>
-                <style>body{font-family:Tajawal,Arial,sans-serif;padding:20px;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #ccc;padding:8px;text-align:right;} th{background:#f0f0f0;} h2{text-align:center;}</style></head>
-                <body><h2>بيان نهاية اليوم - كميات الأصناف المرسلة</h2><p>${dateLabel}</p><table>${tableHtml}</table>
+            const area = document.getElementById('printInvoiceArea');
+            area.innerHTML = `<div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;">
+                <h2 style="text-align:center;">بيان نهاية اليوم - كميات الأصناف المرسلة</h2>
+                <p>${dateLabel}</p>
+                <table style="width:100%;border-collapse:collapse;">${tableHtml}</table>
                 <h3 style="text-align:left;">الإجمالي المالي: ${grandTotal} ر.س</h3>
-                <script>window.print();</script></body></html>`);
-            win.document.close();
+            </div>`;
+            document.body.classList.add('printing-invoice-mode');
+            setTimeout(function() {
+                window.print();
+                setTimeout(function() { document.body.classList.remove('printing-invoice-mode'); }, 500);
+            }, 100);
         }
 
         function renderSalesSummary() {
@@ -6284,6 +6294,6 @@
                 <button class="btn btn-danger" onclick="confirmDeleteAllCustomers()" style="min-width:120px;"><i class="fas fa-trash-alt"></i> نعم، امسح الكل</button>
             </div>
         </div>
-    </div>
+    </div>    <div id="printInvoiceArea" style="display:none;padding:20px;"></div>
 </body>
 </html>
