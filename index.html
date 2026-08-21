@@ -1259,6 +1259,8 @@
                 <div style="display:flex;gap:10px;padding:0 20px 15px;flex-wrap:wrap;">
                     <button class="btn btn-primary btn-sm" id="appMgmtTabBtn-categories" onclick="switchAppMgmtTab('categories')"><i class="fas fa-th-large"></i> الأقسام</button>
                     <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-brands" onclick="switchAppMgmtTab('brands')"><i class="fas fa-tags"></i> الشركات / الماركات</button>
+                    <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-codes" onclick="switchAppMgmtTab('codes')"><i class="fas fa-key"></i> أكواد التفعيل</button>
+                    <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-loyalty" onclick="switchAppMgmtTab('loyalty')"><i class="fas fa-star"></i> نقاط الولاء</button>
                 </div>
             </div>
 
@@ -1277,7 +1279,36 @@
                     <table><thead><tr><th>الشعار</th><th>اسم الشركة</th><th>القسم المرتبط</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="appBrandsTable"></tbody></table>
                 </div>
             </div>
+
+            <!-- أكواد التفعيل -->
+            <div class="card" id="appMgmtTab-codes" style="display:none;">
+                <div class="card-header">
+                    <div class="card-title"><i class="fas fa-key"></i> أكواد تفعيل العملاء الجدد</div>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn btn-success btn-sm" onclick="generateActivationCode()"><i class="fas fa-plus"></i> توليد كود</button>
+                        <button class="btn btn-secondary btn-sm" onclick="generateActivationCodesBatch()"><i class="fas fa-layer-group"></i> توليد دفعة أكواد</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table><thead><tr><th>الكود</th><th>تاريخ الإنشاء</th><th>الحالة</th><th>استخدمه العميل</th><th>تاريخ الاستخدام</th><th>الإجراءات</th></tr></thead><tbody id="activationCodesTable"></tbody></table>
+                </div>
+            </div>
+
+            <!-- نقاط الولاء -->
+            <div class="card" id="appMgmtTab-loyalty" style="display:none;">
+                <div class="card-header"><div class="card-title"><i class="fas fa-star"></i> إعدادات نقاط الولاء</div></div>
+                <div style="padding:0 20px 20px;max-width:400px;">
+                    <div class="form-group"><label class="form-label">كل كام جنيه = نقطة واحدة</label><input type="number" class="form-control" id="loyaltyPointsPerAmount" min="1"></div>
+                    <div class="form-group"><label class="form-label">قيمة النقطة الواحدة عند الاستبدال (جنيه)</label><input type="number" class="form-control" id="loyaltyPointValue" min="0" step="0.1"></div>
+                    <button class="btn btn-success" onclick="saveLoyaltySettings()"><i class="fas fa-save"></i> حفظ الإعدادات</button>
+                </div>
+                <div class="card-header" style="border-top:1px solid var(--border);"><div class="card-title"><i class="fas fa-users"></i> رصيد نقاط العملاء</div></div>
+                <div class="table-container">
+                    <table><thead><tr><th>كود العميل</th><th>اسم العميل</th><th>رصيد النقاط</th><th>قيمتها كخصم</th><th>تعديل يدوي</th></tr></thead><tbody id="loyaltyCustomersTable"></tbody></table>
+                </div>
+            </div>
         </section>
+
 
         <!-- Products Section -->
         <section id="products-section" class="section">
@@ -1937,6 +1968,8 @@
         let auditLog = JSON.parse(localStorage.getItem('auditLog')) || [];
         let appCategories = JSON.parse(localStorage.getItem('appCategories')) || [];
         let appBrands = JSON.parse(localStorage.getItem('appBrands')) || [];
+        let activationCodes = JSON.parse(localStorage.getItem('activationCodes')) || [];
+        let loyaltySettings = JSON.parse(localStorage.getItem('loyaltySettings')) || { pointsPerAmount: 10, pointValue: 1 };
         let currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
 
         const ROLES = {
@@ -1971,7 +2004,7 @@
         const CLOUD_SYNCED_KEYS = new Set([
             'products', 'customers', 'suppliers', 'salesmen', 'invoices', 'purchaseInvoices',
             'inventory', 'stockMovements', 'expenses', 'treasury', 'salesReturns',
-            'purchaseReturns', 'users', 'auditLog', 'appCategories', 'appBrands'
+            'purchaseReturns', 'users', 'auditLog', 'appCategories', 'appBrands', 'activationCodes', 'loyaltySettings'
         ]);
 
         let db = null;
@@ -2030,7 +2063,7 @@
             const payload = {
                 products, customers, suppliers, salesmen, invoices, purchaseInvoices,
                 inventory, stockMovements, expenses, treasury, salesReturns, purchaseReturns,
-                users, auditLog, appCategories, appBrands,
+                users, auditLog, appCategories, appBrands, activationCodes, loyaltySettings,
                 updatedAt: Date.now(),
                 updatedBy: DEVICE_ID
             };
@@ -2068,6 +2101,8 @@
                 auditLog = data.auditLog || [];
                 appCategories = data.appCategories || [];
                 appBrands = data.appBrands || [];
+                activationCodes = data.activationCodes || [];
+                loyaltySettings = data.loyaltySettings || loyaltySettings;
 
                 localStorage.setItem('products', JSON.stringify(products));
                 localStorage.setItem('customers', JSON.stringify(customers));
@@ -2085,6 +2120,8 @@
                 localStorage.setItem('auditLog', JSON.stringify(auditLog));
                 localStorage.setItem('appCategories', JSON.stringify(appCategories));
                 localStorage.setItem('appBrands', JSON.stringify(appBrands));
+                localStorage.setItem('activationCodes', JSON.stringify(activationCodes));
+                localStorage.setItem('loyaltySettings', JSON.stringify(loyaltySettings));
                 applyingRemoteUpdate = false;
 
                 try { loadAllData(); } catch (e) { console.error('refresh after remote update failed:', e); }
@@ -2233,6 +2270,16 @@
                 invoices.push(invoice);
                 localStorage.setItem('invoices', JSON.stringify(invoices));
                 logAction('تجهيز طلب أبليكشن', `تم تجهيز الطلب #${order.id.slice(-6)} للعميل ${invoice.customerName} وتحويله لفاتورة بيع #${invoice.number}`);
+
+                // منح نقاط ولاء تلقائيًا للعميل بناءً على قيمة الطلب
+                if (cust) {
+                    const earnedPoints = Math.floor(grandTotal / (loyaltySettings.pointsPerAmount || 10));
+                    if (earnedPoints > 0) {
+                        cust.loyaltyPoints = (cust.loyaltyPoints || 0) + earnedPoints;
+                        localStorage.setItem('customers', JSON.stringify(customers));
+                        logAction('منح نقاط ولاء', `العميل ${cust.name}: +${earnedPoints} نقطة (رصيده الآن ${cust.loyaltyPoints})`);
+                    }
+                }
 
                 return db.collection('customerOrders').doc(order.id).update({ status: 'fulfilled', fulfilledAt: Date.now(), fulfilledBy: DEVICE_ID, invoiceNumber: invoice.number });
             }).then(function() {
@@ -2872,11 +2919,14 @@
         }
 
         function switchAppMgmtTab(tab) {
-            document.getElementById('appMgmtTab-categories').style.display = tab === 'categories' ? 'block' : 'none';
-            document.getElementById('appMgmtTab-brands').style.display = tab === 'brands' ? 'block' : 'none';
-            document.getElementById('appMgmtTabBtn-categories').className = 'btn btn-sm ' + (tab === 'categories' ? 'btn-primary' : 'btn-secondary');
-            document.getElementById('appMgmtTabBtn-brands').className = 'btn btn-sm ' + (tab === 'brands' ? 'btn-primary' : 'btn-secondary');
-            if (tab === 'categories') renderAppCategories(); else renderAppBrands();
+            ['categories', 'brands', 'codes', 'loyalty'].forEach(t => {
+                document.getElementById('appMgmtTab-' + t).style.display = (t === tab) ? 'block' : 'none';
+                document.getElementById('appMgmtTabBtn-' + t).className = 'btn btn-sm ' + (t === tab ? 'btn-primary' : 'btn-secondary');
+            });
+            if (tab === 'categories') renderAppCategories();
+            else if (tab === 'brands') renderAppBrands();
+            else if (tab === 'codes') renderActivationCodes();
+            else if (tab === 'loyalty') renderLoyaltyTab();
         }
 
         let editingAppCategory = null;
@@ -3031,6 +3081,115 @@
                     <td><button class="btn btn-primary btn-icon btn-sm" onclick='openAppBrandModal(${JSON.stringify(b).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
                     <button class="btn btn-danger btn-icon btn-sm" onclick="deleteAppBrand('${b.id}')"><i class="fas fa-trash"></i></button></td>
                 </tr>`).join('');
+        }
+
+        // ==================== أكواد التفعيل ====================
+        function generateRandomCode() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let code = '';
+            for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+            return code;
+        }
+
+        function generateActivationCode() {
+            const code = generateRandomCode();
+            activationCodes.push({ code, createdAt: Date.now(), used: false, usedBy: null, usedAt: null });
+            localStorage.setItem('activationCodes', JSON.stringify(activationCodes));
+            logAction('توليد كود تفعيل', `تم توليد الكود: ${code}`);
+            renderActivationCodes();
+            showToast('تم توليد كود جديد: ' + code);
+        }
+
+        function generateActivationCodesBatch() {
+            const countRaw = prompt('كام كود عايز تولّد؟', '10');
+            const count = parseInt(countRaw);
+            if (!count || count <= 0) return;
+            for (let i = 0; i < count; i++) {
+                activationCodes.push({ code: generateRandomCode(), createdAt: Date.now(), used: false, usedBy: null, usedAt: null });
+            }
+            localStorage.setItem('activationCodes', JSON.stringify(activationCodes));
+            logAction('توليد دفعة أكواد تفعيل', `تم توليد ${count} كود`);
+            renderActivationCodes();
+            showToast(`تم توليد ${count} كود بنجاح`);
+        }
+
+        function deleteActivationCode(code) {
+            if (!confirm('هل تريد حذف هذا الكود؟')) return;
+            activationCodes = activationCodes.filter(c => c.code !== code);
+            localStorage.setItem('activationCodes', JSON.stringify(activationCodes));
+            renderActivationCodes();
+            showToast('تم الحذف');
+        }
+
+        function copyActivationCode(code) {
+            navigator.clipboard?.writeText(code);
+            showToast('تم نسخ الكود: ' + code);
+        }
+
+        function renderActivationCodes() {
+            const tbody = document.getElementById('activationCodesTable');
+            if (!tbody) return;
+            if (activationCodes.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="empty-state"><i class="fas fa-key"></i><h3>لا توجد أكواد بعد</h3><p>ولّد أكواد جديدة عشان تديها للعملاء الجدد</p></td></tr>`;
+                return;
+            }
+            const sorted = [...activationCodes].sort((a, b) => b.createdAt - a.createdAt);
+            tbody.innerHTML = sorted.map(c => `
+                <tr>
+                    <td><span class="badge badge-primary" style="font-family:monospace;font-size:14px;letter-spacing:1px;">${c.code}</span></td>
+                    <td>${new Date(c.createdAt).toLocaleDateString('ar-EG')}</td>
+                    <td><span class="badge ${c.used ? 'badge-success' : 'badge-warning'}">${c.used ? 'مستخدم' : 'متاح'}</span></td>
+                    <td>${c.usedBy || '-'}</td>
+                    <td>${c.usedAt ? new Date(c.usedAt).toLocaleDateString('ar-EG') : '-'}</td>
+                    <td><button class="btn btn-secondary btn-icon btn-sm" onclick="copyActivationCode('${c.code}')" title="نسخ"><i class="fas fa-copy"></i></button>
+                    ${!c.used ? `<button class="btn btn-danger btn-icon btn-sm" onclick="deleteActivationCode('${c.code}')"><i class="fas fa-trash"></i></button>` : ''}</td>
+                </tr>`).join('');
+        }
+
+        // ==================== نقاط الولاء ====================
+        function renderLoyaltyTab() {
+            document.getElementById('loyaltyPointsPerAmount').value = loyaltySettings.pointsPerAmount;
+            document.getElementById('loyaltyPointValue').value = loyaltySettings.pointValue;
+            renderLoyaltyCustomers();
+        }
+
+        function saveLoyaltySettings() {
+            const pointsPerAmount = parseFloat(document.getElementById('loyaltyPointsPerAmount').value) || 10;
+            const pointValue = parseFloat(document.getElementById('loyaltyPointValue').value) || 1;
+            loyaltySettings = { pointsPerAmount, pointValue };
+            localStorage.setItem('loyaltySettings', JSON.stringify(loyaltySettings));
+            logAction('تعديل إعدادات نقاط الولاء', `كل ${pointsPerAmount} ج.م = نقطة، قيمة النقطة ${pointValue} ج.م`);
+            renderLoyaltyCustomers();
+            showToast('تم حفظ إعدادات نقاط الولاء');
+        }
+
+        function renderLoyaltyCustomers() {
+            const tbody = document.getElementById('loyaltyCustomersTable');
+            if (!tbody) return;
+            if (customers.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="empty-state"><h3>لا يوجد عملاء بعد</h3></td></tr>`;
+                return;
+            }
+            tbody.innerHTML = customers.map(c => {
+                const points = c.loyaltyPoints || 0;
+                return `<tr><td><span class="badge badge-warning">${c.code}</span></td><td><strong>${c.name}</strong></td>
+                <td>${points}</td><td>${(points * loyaltySettings.pointValue).toFixed(2)} ر.س</td>
+                <td><button class="btn btn-secondary btn-sm" onclick="adjustCustomerPoints('${c.code}')"><i class="fas fa-edit"></i> تعديل</button></td></tr>`;
+            }).join('');
+        }
+
+        function adjustCustomerPoints(code) {
+            const cust = customers.find(c => c.code === code);
+            if (!cust) return;
+            const raw = prompt(`رصيد النقاط الحالي للعميل "${cust.name}": ${cust.loyaltyPoints || 0}\nادخل الرصيد الجديد:`, cust.loyaltyPoints || 0);
+            if (raw === null) return;
+            const newPoints = parseInt(raw);
+            if (isNaN(newPoints) || newPoints < 0) { showToast('قيمة غير صحيحة', 'error'); return; }
+            cust.loyaltyPoints = newPoints;
+            localStorage.setItem('customers', JSON.stringify(customers));
+            logAction('تعديل نقاط ولاء يدوي', `العميل ${cust.name}: الرصيد الجديد ${newPoints} نقطة`);
+            renderLoyaltyCustomers();
+            showToast('تم تحديث رصيد النقاط');
         }
 
         function saveProduct() {
