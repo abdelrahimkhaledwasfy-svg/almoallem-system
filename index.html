@@ -398,6 +398,7 @@
         <ul class="nav-menu">
             <li class="nav-item" data-section="dashboard"><a class="nav-link active" onclick="showSection('dashboard')"><i class="fas fa-chart-line"></i><span class="menu-text">الواجهة الرئيسية</span></a></li>
             <li class="nav-item" data-section="customer-orders"><a class="nav-link" href="javascript:void(0)" onclick="showSection('customer-orders')"><i class="fas fa-shopping-basket"></i><span class="menu-text">طلبات العملاء</span> <span id="pendingOrdersBadge" class="badge badge-danger" style="display:none;margin-right:6px;"></span></a></li>
+            <li class="nav-item" data-section="app-management"><a class="nav-link" href="javascript:void(0)" onclick="showSection('app-management')"><i class="fas fa-mobile-alt"></i><span class="menu-text">إدارة الأبليكشن</span></a></li>
             <li class="nav-item" data-section="invoice"><a class="nav-link" href="javascript:void(0)" onclick="showSection('invoice')"><i class="fas fa-file-invoice"></i><span class="menu-text">فاتورة بيع جديدة</span></a></li>
             <li class="nav-item" data-section="purchase-invoice"><a class="nav-link" href="javascript:void(0)" onclick="showSection('purchase-invoice')"><i class="fas fa-cart-plus"></i><span class="menu-text">فاتورة شراء جديدة</span></a></li>
             <li class="nav-item" data-section="invoices"><a class="nav-link" href="javascript:void(0)" onclick="showSection('invoices')"><i class="fas fa-list-alt"></i><span class="menu-text">سجل الفواتير</span></a></li>
@@ -1249,6 +1250,35 @@
             </div>
         </section>
 
+        <!-- App Management Section -->
+        <section id="app-management-section" class="section">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><i class="fas fa-mobile-alt"></i> إدارة الأبليكشن</div>
+                </div>
+                <div style="display:flex;gap:10px;padding:0 20px 15px;flex-wrap:wrap;">
+                    <button class="btn btn-primary btn-sm" id="appMgmtTabBtn-categories" onclick="switchAppMgmtTab('categories')"><i class="fas fa-th-large"></i> الأقسام</button>
+                    <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-brands" onclick="switchAppMgmtTab('brands')"><i class="fas fa-tags"></i> الشركات / الماركات</button>
+                </div>
+            </div>
+
+            <!-- الأقسام -->
+            <div class="card" id="appMgmtTab-categories">
+                <div class="card-header"><div class="card-title"><i class="fas fa-th-large"></i> أقسام الأبليكشن</div><button class="btn btn-success btn-sm" onclick="openAppCategoryModal()"><i class="fas fa-plus"></i> إضافة قسم</button></div>
+                <div class="table-container">
+                    <table><thead><tr><th>الصورة</th><th>اسم القسم</th><th>الترتيب</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="appCategoriesTable"></tbody></table>
+                </div>
+            </div>
+
+            <!-- الشركات -->
+            <div class="card" id="appMgmtTab-brands" style="display:none;">
+                <div class="card-header"><div class="card-title"><i class="fas fa-tags"></i> الشركات / الماركات</div><button class="btn btn-success btn-sm" onclick="openAppBrandModal()"><i class="fas fa-plus"></i> إضافة شركة</button></div>
+                <div class="table-container">
+                    <table><thead><tr><th>الشعار</th><th>اسم الشركة</th><th>القسم المرتبط</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="appBrandsTable"></tbody></table>
+                </div>
+            </div>
+        </section>
+
         <!-- Products Section -->
         <section id="products-section" class="section">
             <div class="card">
@@ -1618,6 +1648,10 @@
                 <div class="form-group"><label class="form-label">المخزون الافتتاحي</label><input type="number" class="form-control" id="productInitialStock" placeholder="0" value="0"></div>
                 <div class="form-group"><label class="form-label">الحد الأدنى للمخزون</label><input type="number" class="form-control" id="productMinStock" placeholder="0" value="0"></div>
                 <div class="form-group"><label class="form-label">الحد الأقصى للطلب الواحد (أبليكشن العملاء)</label><input type="number" class="form-control" id="productMaxOrderQty" placeholder="اتركه فارغاً لعدم وضع حد" min="0"></div>
+                <div class="form-group"><label class="form-label">الشركة / الماركة (اختياري - لعرضها في الأبليكشن)</label>
+                    <select class="form-control" id="productBrand"><option value="">بدون تحديد</option></select>
+                </div>
+                <div class="form-group"><label class="form-label"><input type="checkbox" id="productShowInApp" checked> إظهار هذا الصنف في أبليكشن العملاء</label></div>
                 <div class="form-group">
                     <label class="form-label"><input type="checkbox" id="productHasSecondaryUnit" onchange="toggleSecondaryUnitFields()"> السماح ببيع الصنف بوحدة تانية كمان (مثال: قطاعي جنب الكرتونة)</label>
                 </div>
@@ -1647,6 +1681,54 @@
     </div>
 
     <!-- Customer Modal -->
+    <!-- App Category Modal -->
+    <div class="modal-overlay" id="appCategoryModal">
+        <div class="modal">
+            <div class="modal-header"><h3 class="modal-title" id="appCategoryModalTitle">إضافة قسم</h3><button class="modal-close" onclick="closeModal('appCategoryModal')">&times;</button></div>
+            <div class="modal-body">
+                <div class="form-group"><label class="form-label">اسم القسم (لازم يطابق اسم القسم المستخدم في الأصناف)</label><input type="text" class="form-control" id="appCategoryName" placeholder="مثال: منظفات"></div>
+                <div class="form-group">
+                    <label class="form-label">صورة القسم</label>
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <img id="appCategoryImagePreview" src="" style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid var(--border);display:none;">
+                        <input type="file" accept="image/*" class="form-control" id="appCategoryImageFile" onchange="previewGenericImage('appCategoryImageFile','appCategoryImagePreview')">
+                    </div>
+                    <div id="appCategoryImageUploadStatus" style="font-size:12px;color:var(--text-light);margin-top:4px;"></div>
+                    <input type="hidden" id="appCategoryImageUrl">
+                </div>
+                <div class="form-group"><label class="form-label">ترتيب الظهور</label><input type="number" class="form-control" id="appCategoryOrder" value="0" min="0"></div>
+                <div class="form-group"><label class="form-label"><input type="checkbox" id="appCategoryActive" checked> مفعّل (ظاهر في الأبليكشن)</label></div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('appCategoryModal')">إلغاء</button><button class="btn btn-success" onclick="saveAppCategory()">حفظ</button></div>
+        </div>
+    </div>
+
+    <!-- App Brand Modal -->
+    <div class="modal-overlay" id="appBrandModal">
+        <div class="modal">
+            <div class="modal-header"><h3 class="modal-title" id="appBrandModalTitle">إضافة شركة</h3><button class="modal-close" onclick="closeModal('appBrandModal')">&times;</button></div>
+            <div class="modal-body">
+                <div class="form-group"><label class="form-label">اسم الشركة/الماركة</label><input type="text" class="form-control" id="appBrandName" placeholder="مثال: جهينة"></div>
+                <div class="form-group">
+                    <label class="form-label">شعار الشركة</label>
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <img id="appBrandImagePreview" src="" style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid var(--border);display:none;">
+                        <input type="file" accept="image/*" class="form-control" id="appBrandImageFile" onchange="previewGenericImage('appBrandImageFile','appBrandImagePreview')">
+                    </div>
+                    <div id="appBrandImageUploadStatus" style="font-size:12px;color:var(--text-light);margin-top:4px;"></div>
+                    <input type="hidden" id="appBrandImageUrl">
+                </div>
+                <div class="form-group"><label class="form-label">القسم المرتبط</label>
+                    <select class="form-control" id="appBrandCategory">
+                        <option value="">بدون تحديد</option>
+                    </select>
+                </div>
+                <div class="form-group"><label class="form-label"><input type="checkbox" id="appBrandActive" checked> مفعّلة (ظاهرة في الأبليكشن)</label></div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('appBrandModal')">إلغاء</button><button class="btn btn-success" onclick="saveAppBrand()">حفظ</button></div>
+        </div>
+    </div>
+
     <!-- View Invoice Modal (Professional Layout) -->
     <div class="modal-overlay" id="viewInvoiceModal">
         <div class="modal" style="max-width:650px;">
@@ -1853,11 +1935,13 @@
             { id: 1, username: 'admin', password: 'admin123', fullName: 'مدير النظام', role: 'admin', active: true, lastLogin: null }
         ];
         let auditLog = JSON.parse(localStorage.getItem('auditLog')) || [];
+        let appCategories = JSON.parse(localStorage.getItem('appCategories')) || [];
+        let appBrands = JSON.parse(localStorage.getItem('appBrands')) || [];
         let currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
 
         const ROLES = {
             admin: { label: 'مدير النظام', sections: ['*'] },
-            sales_manager: { label: 'مدير مبيعات', sections: ['dashboard', 'customer-orders', 'invoice', 'invoices', 'sales-returns', 'collections', 'sales-tracking', 'smart-analytics', 'profit', 'profit-target', 'customers', 'salesmen', 'reports'] },
+            sales_manager: { label: 'مدير مبيعات', sections: ['dashboard', 'customer-orders', 'app-management', 'invoice', 'invoices', 'sales-returns', 'collections', 'sales-tracking', 'smart-analytics', 'profit', 'profit-target', 'customers', 'salesmen', 'reports'] },
             accountant: { label: 'محاسب', sections: ['dashboard', 'invoices', 'purchase-invoice', 'purchase-returns', 'collections', 'treasury', 'expenses', 'profit', 'profit-target', 'products', 'customers', 'suppliers', 'reports'] },
             warehouse_keeper: { label: 'أمين مخزن', sections: ['dashboard', 'customer-orders', 'purchase-invoice', 'purchase-returns', 'inventory', 'products', 'suppliers'] },
             salesman: { label: 'مندوب', sections: ['dashboard', 'invoice', 'invoices', 'sales-returns', 'customers'] }
@@ -1887,7 +1971,7 @@
         const CLOUD_SYNCED_KEYS = new Set([
             'products', 'customers', 'suppliers', 'salesmen', 'invoices', 'purchaseInvoices',
             'inventory', 'stockMovements', 'expenses', 'treasury', 'salesReturns',
-            'purchaseReturns', 'users', 'auditLog'
+            'purchaseReturns', 'users', 'auditLog', 'appCategories', 'appBrands'
         ]);
 
         let db = null;
@@ -1946,7 +2030,7 @@
             const payload = {
                 products, customers, suppliers, salesmen, invoices, purchaseInvoices,
                 inventory, stockMovements, expenses, treasury, salesReturns, purchaseReturns,
-                users, auditLog,
+                users, auditLog, appCategories, appBrands,
                 updatedAt: Date.now(),
                 updatedBy: DEVICE_ID
             };
@@ -1982,6 +2066,8 @@
                 purchaseReturns = data.purchaseReturns || [];
                 users = data.users || users;
                 auditLog = data.auditLog || [];
+                appCategories = data.appCategories || [];
+                appBrands = data.appBrands || [];
 
                 localStorage.setItem('products', JSON.stringify(products));
                 localStorage.setItem('customers', JSON.stringify(customers));
@@ -1997,6 +2083,8 @@
                 localStorage.setItem('purchaseReturns', JSON.stringify(purchaseReturns));
                 localStorage.setItem('users', JSON.stringify(users));
                 localStorage.setItem('auditLog', JSON.stringify(auditLog));
+                localStorage.setItem('appCategories', JSON.stringify(appCategories));
+                localStorage.setItem('appBrands', JSON.stringify(appBrands));
                 applyingRemoteUpdate = false;
 
                 try { loadAllData(); } catch (e) { console.error('refresh after remote update failed:', e); }
@@ -2680,6 +2768,7 @@
             };
             document.getElementById('pageTitle').textContent = titles[sectionName] || sectionName;
             if (sectionName === 'reports') { renderSalesSummary(); renderAdvancedReports(); renderDailyShipmentReport(); }
+            if (sectionName === 'app-management') { populateAppBrandCategoryOptions(); renderAppCategories(); renderAppBrands(); }
             if (sectionName === 'dashboard') { updateDashboardStats(); renderTopProducts(); renderPaymentSummary(); updateSalesChart(); renderLowStock(); applyDashboardRoleFilters(); }
             if (sectionName === 'inventory') { renderInventory(); renderMovements(); }
             if (sectionName === 'profit') { renderProfitData(); }
@@ -2730,6 +2819,10 @@
             document.getElementById('productInitialStock').value = product ? (inventory[product.code]?.qty || 0) : 0;
             document.getElementById('productMinStock').value = product ? (product.minStock || 0) : 0;
             document.getElementById('productMaxOrderQty').value = product ? (product.maxOrderQty || '') : '';
+            const brandSel = document.getElementById('productBrand');
+            brandSel.innerHTML = '<option value="">بدون تحديد</option>' + appBrands.map(b => `<option value="${b.name}">${b.name}</option>`).join('');
+            brandSel.value = product ? (product.brand || '') : '';
+            document.getElementById('productShowInApp').checked = product ? (product.showInApp !== false) : true;
             document.getElementById('productImageUrl').value = product ? (product.imageUrl || '') : '';
             document.getElementById('productImageFile').value = '';
             const preview = document.getElementById('productImagePreview');
@@ -2757,6 +2850,187 @@
             const reader = new FileReader();
             reader.onload = e => { preview.src = e.target.result; preview.style.display = 'inline-block'; };
             reader.readAsDataURL(file);
+        }
+
+        // ==================== APP MANAGEMENT (الأقسام والشركات في الأبليكشن) ====================
+        function previewGenericImage(fileInputId, previewImgId) {
+            const file = document.getElementById(fileInputId).files[0];
+            if (!file) return;
+            const preview = document.getElementById(previewImgId);
+            const reader = new FileReader();
+            reader.onload = e => { preview.src = e.target.result; preview.style.display = 'inline-block'; };
+            reader.readAsDataURL(file);
+        }
+
+        function uploadImageIfProvided(fileInputId, storagePrefix, callback) {
+            const file = document.getElementById(fileInputId).files[0];
+            if (!file) { callback(null); return; }
+            if (!db || !firebase.storage) { showToast('لا يوجد اتصال بالسحابة، لا يمكن رفع الصورة الآن', 'error'); return; }
+            const ref = firebase.storage().ref(storagePrefix + '_' + Date.now() + '.jpg');
+            ref.put(file).then(snap => snap.ref.getDownloadURL()).then(url => callback(url))
+                .catch(err => { console.error('Image upload failed:', err); showToast('تعذر رفع الصورة', 'error'); });
+        }
+
+        function switchAppMgmtTab(tab) {
+            document.getElementById('appMgmtTab-categories').style.display = tab === 'categories' ? 'block' : 'none';
+            document.getElementById('appMgmtTab-brands').style.display = tab === 'brands' ? 'block' : 'none';
+            document.getElementById('appMgmtTabBtn-categories').className = 'btn btn-sm ' + (tab === 'categories' ? 'btn-primary' : 'btn-secondary');
+            document.getElementById('appMgmtTabBtn-brands').className = 'btn btn-sm ' + (tab === 'brands' ? 'btn-primary' : 'btn-secondary');
+            if (tab === 'categories') renderAppCategories(); else renderAppBrands();
+        }
+
+        let editingAppCategory = null;
+        function openAppCategoryModal(cat = null) {
+            editingAppCategory = cat;
+            document.getElementById('appCategoryModalTitle').textContent = cat ? 'تعديل قسم' : 'إضافة قسم';
+            document.getElementById('appCategoryName').value = cat ? cat.name : '';
+            document.getElementById('appCategoryOrder').value = cat ? cat.order : (appCategories.length);
+            document.getElementById('appCategoryActive').checked = cat ? cat.active !== false : true;
+            document.getElementById('appCategoryImageUrl').value = cat ? (cat.imageUrl || '') : '';
+            document.getElementById('appCategoryImageFile').value = '';
+            const preview = document.getElementById('appCategoryImagePreview');
+            if (cat && cat.imageUrl) { preview.src = cat.imageUrl; preview.style.display = 'inline-block'; } else { preview.style.display = 'none'; preview.src = ''; }
+            document.getElementById('appCategoryImageUploadStatus').textContent = '';
+            openModal('appCategoryModal');
+        }
+
+        function saveAppCategory() {
+            const name = document.getElementById('appCategoryName').value.trim();
+            if (!name) { showToast('الرجاء إدخال اسم القسم', 'error'); return; }
+            const order = parseInt(document.getElementById('appCategoryOrder').value) || 0;
+            const active = document.getElementById('appCategoryActive').checked;
+            document.getElementById('appCategoryImageUploadStatus').textContent = 'جاري الحفظ...';
+            uploadImageIfProvided('appCategoryImageFile', 'app_categories/' + name.replace(/\s+/g, '_'), function(url) {
+                const imageUrl = url || document.getElementById('appCategoryImageUrl').value || null;
+                if (editingAppCategory) {
+                    const idx = appCategories.findIndex(c => c.id === editingAppCategory.id);
+                    if (idx !== -1) appCategories[idx] = { ...appCategories[idx], name, order, active, imageUrl };
+                } else {
+                    appCategories.push({ id: 'cat_' + Date.now(), name, order, active, imageUrl });
+                }
+                localStorage.setItem('appCategories', JSON.stringify(appCategories));
+                logAction(editingAppCategory ? 'تعديل قسم أبليكشن' : 'إضافة قسم أبليكشن', `القسم: ${name}`);
+                closeModal('appCategoryModal');
+                renderAppCategories();
+                populateAppBrandCategoryOptions();
+                showToast('تم الحفظ بنجاح');
+            });
+        }
+
+        function deleteAppCategory(id) {
+            if (!confirm('هل تريد حذف هذا القسم من الأبليكشن؟')) return;
+            appCategories = appCategories.filter(c => c.id !== id);
+            localStorage.setItem('appCategories', JSON.stringify(appCategories));
+            renderAppCategories();
+            populateAppBrandCategoryOptions();
+            showToast('تم الحذف');
+        }
+
+        function toggleAppCategoryActive(id) {
+            const c = appCategories.find(x => x.id === id);
+            if (!c) return;
+            c.active = !c.active;
+            localStorage.setItem('appCategories', JSON.stringify(appCategories));
+            renderAppCategories();
+        }
+
+        function renderAppCategories() {
+            const tbody = document.getElementById('appCategoriesTable');
+            if (!tbody) return;
+            const sorted = [...appCategories].sort((a, b) => a.order - b.order);
+            if (sorted.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="empty-state"><i class="fas fa-th-large"></i><h3>لا توجد أقسام مضافة بعد</h3></td></tr>`;
+                return;
+            }
+            tbody.innerHTML = sorted.map(c => `
+                <tr>
+                    <td>${c.imageUrl ? `<img src="${c.imageUrl}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;">` : '-'}</td>
+                    <td><strong>${c.name}</strong></td>
+                    <td>${c.order}</td>
+                    <td><span class="badge ${c.active !== false ? 'badge-success' : 'badge-danger'}" style="cursor:pointer;" onclick="toggleAppCategoryActive('${c.id}')">${c.active !== false ? 'مفعّل' : 'موقوف'}</span></td>
+                    <td><button class="btn btn-primary btn-icon btn-sm" onclick='openAppCategoryModal(${JSON.stringify(c).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-danger btn-icon btn-sm" onclick="deleteAppCategory('${c.id}')"><i class="fas fa-trash"></i></button></td>
+                </tr>`).join('');
+        }
+
+        let editingAppBrand = null;
+        function populateAppBrandCategoryOptions() {
+            const sel = document.getElementById('appBrandCategory');
+            if (!sel) return;
+            const current = sel.value;
+            sel.innerHTML = '<option value="">بدون تحديد</option>' + appCategories.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+            sel.value = current;
+        }
+
+        function openAppBrandModal(brand = null) {
+            editingAppBrand = brand;
+            populateAppBrandCategoryOptions();
+            document.getElementById('appBrandModalTitle').textContent = brand ? 'تعديل شركة' : 'إضافة شركة';
+            document.getElementById('appBrandName').value = brand ? brand.name : '';
+            document.getElementById('appBrandCategory').value = brand ? (brand.categoryName || '') : '';
+            document.getElementById('appBrandActive').checked = brand ? brand.active !== false : true;
+            document.getElementById('appBrandImageUrl').value = brand ? (brand.logoUrl || '') : '';
+            document.getElementById('appBrandImageFile').value = '';
+            const preview = document.getElementById('appBrandImagePreview');
+            if (brand && brand.logoUrl) { preview.src = brand.logoUrl; preview.style.display = 'inline-block'; } else { preview.style.display = 'none'; preview.src = ''; }
+            document.getElementById('appBrandImageUploadStatus').textContent = '';
+            openModal('appBrandModal');
+        }
+
+        function saveAppBrand() {
+            const name = document.getElementById('appBrandName').value.trim();
+            if (!name) { showToast('الرجاء إدخال اسم الشركة', 'error'); return; }
+            const categoryName = document.getElementById('appBrandCategory').value;
+            const active = document.getElementById('appBrandActive').checked;
+            document.getElementById('appBrandImageUploadStatus').textContent = 'جاري الحفظ...';
+            uploadImageIfProvided('appBrandImageFile', 'app_brands/' + name.replace(/\s+/g, '_'), function(url) {
+                const logoUrl = url || document.getElementById('appBrandImageUrl').value || null;
+                if (editingAppBrand) {
+                    const idx = appBrands.findIndex(b => b.id === editingAppBrand.id);
+                    if (idx !== -1) appBrands[idx] = { ...appBrands[idx], name, categoryName, active, logoUrl };
+                } else {
+                    appBrands.push({ id: 'brand_' + Date.now(), name, categoryName, active, logoUrl });
+                }
+                localStorage.setItem('appBrands', JSON.stringify(appBrands));
+                logAction(editingAppBrand ? 'تعديل شركة أبليكشن' : 'إضافة شركة أبليكشن', `الشركة: ${name}`);
+                closeModal('appBrandModal');
+                renderAppBrands();
+                showToast('تم الحفظ بنجاح');
+            });
+        }
+
+        function deleteAppBrand(id) {
+            if (!confirm('هل تريد حذف هذه الشركة؟')) return;
+            appBrands = appBrands.filter(b => b.id !== id);
+            localStorage.setItem('appBrands', JSON.stringify(appBrands));
+            renderAppBrands();
+            showToast('تم الحذف');
+        }
+
+        function toggleAppBrandActive(id) {
+            const b = appBrands.find(x => x.id === id);
+            if (!b) return;
+            b.active = !b.active;
+            localStorage.setItem('appBrands', JSON.stringify(appBrands));
+            renderAppBrands();
+        }
+
+        function renderAppBrands() {
+            const tbody = document.getElementById('appBrandsTable');
+            if (!tbody) return;
+            if (appBrands.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="empty-state"><i class="fas fa-tags"></i><h3>لا توجد شركات مضافة بعد</h3></td></tr>`;
+                return;
+            }
+            tbody.innerHTML = appBrands.map(b => `
+                <tr>
+                    <td>${b.logoUrl ? `<img src="${b.logoUrl}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;">` : '-'}</td>
+                    <td><strong>${b.name}</strong></td>
+                    <td>${b.categoryName || '-'}</td>
+                    <td><span class="badge ${b.active !== false ? 'badge-success' : 'badge-danger'}" style="cursor:pointer;" onclick="toggleAppBrandActive('${b.id}')">${b.active !== false ? 'مفعّلة' : 'موقوفة'}</span></td>
+                    <td><button class="btn btn-primary btn-icon btn-sm" onclick='openAppBrandModal(${JSON.stringify(b).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-danger btn-icon btn-sm" onclick="deleteAppBrand('${b.id}')"><i class="fas fa-trash"></i></button></td>
+                </tr>`).join('');
         }
 
         function saveProduct() {
@@ -2791,6 +3065,8 @@
             const minStock = parseFloat(document.getElementById('productMinStock').value) || 0;
             const maxOrderQtyRaw = document.getElementById('productMaxOrderQty').value;
             const maxOrderQty = maxOrderQtyRaw === '' ? null : parseFloat(maxOrderQtyRaw);
+            const brand = document.getElementById('productBrand').value || null;
+            const showInApp = document.getElementById('productShowInApp').checked;
             let secondaryUnit = null;
             if (document.getElementById('productHasSecondaryUnit').checked) {
                 const secName = document.getElementById('productSecondaryUnitName').value.trim();
@@ -2805,7 +3081,7 @@
                 const idx = products.findIndex(p => p.code === editingProduct.code);
                 if (idx !== -1) {
                     const oldCode = editingProduct.code;
-                    products[idx] = { code, name, unit, category, price, cost, minStock, maxOrderQty, secondaryUnit, imageUrl };
+                    products[idx] = { code, name, unit, category, price, cost, minStock, maxOrderQty, secondaryUnit, imageUrl, brand, showInApp };
                     if (oldCode !== code && inventory[oldCode]) {
                         inventory[code] = { ...inventory[oldCode], code };
                         delete inventory[oldCode];
@@ -2819,7 +3095,7 @@
                 }
             } else {
                 if (products.find(p => p.code === code)) { showToast('كود الصنف موجود مسبقاً', 'error'); return; }
-                products.push({ code, name, unit, category, price, cost, minStock, maxOrderQty, secondaryUnit, imageUrl });
+                products.push({ code, name, unit, category, price, cost, minStock, maxOrderQty, secondaryUnit, imageUrl, brand, showInApp });
                 inventory[code] = { code, qty: initialStock, cost, minStock };
                 if (initialStock > 0) addStockMovement(code, name, 'initial', initialStock, initialStock, 'إضافة صنف', 'رصيد أولي');
             }
@@ -2851,7 +3127,7 @@
             tbody.innerHTML = products.map(p => {
                 const profit = p.price - (p.cost || 0);
                 const margin = p.cost > 0 ? ((profit / p.price) * 100).toFixed(1) : 0;
-                return `<tr><td><span class="badge badge-primary">${p.code}</span></td><td>${p.imageUrl ? `<img src="${p.imageUrl}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-left:8px;">` : ''}<strong>${p.name}</strong></td><td>${p.unit}${p.secondaryUnit ? ' / ' + p.secondaryUnit.name : ''}</td><td>${p.category || '-'}</td>
+                return `<tr><td><span class="badge badge-primary">${p.code}</span></td><td>${p.imageUrl ? `<img src="${p.imageUrl}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-left:8px;">` : ''}<strong>${p.name}</strong>${p.showInApp === false ? ' <i class="fas fa-mobile-alt" style="color:var(--text-light);" title="مخفي من الأبليكشن"></i><i class="fas fa-slash" style="color:#c0392b;margin-right:-14px;font-size:10px;"></i>' : ''}</td><td>${p.unit}${p.secondaryUnit ? ' / ' + p.secondaryUnit.name : ''}</td><td>${p.category || '-'}</td>
                 <td><strong style="color:var(--accent);">${p.price.toFixed(2)} ر.س</strong></td>
                 <td><span class="cost-highlight">${(p.cost || 0).toFixed(2)} ر.س</span></td>
                 <td><span class="profit-highlight">${profit.toFixed(2)} ر.س</span> <span class="margin-badge ${margin >= 30 ? 'high' : (margin >= 15 ? 'medium' : 'low')}">${margin}%</span></td>
