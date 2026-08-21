@@ -1263,6 +1263,8 @@
                     <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-loyalty" onclick="switchAppMgmtTab('loyalty')"><i class="fas fa-star"></i> نقاط الولاء</button>
                     <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-banners" onclick="switchAppMgmtTab('banners')"><i class="fas fa-images"></i> البانرات/الإعلانات</button>
                     <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-offers" onclick="switchAppMgmtTab('offers')"><i class="fas fa-percent"></i> العروض</button>
+                    <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-geo" onclick="switchAppMgmtTab('geo')"><i class="fas fa-map-marked-alt"></i> المناطق الجغرافية</button>
+                    <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-notifications" onclick="switchAppMgmtTab('notifications')"><i class="fas fa-bell"></i> الإشعارات</button>
                 </div>
             </div>
 
@@ -1323,6 +1325,39 @@
                 <div class="card-header"><div class="card-title"><i class="fas fa-percent"></i> العروض والخصومات</div><button class="btn btn-success btn-sm" onclick="openAppOfferModal()"><i class="fas fa-plus"></i> إضافة عرض</button></div>
                 <div class="table-container">
                     <table><thead><tr><th>الصنف</th><th>عنوان العرض</th><th>السعر قبل</th><th>السعر بعد</th><th>نسبة الخصم</th><th>ينتهي في</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="appOffersTable"></tbody></table>
+                </div>
+            </div>
+
+            <!-- المناطق الجغرافية -->
+            <div class="card" id="appMgmtTab-geo" style="display:none;">
+                <div class="card-header"><div class="card-title"><i class="fas fa-city"></i> المدن</div><button class="btn btn-success btn-sm" onclick="openAppCityModal()"><i class="fas fa-plus"></i> إضافة مدينة</button></div>
+                <div class="table-container"><table><thead><tr><th>اسم المدينة</th><th>الإجراءات</th></tr></thead><tbody id="appCitiesTable"></tbody></table></div>
+            </div>
+            <div class="card" id="appMgmtTab-geo-2" style="display:none;">
+                <div class="card-header"><div class="card-title"><i class="fas fa-map-signs"></i> المناطق</div><button class="btn btn-success btn-sm" onclick="openAppRegionModal()"><i class="fas fa-plus"></i> إضافة منطقة</button></div>
+                <div class="table-container"><table><thead><tr><th>اسم المنطقة</th><th>المدينة</th><th>الإجراءات</th></tr></thead><tbody id="appRegionsTable"></tbody></table></div>
+            </div>
+            <div class="card" id="appMgmtTab-geo-3" style="display:none;">
+                <div class="card-header"><div class="card-title"><i class="fas fa-map-pin"></i> الأحياء</div><button class="btn btn-success btn-sm" onclick="openAppNeighborhoodModal()"><i class="fas fa-plus"></i> إضافة حي</button></div>
+                <div class="table-container"><table><thead><tr><th>اسم الحي</th><th>المنطقة</th><th>الإجراءات</th></tr></thead><tbody id="appNeighborhoodsTable"></tbody></table></div>
+            </div>
+
+            <!-- الإشعارات -->
+            <div class="card" id="appMgmtTab-notifications" style="display:none;">
+                <div class="card-header"><div class="card-title"><i class="fas fa-bell"></i> إرسال إشعار للعملاء</div></div>
+                <div style="padding:0 20px 20px;max-width:450px;">
+                    <div class="form-group"><label class="form-label">المستلم</label>
+                        <select class="form-control" id="notificationTarget">
+                            <option value="all">كل العملاء</option>
+                        </select>
+                    </div>
+                    <div class="form-group"><label class="form-label">عنوان الإشعار</label><input type="text" class="form-control" id="notificationTitle" placeholder="مثال: وصل عرض جديد!"></div>
+                    <div class="form-group"><label class="form-label">نص الرسالة</label><textarea class="form-control" id="notificationMessage" rows="3" placeholder="تفاصيل الإشعار..."></textarea></div>
+                    <button class="btn btn-success" onclick="sendAppNotification()"><i class="fas fa-paper-plane"></i> إرسال الإشعار</button>
+                </div>
+                <div class="card-header" style="border-top:1px solid var(--border);"><div class="card-title"><i class="fas fa-history"></i> سجل الإشعارات المرسلة</div></div>
+                <div class="table-container">
+                    <table><thead><tr><th>العنوان</th><th>الرسالة</th><th>المستلم</th><th>وقت الإرسال</th></tr></thead><tbody id="appNotificationsTable"></tbody></table>
                 </div>
             </div>
         </section>
@@ -1831,6 +1866,41 @@
         </div>
     </div>
 
+    <!-- App City Modal -->
+    <div class="modal-overlay" id="appCityModal">
+        <div class="modal">
+            <div class="modal-header"><h3 class="modal-title" id="appCityModalTitle">إضافة مدينة</h3><button class="modal-close" onclick="closeModal('appCityModal')">&times;</button></div>
+            <div class="modal-body">
+                <div class="form-group"><label class="form-label">اسم المدينة</label><input type="text" class="form-control" id="appCityName" placeholder="مثال: أسوان"></div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('appCityModal')">إلغاء</button><button class="btn btn-success" onclick="saveAppCity()">حفظ</button></div>
+        </div>
+    </div>
+
+    <!-- App Region Modal -->
+    <div class="modal-overlay" id="appRegionModal">
+        <div class="modal">
+            <div class="modal-header"><h3 class="modal-title" id="appRegionModalTitle">إضافة منطقة</h3><button class="modal-close" onclick="closeModal('appRegionModal')">&times;</button></div>
+            <div class="modal-body">
+                <div class="form-group"><label class="form-label">المدينة</label><select class="form-control" id="appRegionCity"></select></div>
+                <div class="form-group"><label class="form-label">اسم المنطقة</label><input type="text" class="form-control" id="appRegionName" placeholder="مثال: كوم أمبو"></div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('appRegionModal')">إلغاء</button><button class="btn btn-success" onclick="saveAppRegion()">حفظ</button></div>
+        </div>
+    </div>
+
+    <!-- App Neighborhood Modal -->
+    <div class="modal-overlay" id="appNeighborhoodModal">
+        <div class="modal">
+            <div class="modal-header"><h3 class="modal-title" id="appNeighborhoodModalTitle">إضافة حي</h3><button class="modal-close" onclick="closeModal('appNeighborhoodModal')">&times;</button></div>
+            <div class="modal-body">
+                <div class="form-group"><label class="form-label">المنطقة</label><select class="form-control" id="appNeighborhoodRegion"></select></div>
+                <div class="form-group"><label class="form-label">اسم الحي</label><input type="text" class="form-control" id="appNeighborhoodName" placeholder="مثال: حي السلسلة"></div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('appNeighborhoodModal')">إلغاء</button><button class="btn btn-success" onclick="saveAppNeighborhood()">حفظ</button></div>
+        </div>
+    </div>
+
     <!-- View Invoice Modal (Professional Layout) -->
     <div class="modal-overlay" id="viewInvoiceModal">
         <div class="modal" style="max-width:650px;">
@@ -2043,6 +2113,10 @@
         let loyaltySettings = JSON.parse(localStorage.getItem('loyaltySettings')) || { pointsPerAmount: 10, pointValue: 1 };
         let appBanners = JSON.parse(localStorage.getItem('appBanners')) || [];
         let appOffers = JSON.parse(localStorage.getItem('appOffers')) || [];
+        let appCities = JSON.parse(localStorage.getItem('appCities')) || [];
+        let appRegions = JSON.parse(localStorage.getItem('appRegions')) || [];
+        let appNeighborhoods = JSON.parse(localStorage.getItem('appNeighborhoods')) || [];
+        let appNotifications = JSON.parse(localStorage.getItem('appNotifications')) || [];
         let currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
 
         const ROLES = {
@@ -2077,7 +2151,7 @@
         const CLOUD_SYNCED_KEYS = new Set([
             'products', 'customers', 'suppliers', 'salesmen', 'invoices', 'purchaseInvoices',
             'inventory', 'stockMovements', 'expenses', 'treasury', 'salesReturns',
-            'purchaseReturns', 'users', 'auditLog', 'appCategories', 'appBrands', 'activationCodes', 'loyaltySettings', 'appBanners', 'appOffers'
+            'purchaseReturns', 'users', 'auditLog', 'appCategories', 'appBrands', 'activationCodes', 'loyaltySettings', 'appBanners', 'appOffers', 'appCities', 'appRegions', 'appNeighborhoods', 'appNotifications'
         ]);
 
         let db = null;
@@ -2137,6 +2211,7 @@
                 products, customers, suppliers, salesmen, invoices, purchaseInvoices,
                 inventory, stockMovements, expenses, treasury, salesReturns, purchaseReturns,
                 users, auditLog, appCategories, appBrands, activationCodes, loyaltySettings, appBanners, appOffers,
+                appCities, appRegions, appNeighborhoods, appNotifications,
                 updatedAt: Date.now(),
                 updatedBy: DEVICE_ID
             };
@@ -2178,6 +2253,10 @@
                 loyaltySettings = data.loyaltySettings || loyaltySettings;
                 appBanners = data.appBanners || [];
                 appOffers = data.appOffers || [];
+                appCities = data.appCities || [];
+                appRegions = data.appRegions || [];
+                appNeighborhoods = data.appNeighborhoods || [];
+                appNotifications = data.appNotifications || [];
 
                 localStorage.setItem('products', JSON.stringify(products));
                 localStorage.setItem('customers', JSON.stringify(customers));
@@ -2199,6 +2278,10 @@
                 localStorage.setItem('loyaltySettings', JSON.stringify(loyaltySettings));
                 localStorage.setItem('appBanners', JSON.stringify(appBanners));
                 localStorage.setItem('appOffers', JSON.stringify(appOffers));
+                localStorage.setItem('appCities', JSON.stringify(appCities));
+                localStorage.setItem('appRegions', JSON.stringify(appRegions));
+                localStorage.setItem('appNeighborhoods', JSON.stringify(appNeighborhoods));
+                localStorage.setItem('appNotifications', JSON.stringify(appNotifications));
                 applyingRemoteUpdate = false;
 
                 try { loadAllData(); } catch (e) { console.error('refresh after remote update failed:', e); }
@@ -2996,9 +3079,13 @@
         }
 
         function switchAppMgmtTab(tab) {
-            ['categories', 'brands', 'codes', 'loyalty', 'banners', 'offers'].forEach(t => {
-                document.getElementById('appMgmtTab-' + t).style.display = (t === tab) ? 'block' : 'none';
-                document.getElementById('appMgmtTabBtn-' + t).className = 'btn btn-sm ' + (t === tab ? 'btn-primary' : 'btn-secondary');
+            ['categories', 'brands', 'codes', 'loyalty', 'banners', 'offers', 'geo', 'geo-2', 'geo-3', 'notifications'].forEach(t => {
+                const el = document.getElementById('appMgmtTab-' + t);
+                if (el) el.style.display = (t === tab || (tab === 'geo' && (t === 'geo-2' || t === 'geo-3'))) ? 'block' : 'none';
+            });
+            ['categories', 'brands', 'codes', 'loyalty', 'banners', 'offers', 'geo', 'notifications'].forEach(t => {
+                const btn = document.getElementById('appMgmtTabBtn-' + t);
+                if (btn) btn.className = 'btn btn-sm ' + (t === tab ? 'btn-primary' : 'btn-secondary');
             });
             if (tab === 'categories') renderAppCategories();
             else if (tab === 'brands') renderAppBrands();
@@ -3006,6 +3093,8 @@
             else if (tab === 'loyalty') renderLoyaltyTab();
             else if (tab === 'banners') renderAppBanners();
             else if (tab === 'offers') renderAppOffers();
+            else if (tab === 'geo') { renderAppCities(); renderAppRegions(); renderAppNeighborhoods(); }
+            else if (tab === 'notifications') renderNotificationsTab();
         }
 
         let editingAppCategory = null;
@@ -3461,6 +3550,175 @@
                 </tr>`;
             }).join('');
         }
+
+        // ==================== المناطق الجغرافية ====================
+        let editingAppCity = null, editingAppRegion = null, editingAppNeighborhood = null;
+
+        function openAppCityModal(city = null) {
+            editingAppCity = city;
+            document.getElementById('appCityModalTitle').textContent = city ? 'تعديل مدينة' : 'إضافة مدينة';
+            document.getElementById('appCityName').value = city ? city.name : '';
+            openModal('appCityModal');
+        }
+        function saveAppCity() {
+            const name = document.getElementById('appCityName').value.trim();
+            if (!name) { showToast('الرجاء إدخال اسم المدينة', 'error'); return; }
+            if (editingAppCity) {
+                const c = appCities.find(x => x.id === editingAppCity.id);
+                if (c) c.name = name;
+            } else {
+                appCities.push({ id: 'city_' + Date.now(), name });
+            }
+            localStorage.setItem('appCities', JSON.stringify(appCities));
+            closeModal('appCityModal');
+            renderAppCities();
+            showToast('تم الحفظ');
+        }
+        function deleteAppCity(id) {
+            if (!confirm('حذف هذه المدينة؟ (لن يتم حذف المناطق التابعة لها تلقائيًا)')) return;
+            appCities = appCities.filter(c => c.id !== id);
+            localStorage.setItem('appCities', JSON.stringify(appCities));
+            renderAppCities();
+            showToast('تم الحذف');
+        }
+        function renderAppCities() {
+            const tbody = document.getElementById('appCitiesTable');
+            if (!tbody) return;
+            if (appCities.length === 0) { tbody.innerHTML = `<tr><td colspan="2" class="empty-state"><h3>لا توجد مدن مضافة</h3></td></tr>`; return; }
+            tbody.innerHTML = appCities.map(c => `<tr><td><strong>${c.name}</strong></td>
+                <td><button class="btn btn-primary btn-icon btn-sm" onclick='openAppCityModal(${JSON.stringify(c).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
+                <button class="btn btn-danger btn-icon btn-sm" onclick="deleteAppCity('${c.id}')"><i class="fas fa-trash"></i></button></td></tr>`).join('');
+            populateCitySelect();
+        }
+        function populateCitySelect() {
+            const sel = document.getElementById('appRegionCity');
+            if (!sel) return;
+            sel.innerHTML = appCities.map(c => `<option value="${c.id}">${c.name}</option>`).join('') || '<option value="">أضف مدينة أولاً</option>';
+        }
+
+        function openAppRegionModal(region = null) {
+            editingAppRegion = region;
+            populateCitySelect();
+            document.getElementById('appRegionModalTitle').textContent = region ? 'تعديل منطقة' : 'إضافة منطقة';
+            document.getElementById('appRegionName').value = region ? region.name : '';
+            if (region) document.getElementById('appRegionCity').value = region.cityId;
+            openModal('appRegionModal');
+        }
+        function saveAppRegion() {
+            const name = document.getElementById('appRegionName').value.trim();
+            const cityId = document.getElementById('appRegionCity').value;
+            if (!name || !cityId) { showToast('الرجاء إدخال اسم المنطقة واختيار المدينة', 'error'); return; }
+            if (editingAppRegion) {
+                const r = appRegions.find(x => x.id === editingAppRegion.id);
+                if (r) { r.name = name; r.cityId = cityId; }
+            } else {
+                appRegions.push({ id: 'region_' + Date.now(), name, cityId });
+            }
+            localStorage.setItem('appRegions', JSON.stringify(appRegions));
+            closeModal('appRegionModal');
+            renderAppRegions();
+            showToast('تم الحفظ');
+        }
+        function deleteAppRegion(id) {
+            if (!confirm('حذف هذه المنطقة؟')) return;
+            appRegions = appRegions.filter(r => r.id !== id);
+            localStorage.setItem('appRegions', JSON.stringify(appRegions));
+            renderAppRegions();
+            showToast('تم الحذف');
+        }
+        function renderAppRegions() {
+            const tbody = document.getElementById('appRegionsTable');
+            if (!tbody) return;
+            if (appRegions.length === 0) { tbody.innerHTML = `<tr><td colspan="3" class="empty-state"><h3>لا توجد مناطق مضافة</h3></td></tr>`; return; }
+            tbody.innerHTML = appRegions.map(r => {
+                const city = appCities.find(c => c.id === r.cityId);
+                return `<tr><td><strong>${r.name}</strong></td><td>${city ? city.name : '-'}</td>
+                <td><button class="btn btn-primary btn-icon btn-sm" onclick='openAppRegionModal(${JSON.stringify(r).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
+                <button class="btn btn-danger btn-icon btn-sm" onclick="deleteAppRegion('${r.id}')"><i class="fas fa-trash"></i></button></td></tr>`;
+            }).join('');
+            populateRegionSelect();
+        }
+        function populateRegionSelect() {
+            const sel = document.getElementById('appNeighborhoodRegion');
+            if (!sel) return;
+            sel.innerHTML = appRegions.map(r => {
+                const city = appCities.find(c => c.id === r.cityId);
+                return `<option value="${r.id}">${r.name}${city ? ' - ' + city.name : ''}</option>`;
+            }).join('') || '<option value="">أضف منطقة أولاً</option>';
+        }
+
+        function openAppNeighborhoodModal(n = null) {
+            editingAppNeighborhood = n;
+            populateRegionSelect();
+            document.getElementById('appNeighborhoodModalTitle').textContent = n ? 'تعديل حي' : 'إضافة حي';
+            document.getElementById('appNeighborhoodName').value = n ? n.name : '';
+            if (n) document.getElementById('appNeighborhoodRegion').value = n.regionId;
+            openModal('appNeighborhoodModal');
+        }
+        function saveAppNeighborhood() {
+            const name = document.getElementById('appNeighborhoodName').value.trim();
+            const regionId = document.getElementById('appNeighborhoodRegion').value;
+            if (!name || !regionId) { showToast('الرجاء إدخال اسم الحي واختيار المنطقة', 'error'); return; }
+            if (editingAppNeighborhood) {
+                const nb = appNeighborhoods.find(x => x.id === editingAppNeighborhood.id);
+                if (nb) { nb.name = name; nb.regionId = regionId; }
+            } else {
+                appNeighborhoods.push({ id: 'nb_' + Date.now(), name, regionId });
+            }
+            localStorage.setItem('appNeighborhoods', JSON.stringify(appNeighborhoods));
+            closeModal('appNeighborhoodModal');
+            renderAppNeighborhoods();
+            showToast('تم الحفظ');
+        }
+        function deleteAppNeighborhood(id) {
+            if (!confirm('حذف هذا الحي؟')) return;
+            appNeighborhoods = appNeighborhoods.filter(n => n.id !== id);
+            localStorage.setItem('appNeighborhoods', JSON.stringify(appNeighborhoods));
+            renderAppNeighborhoods();
+            showToast('تم الحذف');
+        }
+        function renderAppNeighborhoods() {
+            const tbody = document.getElementById('appNeighborhoodsTable');
+            if (!tbody) return;
+            if (appNeighborhoods.length === 0) { tbody.innerHTML = `<tr><td colspan="3" class="empty-state"><h3>لا توجد أحياء مضافة</h3></td></tr>`; return; }
+            tbody.innerHTML = appNeighborhoods.map(n => {
+                const region = appRegions.find(r => r.id === n.regionId);
+                return `<tr><td><strong>${n.name}</strong></td><td>${region ? region.name : '-'}</td>
+                <td><button class="btn btn-primary btn-icon btn-sm" onclick='openAppNeighborhoodModal(${JSON.stringify(n).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
+                <button class="btn btn-danger btn-icon btn-sm" onclick="deleteAppNeighborhood('${n.id}')"><i class="fas fa-trash"></i></button></td></tr>`;
+            }).join('');
+        }
+
+        // ==================== الإشعارات ====================
+        function renderNotificationsTab() {
+            const sel = document.getElementById('notificationTarget');
+            sel.innerHTML = '<option value="all">كل العملاء</option>' + customers.map(c => `<option value="${c.code}">${c.name}</option>`).join('');
+            renderNotificationsLog();
+        }
+
+        function sendAppNotification() {
+            const target = document.getElementById('notificationTarget').value;
+            const title = document.getElementById('notificationTitle').value.trim();
+            const message = document.getElementById('notificationMessage').value.trim();
+            if (!title || !message) { showToast('الرجاء إدخال العنوان والرسالة', 'error'); return; }
+            const targetLabel = target === 'all' ? 'كل العملاء' : (customers.find(c => c.code === target)?.name || target);
+            appNotifications.push({ id: 'notif_' + Date.now(), title, message, target, targetLabel, createdAt: Date.now() });
+            localStorage.setItem('appNotifications', JSON.stringify(appNotifications));
+            logAction('إرسال إشعار', `العنوان: ${title} - المستلم: ${targetLabel}`);
+            document.getElementById('notificationTitle').value = '';
+            document.getElementById('notificationMessage').value = '';
+            renderNotificationsLog();
+            showToast('تم إرسال الإشعار بنجاح');
+        }
+
+        function renderNotificationsLog() {
+            const tbody = document.getElementById('appNotificationsTable');
+            if (!tbody) return;
+            if (appNotifications.length === 0) { tbody.innerHTML = `<tr><td colspan="4" class="empty-state"><i class="fas fa-bell"></i><h3>لم يتم إرسال أي إشعارات بعد</h3></td></tr>`; return; }
+            const sorted = [...appNotifications].sort((a, b) => b.createdAt - a.createdAt);
+            tbody.innerHTML = sorted.map(n => `<tr><td><strong>${n.title}</strong></td><td>${n.message}</td><td>${n.targetLabel}</td><td>${new Date(n.createdAt).toLocaleString('ar-EG')}</td></tr>`).join('');
+        }
+
 
         function saveProduct() {
             const code = document.getElementById('productCode').value.trim();
