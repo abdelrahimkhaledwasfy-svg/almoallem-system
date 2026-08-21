@@ -1261,6 +1261,8 @@
                     <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-brands" onclick="switchAppMgmtTab('brands')"><i class="fas fa-tags"></i> الشركات / الماركات</button>
                     <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-codes" onclick="switchAppMgmtTab('codes')"><i class="fas fa-key"></i> أكواد التفعيل</button>
                     <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-loyalty" onclick="switchAppMgmtTab('loyalty')"><i class="fas fa-star"></i> نقاط الولاء</button>
+                    <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-banners" onclick="switchAppMgmtTab('banners')"><i class="fas fa-images"></i> البانرات/الإعلانات</button>
+                    <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-offers" onclick="switchAppMgmtTab('offers')"><i class="fas fa-percent"></i> العروض</button>
                 </div>
             </div>
 
@@ -1305,6 +1307,22 @@
                 <div class="card-header" style="border-top:1px solid var(--border);"><div class="card-title"><i class="fas fa-users"></i> رصيد نقاط العملاء</div></div>
                 <div class="table-container">
                     <table><thead><tr><th>كود العميل</th><th>اسم العميل</th><th>رصيد النقاط</th><th>قيمتها كخصم</th><th>تعديل يدوي</th></tr></thead><tbody id="loyaltyCustomersTable"></tbody></table>
+                </div>
+            </div>
+
+            <!-- البانرات -->
+            <div class="card" id="appMgmtTab-banners" style="display:none;">
+                <div class="card-header"><div class="card-title"><i class="fas fa-images"></i> بانرات الإعلانات في الرئيسية</div><button class="btn btn-success btn-sm" onclick="openAppBannerModal()"><i class="fas fa-plus"></i> إضافة بانر</button></div>
+                <div class="table-container">
+                    <table><thead><tr><th>الصورة</th><th>العنوان</th><th>يوديك لـ</th><th>الترتيب</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="appBannersTable"></tbody></table>
+                </div>
+            </div>
+
+            <!-- العروض -->
+            <div class="card" id="appMgmtTab-offers" style="display:none;">
+                <div class="card-header"><div class="card-title"><i class="fas fa-percent"></i> العروض والخصومات</div><button class="btn btn-success btn-sm" onclick="openAppOfferModal()"><i class="fas fa-plus"></i> إضافة عرض</button></div>
+                <div class="table-container">
+                    <table><thead><tr><th>الصنف</th><th>عنوان العرض</th><th>السعر قبل</th><th>السعر بعد</th><th>نسبة الخصم</th><th>ينتهي في</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="appOffersTable"></tbody></table>
                 </div>
             </div>
         </section>
@@ -1760,6 +1778,59 @@
         </div>
     </div>
 
+    <!-- App Banner Modal -->
+    <div class="modal-overlay" id="appBannerModal">
+        <div class="modal">
+            <div class="modal-header"><h3 class="modal-title" id="appBannerModalTitle">إضافة بانر</h3><button class="modal-close" onclick="closeModal('appBannerModal')">&times;</button></div>
+            <div class="modal-body">
+                <div class="form-group"><label class="form-label">عنوان البانر</label><input type="text" class="form-control" id="appBannerTitle" placeholder="مثال: عروض الأسبوع على المنظفات"></div>
+                <div class="form-group"><label class="form-label">نص فرعي (اختياري)</label><input type="text" class="form-control" id="appBannerSubtitle" placeholder="مثال: خصومات تصل لـ 15%"></div>
+                <div class="form-group">
+                    <label class="form-label">صورة البانر</label>
+                    <div style="display:flex;align-items:center;gap:12px;">
+                        <img id="appBannerImagePreview" src="" style="width:80px;height:50px;object-fit:cover;border-radius:8px;border:1px solid var(--border);display:none;">
+                        <input type="file" accept="image/*" class="form-control" id="appBannerImageFile" onchange="previewGenericImage('appBannerImageFile','appBannerImagePreview')">
+                    </div>
+                    <div id="appBannerImageUploadStatus" style="font-size:12px;color:var(--text-light);margin-top:4px;"></div>
+                    <input type="hidden" id="appBannerImageUrl">
+                </div>
+                <div class="form-group"><label class="form-label">عند الضغط على البانر يوديك لـ</label>
+                    <select class="form-control" id="appBannerLinkType" onchange="toggleBannerLinkValueField()">
+                        <option value="none">بدون رابط (عرض فقط)</option>
+                        <option value="category">قسم معين</option>
+                        <option value="product">صنف معين</option>
+                    </select>
+                </div>
+                <div class="form-group" id="appBannerLinkValueGroup" style="display:none;">
+                    <label class="form-label">حدد الوجهة</label>
+                    <select class="form-control" id="appBannerLinkValue"></select>
+                </div>
+                <div class="form-group"><label class="form-label">ترتيب الظهور</label><input type="number" class="form-control" id="appBannerOrder" value="0" min="0"></div>
+                <div class="form-group"><label class="form-label"><input type="checkbox" id="appBannerActive" checked> مفعّل (ظاهر في الأبليكشن)</label></div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('appBannerModal')">إلغاء</button><button class="btn btn-success" onclick="saveAppBanner()">حفظ</button></div>
+        </div>
+    </div>
+
+    <!-- App Offer Modal -->
+    <div class="modal-overlay" id="appOfferModal">
+        <div class="modal">
+            <div class="modal-header"><h3 class="modal-title" id="appOfferModalTitle">إضافة عرض</h3><button class="modal-close" onclick="closeModal('appOfferModal')">&times;</button></div>
+            <div class="modal-body">
+                <div class="form-group"><label class="form-label">الصنف</label>
+                    <select class="form-control" id="appOfferProduct" onchange="onOfferProductChange()"><option value="">اختر صنف</option></select>
+                </div>
+                <div class="form-group"><label class="form-label">عنوان العرض</label><input type="text" class="form-control" id="appOfferTitle" placeholder="مثال: خصم 10% على..."></div>
+                <div class="form-group"><label class="form-label">وصف العرض (اختياري)</label><input type="text" class="form-control" id="appOfferDesc" placeholder="مثال: عند الطلب بكميتين فأكثر"></div>
+                <div class="form-group"><label class="form-label">السعر قبل العرض</label><input type="number" class="form-control" id="appOfferOldPrice" readonly></div>
+                <div class="form-group"><label class="form-label">السعر بعد العرض</label><input type="number" class="form-control" id="appOfferNewPrice" min="0"></div>
+                <div class="form-group"><label class="form-label">تاريخ انتهاء العرض (اختياري)</label><input type="date" class="form-control" id="appOfferEndDate"></div>
+                <div class="form-group"><label class="form-label"><input type="checkbox" id="appOfferActive" checked> مفعّل (ظاهر في الأبليكشن)</label></div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('appOfferModal')">إلغاء</button><button class="btn btn-success" onclick="saveAppOffer()">حفظ</button></div>
+        </div>
+    </div>
+
     <!-- View Invoice Modal (Professional Layout) -->
     <div class="modal-overlay" id="viewInvoiceModal">
         <div class="modal" style="max-width:650px;">
@@ -1970,6 +2041,8 @@
         let appBrands = JSON.parse(localStorage.getItem('appBrands')) || [];
         let activationCodes = JSON.parse(localStorage.getItem('activationCodes')) || [];
         let loyaltySettings = JSON.parse(localStorage.getItem('loyaltySettings')) || { pointsPerAmount: 10, pointValue: 1 };
+        let appBanners = JSON.parse(localStorage.getItem('appBanners')) || [];
+        let appOffers = JSON.parse(localStorage.getItem('appOffers')) || [];
         let currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
 
         const ROLES = {
@@ -2004,7 +2077,7 @@
         const CLOUD_SYNCED_KEYS = new Set([
             'products', 'customers', 'suppliers', 'salesmen', 'invoices', 'purchaseInvoices',
             'inventory', 'stockMovements', 'expenses', 'treasury', 'salesReturns',
-            'purchaseReturns', 'users', 'auditLog', 'appCategories', 'appBrands', 'activationCodes', 'loyaltySettings'
+            'purchaseReturns', 'users', 'auditLog', 'appCategories', 'appBrands', 'activationCodes', 'loyaltySettings', 'appBanners', 'appOffers'
         ]);
 
         let db = null;
@@ -2063,7 +2136,7 @@
             const payload = {
                 products, customers, suppliers, salesmen, invoices, purchaseInvoices,
                 inventory, stockMovements, expenses, treasury, salesReturns, purchaseReturns,
-                users, auditLog, appCategories, appBrands, activationCodes, loyaltySettings,
+                users, auditLog, appCategories, appBrands, activationCodes, loyaltySettings, appBanners, appOffers,
                 updatedAt: Date.now(),
                 updatedBy: DEVICE_ID
             };
@@ -2103,6 +2176,8 @@
                 appBrands = data.appBrands || [];
                 activationCodes = data.activationCodes || [];
                 loyaltySettings = data.loyaltySettings || loyaltySettings;
+                appBanners = data.appBanners || [];
+                appOffers = data.appOffers || [];
 
                 localStorage.setItem('products', JSON.stringify(products));
                 localStorage.setItem('customers', JSON.stringify(customers));
@@ -2122,6 +2197,8 @@
                 localStorage.setItem('appBrands', JSON.stringify(appBrands));
                 localStorage.setItem('activationCodes', JSON.stringify(activationCodes));
                 localStorage.setItem('loyaltySettings', JSON.stringify(loyaltySettings));
+                localStorage.setItem('appBanners', JSON.stringify(appBanners));
+                localStorage.setItem('appOffers', JSON.stringify(appOffers));
                 applyingRemoteUpdate = false;
 
                 try { loadAllData(); } catch (e) { console.error('refresh after remote update failed:', e); }
@@ -2919,7 +2996,7 @@
         }
 
         function switchAppMgmtTab(tab) {
-            ['categories', 'brands', 'codes', 'loyalty'].forEach(t => {
+            ['categories', 'brands', 'codes', 'loyalty', 'banners', 'offers'].forEach(t => {
                 document.getElementById('appMgmtTab-' + t).style.display = (t === tab) ? 'block' : 'none';
                 document.getElementById('appMgmtTabBtn-' + t).className = 'btn btn-sm ' + (t === tab ? 'btn-primary' : 'btn-secondary');
             });
@@ -2927,6 +3004,8 @@
             else if (tab === 'brands') renderAppBrands();
             else if (tab === 'codes') renderActivationCodes();
             else if (tab === 'loyalty') renderLoyaltyTab();
+            else if (tab === 'banners') renderAppBanners();
+            else if (tab === 'offers') renderAppOffers();
         }
 
         let editingAppCategory = null;
@@ -3190,6 +3269,197 @@
             logAction('تعديل نقاط ولاء يدوي', `العميل ${cust.name}: الرصيد الجديد ${newPoints} نقطة`);
             renderLoyaltyCustomers();
             showToast('تم تحديث رصيد النقاط');
+        }
+
+        // ==================== البانرات/الإعلانات ====================
+        let editingAppBanner = null;
+
+        function toggleBannerLinkValueField() {
+            const type = document.getElementById('appBannerLinkType').value;
+            const group = document.getElementById('appBannerLinkValueGroup');
+            const sel = document.getElementById('appBannerLinkValue');
+            if (type === 'none') { group.style.display = 'none'; return; }
+            group.style.display = 'block';
+            if (type === 'category') {
+                sel.innerHTML = appCategories.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+            } else if (type === 'product') {
+                sel.innerHTML = products.map(p => `<option value="${p.code}">${p.name}</option>`).join('');
+            }
+        }
+
+        function openAppBannerModal(banner = null) {
+            editingAppBanner = banner;
+            document.getElementById('appBannerModalTitle').textContent = banner ? 'تعديل بانر' : 'إضافة بانر';
+            document.getElementById('appBannerTitle').value = banner ? banner.title : '';
+            document.getElementById('appBannerSubtitle').value = banner ? (banner.subtitle || '') : '';
+            document.getElementById('appBannerOrder').value = banner ? banner.order : appBanners.length;
+            document.getElementById('appBannerActive').checked = banner ? banner.active !== false : true;
+            document.getElementById('appBannerImageUrl').value = banner ? (banner.imageUrl || '') : '';
+            document.getElementById('appBannerImageFile').value = '';
+            const preview = document.getElementById('appBannerImagePreview');
+            if (banner && banner.imageUrl) { preview.src = banner.imageUrl; preview.style.display = 'inline-block'; } else { preview.style.display = 'none'; preview.src = ''; }
+            document.getElementById('appBannerImageUploadStatus').textContent = '';
+            document.getElementById('appBannerLinkType').value = banner ? banner.linkType : 'none';
+            toggleBannerLinkValueField();
+            if (banner && banner.linkValue) document.getElementById('appBannerLinkValue').value = banner.linkValue;
+            openModal('appBannerModal');
+        }
+
+        function saveAppBanner() {
+            const title = document.getElementById('appBannerTitle').value.trim();
+            if (!title) { showToast('الرجاء إدخال عنوان البانر', 'error'); return; }
+            const subtitle = document.getElementById('appBannerSubtitle').value.trim();
+            const order = parseInt(document.getElementById('appBannerOrder').value) || 0;
+            const active = document.getElementById('appBannerActive').checked;
+            const linkType = document.getElementById('appBannerLinkType').value;
+            const linkValue = linkType === 'none' ? null : document.getElementById('appBannerLinkValue').value;
+            document.getElementById('appBannerImageUploadStatus').textContent = 'جاري الحفظ...';
+            uploadImageIfProvided('appBannerImageFile', 'app_banners/' + Date.now(), function(url) {
+                const imageUrl = url || document.getElementById('appBannerImageUrl').value || null;
+                if (editingAppBanner) {
+                    const idx = appBanners.findIndex(b => b.id === editingAppBanner.id);
+                    if (idx !== -1) appBanners[idx] = { ...appBanners[idx], title, subtitle, order, active, linkType, linkValue, imageUrl };
+                } else {
+                    appBanners.push({ id: 'banner_' + Date.now(), title, subtitle, order, active, linkType, linkValue, imageUrl });
+                }
+                localStorage.setItem('appBanners', JSON.stringify(appBanners));
+                logAction(editingAppBanner ? 'تعديل بانر' : 'إضافة بانر', `البانر: ${title}`);
+                closeModal('appBannerModal');
+                renderAppBanners();
+                showToast('تم الحفظ بنجاح');
+            });
+        }
+
+        function deleteAppBanner(id) {
+            if (!confirm('هل تريد حذف هذا البانر؟')) return;
+            appBanners = appBanners.filter(b => b.id !== id);
+            localStorage.setItem('appBanners', JSON.stringify(appBanners));
+            renderAppBanners();
+            showToast('تم الحذف');
+        }
+
+        function toggleAppBannerActive(id) {
+            const b = appBanners.find(x => x.id === id);
+            if (!b) return;
+            b.active = !b.active;
+            localStorage.setItem('appBanners', JSON.stringify(appBanners));
+            renderAppBanners();
+        }
+
+        function renderAppBanners() {
+            const tbody = document.getElementById('appBannersTable');
+            if (!tbody) return;
+            if (appBanners.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="empty-state"><i class="fas fa-images"></i><h3>لا توجد بانرات مضافة بعد</h3></td></tr>`;
+                return;
+            }
+            const linkLabels = { none: 'بدون رابط', category: 'قسم: ', product: 'صنف: ' };
+            const sorted = [...appBanners].sort((a, b) => a.order - b.order);
+            tbody.innerHTML = sorted.map(b => {
+                let linkText = linkLabels[b.linkType] || '-';
+                if (b.linkType === 'product') { const p = products.find(x => x.code === b.linkValue); linkText += p ? p.name : b.linkValue; }
+                else if (b.linkType === 'category') linkText += b.linkValue;
+                return `<tr>
+                    <td>${b.imageUrl ? `<img src="${b.imageUrl}" style="width:60px;height:36px;object-fit:cover;border-radius:6px;">` : '-'}</td>
+                    <td><strong>${b.title}</strong>${b.subtitle ? `<br><span style="font-size:11px;color:var(--text-light);">${b.subtitle}</span>` : ''}</td>
+                    <td>${linkText}</td>
+                    <td>${b.order}</td>
+                    <td><span class="badge ${b.active !== false ? 'badge-success' : 'badge-danger'}" style="cursor:pointer;" onclick="toggleAppBannerActive('${b.id}')">${b.active !== false ? 'مفعّل' : 'موقوف'}</span></td>
+                    <td><button class="btn btn-primary btn-icon btn-sm" onclick='openAppBannerModal(${JSON.stringify(b).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-danger btn-icon btn-sm" onclick="deleteAppBanner('${b.id}')"><i class="fas fa-trash"></i></button></td>
+                </tr>`;
+            }).join('');
+        }
+
+        // ==================== العروض ====================
+        let editingAppOffer = null;
+
+        function onOfferProductChange() {
+            const code = document.getElementById('appOfferProduct').value;
+            const p = products.find(x => x.code === code);
+            document.getElementById('appOfferOldPrice').value = p ? p.price : '';
+        }
+
+        function openAppOfferModal(offer = null) {
+            editingAppOffer = offer;
+            document.getElementById('appOfferModalTitle').textContent = offer ? 'تعديل عرض' : 'إضافة عرض';
+            const sel = document.getElementById('appOfferProduct');
+            sel.innerHTML = '<option value="">اختر صنف</option>' + products.map(p => `<option value="${p.code}">${p.name}</option>`).join('');
+            sel.value = offer ? offer.productCode : '';
+            document.getElementById('appOfferTitle').value = offer ? offer.title : '';
+            document.getElementById('appOfferDesc').value = offer ? (offer.desc || '') : '';
+            document.getElementById('appOfferOldPrice').value = offer ? offer.oldPrice : '';
+            document.getElementById('appOfferNewPrice').value = offer ? offer.newPrice : '';
+            document.getElementById('appOfferEndDate').value = offer ? (offer.endDate || '') : '';
+            document.getElementById('appOfferActive').checked = offer ? offer.active !== false : true;
+            if (!offer) onOfferProductChange();
+            openModal('appOfferModal');
+        }
+
+        function saveAppOffer() {
+            const productCode = document.getElementById('appOfferProduct').value;
+            const title = document.getElementById('appOfferTitle').value.trim();
+            const newPrice = parseFloat(document.getElementById('appOfferNewPrice').value);
+            if (!productCode || !title || !newPrice) { showToast('الرجاء ملء الحقول الإلزامية (الصنف، العنوان، السعر الجديد)', 'error'); return; }
+            const p = products.find(x => x.code === productCode);
+            const offerData = {
+                productCode, productName: p ? p.name : '',
+                title, desc: document.getElementById('appOfferDesc').value.trim(),
+                oldPrice: parseFloat(document.getElementById('appOfferOldPrice').value) || (p ? p.price : 0),
+                newPrice, endDate: document.getElementById('appOfferEndDate').value || null,
+                active: document.getElementById('appOfferActive').checked
+            };
+            if (editingAppOffer) {
+                const idx = appOffers.findIndex(o => o.id === editingAppOffer.id);
+                if (idx !== -1) appOffers[idx] = { ...appOffers[idx], ...offerData };
+            } else {
+                appOffers.push({ id: 'offer_' + Date.now(), ...offerData });
+            }
+            localStorage.setItem('appOffers', JSON.stringify(appOffers));
+            logAction(editingAppOffer ? 'تعديل عرض' : 'إضافة عرض', `العرض: ${title}`);
+            closeModal('appOfferModal');
+            renderAppOffers();
+            showToast('تم الحفظ بنجاح');
+        }
+
+        function deleteAppOffer(id) {
+            if (!confirm('هل تريد حذف هذا العرض؟')) return;
+            appOffers = appOffers.filter(o => o.id !== id);
+            localStorage.setItem('appOffers', JSON.stringify(appOffers));
+            renderAppOffers();
+            showToast('تم الحذف');
+        }
+
+        function toggleAppOfferActive(id) {
+            const o = appOffers.find(x => x.id === id);
+            if (!o) return;
+            o.active = !o.active;
+            localStorage.setItem('appOffers', JSON.stringify(appOffers));
+            renderAppOffers();
+        }
+
+        function renderAppOffers() {
+            const tbody = document.getElementById('appOffersTable');
+            if (!tbody) return;
+            if (appOffers.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="empty-state"><i class="fas fa-percent"></i><h3>لا توجد عروض مضافة بعد</h3></td></tr>`;
+                return;
+            }
+            tbody.innerHTML = appOffers.map(o => {
+                const discountPct = o.oldPrice > 0 ? Math.round((1 - o.newPrice / o.oldPrice) * 100) : 0;
+                const expired = o.endDate && new Date(o.endDate) < new Date();
+                return `<tr>
+                    <td><strong>${o.productName}</strong></td>
+                    <td>${o.title}</td>
+                    <td>${o.oldPrice.toFixed(2)} ر.س</td>
+                    <td><strong style="color:var(--accent);">${o.newPrice.toFixed(2)} ر.س</strong></td>
+                    <td>${discountPct > 0 ? discountPct + '%' : '-'}</td>
+                    <td>${o.endDate ? new Date(o.endDate).toLocaleDateString('ar-EG') : 'بدون تاريخ انتهاء'} ${expired ? '<span class="badge badge-danger">منتهي</span>' : ''}</td>
+                    <td><span class="badge ${o.active !== false ? 'badge-success' : 'badge-danger'}" style="cursor:pointer;" onclick="toggleAppOfferActive('${o.id}')">${o.active !== false ? 'مفعّل' : 'موقوف'}</span></td>
+                    <td><button class="btn btn-primary btn-icon btn-sm" onclick='openAppOfferModal(${JSON.stringify(o).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-danger btn-icon btn-sm" onclick="deleteAppOffer('${o.id}')"><i class="fas fa-trash"></i></button></td>
+                </tr>`;
+            }).join('');
         }
 
         function saveProduct() {
