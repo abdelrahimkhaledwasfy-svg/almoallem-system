@@ -2385,19 +2385,27 @@
             if (!confirm('تأكيد تجهيز هذا الطلب؟ سيتم خصم الأصناف من المخزون وإنشاء فاتورة بيع.')) return;
             if (!db) { showToast('لا يوجد اتصال بالسحابة، لا يمكن تنفيذ الطلب الآن', 'error'); return; }
 
+            // حساب كمية الخصم الفعلية من المخزون (بوحدة الكرتونة الأساسية) لكل صنف
+            // لو الطلب كان بالقطاعي، بنحول الكمية لكسر من الكرتونة عشان الخصم يبقى صحيح
+            order.items.forEach(item => {
+                const product = products.find(p => p.code === item.productCode);
+                const isSecondary = product && product.secondaryUnit && item.unit === product.secondaryUnit.name;
+                item.stockDeductQty = isSecondary ? (item.qty / product.secondaryUnit.factor) : item.qty;
+            });
+
             const refs = (order.items || []).map(item => db.collection('stockLevels').doc(item.productCode));
             db.runTransaction(function(t) {
                 return Promise.all(refs.map(r => t.get(r))).then(function(snaps) {
                     for (let i = 0; i < snaps.length; i++) {
                         const item = order.items[i];
                         const currentQty = snaps[i].exists ? (snaps[i].data().qty || 0) : 0;
-                        if (currentQty < item.qty) {
+                        if (currentQty < item.stockDeductQty) {
                             throw new Error('الكمية غير متوفرة حاليًا للصنف: ' + item.productName + ' (المتاح: ' + currentQty + ')');
                         }
                     }
                     for (let i = 0; i < snaps.length; i++) {
                         const item = order.items[i];
-                        const newQty = (snaps[i].data().qty || 0) - item.qty;
+                        const newQty = (snaps[i].data().qty || 0) - item.stockDeductQty;
                         t.set(refs[i], { code: item.productCode, qty: newQty, updatedAt: Date.now() });
                     }
                 });
@@ -2406,10 +2414,10 @@
                 order.items.forEach(item => {
                     if (inventory[item.productCode]) {
                         const unitCost = inventory[item.productCode].cost || (products.find(p => p.code === item.productCode) || {}).cost || 0;
-                        inventory[item.productCode].qty -= item.qty;
+                        inventory[item.productCode].qty -= item.stockDeductQty;
                         item.cost = unitCost;
                         item.profit = (item.price - unitCost) * item.qty;
-                        addStockMovement(item.productCode, item.productName, 'out', -item.qty, inventory[item.productCode].qty, 'طلب أبليكشن #' + order.id.slice(-6), 'خصم تلقائي من طلب عميل عبر الأبليكشن');
+                        addStockMovement(item.productCode, item.productName, 'out', -item.stockDeductQty, inventory[item.productCode].qty, 'طلب أبليكشن #' + order.id.slice(-6), 'خصم تلقائي من طلب عميل عبر الأبليكشن');
                     }
                 });
                 localStorage.setItem('inventory', JSON.stringify(inventory));
@@ -4661,13 +4669,15 @@
             const rowNum = tbody.children.length + 1;
             const options = products.map(p => {
                 const inv = inventory[p.code] || { qty: 0 };
-                return `<option value="${p.code}" data-price="${p.price}" data-unit="${p.unit}" data-stock="${inv.qty}">${p.name} (مخزون: ${inv.qty})</option>`;
+                return `<option value="${p.code}" data-price="${p.price}" data-unit="${p.unit}" data-stock="${inv.qty}"
+                    data-sec-unit="${p.secondaryUnit ? p.secondaryUnit.name : ''}" data-sec-price="${p.secondaryUnit ? p.secondaryUnit.price : ''}"
+                    data-sec-factor="${p.secondaryUnit ? p.secondaryUnit.factor : ''}">${p.name} (مخزون: ${inv.qty} ${p.unit})</option>`;
             }).join('');
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${rowNum}</td>
                 <td><select class="form-control" onchange="updateInvoiceRow(this)" style="min-width:200px"><option value="">اختر الصنف...</option>${options}</select></td>
-                <td><input type="text" class="form-control unit-field" readonly style="background:#f8f9fa"></td>
+                <td><select class="form-control unit-field" onchange="onInvoiceUnitChange(this)" style="min-width:90px;"><option value="">-</option></select></td>
                 <td><input type="number" class="form-control stock-field" readonly style="background:#f8f9fa;color:var(--primary);font-weight:700;"></td>
                 <td><input type="number" class="form-control qty-field" value="1" min="1" onchange="calculateInvoiceRow(this)"></td>
                 <td><input type="number" class="form-control price-field" readonly style="background:#f8f9fa"></td>
@@ -4679,10 +4689,28 @@
         function updateInvoiceRow(select) {
             const row = select.closest('tr');
             const option = select.options[select.selectedIndex];
-            if (!option.value) return;
-            row.querySelector('.unit-field').value = option.dataset.unit;
-            row.querySelector('.stock-field').value = option.dataset.stock;
-            row.querySelector('.price-field').value = option.dataset.price;
+            const unitSelect = row.querySelector('.unit-field');
+            if (!option.value) { unitSelect.innerHTML = '<option value="">-</option>'; return; }
+
+            // تجهيز قايمة الوحدات (الأساسية + الثانية لو موجودة)
+            let unitOptions = `<option value="primary" data-price="${option.dataset.price}" data-factor="1">${option.dataset.unit}</option>`;
+            if (option.dataset.secUnit) {
+                unitOptions += `<option value="secondary" data-price="${option.dataset.secPrice}" data-factor="${option.dataset.secFactor}">${option.dataset.secUnit} (قطاعي)</option>`;
+            }
+            unitSelect.innerHTML = unitOptions;
+            unitSelect.dataset.baseStock = option.dataset.stock;
+            onInvoiceUnitChange(unitSelect);
+        }
+
+        function onInvoiceUnitChange(unitSelect) {
+            const row = unitSelect.closest('tr');
+            const opt = unitSelect.options[unitSelect.selectedIndex];
+            const factor = parseFloat(opt.dataset.factor) || 1;
+            const baseStock = parseFloat(unitSelect.dataset.baseStock) || 0;
+            row.querySelector('.price-field').value = opt.dataset.price;
+            // المخزون المعروض بنفس وحدة البيع المختارة (لو قطاعي: المخزون × عدد القطع في الكرتونة)
+            row.querySelector('.stock-field').value = (baseStock * factor).toFixed(factor === 1 ? 0 : 2);
+            row.dataset.unitFactor = factor;
             calculateInvoiceRow(row.querySelector('.qty-field'));
         }
 
@@ -4723,9 +4751,15 @@
                     const qty = parseFloat(row.querySelector('.qty-field').value) || 0;
                     const stock = parseFloat(row.querySelector('.stock-field').value) || 0;
                     if (qty > stock) { stockError = true; }
-                    items.push({ productCode: select.value, productName: product.name, unit: row.querySelector('.unit-field').value,
+                    const unitSelect = row.querySelector('.unit-field');
+                    const unitOpt = unitSelect.options[unitSelect.selectedIndex];
+                    const isSecondary = unitSelect.value === 'secondary';
+                    const unitLabel = isSecondary ? product.secondaryUnit.name : product.unit;
+                    const factor = parseFloat(unitOpt?.dataset.factor) || 1;
+                    items.push({ productCode: select.value, productName: product.name, unit: unitLabel,
                         qty: qty, price: parseFloat(row.querySelector('.price-field').value),
-                        total: parseFloat(row.querySelector('.total-field').value) });
+                        total: parseFloat(row.querySelector('.total-field').value),
+                        stockDeductQty: isSecondary ? (qty / factor) : qty });
                 }
             });
             if (!hasItems) { showToast('الرجاء إضافة أصناف للفاتورة', 'error'); return; }
@@ -4752,10 +4786,11 @@
             items.forEach(item => {
                 if (inventory[item.productCode]) {
                     const unitCost = inventory[item.productCode].cost || products.find(p => p.code === item.productCode)?.cost || 0;
-                    inventory[item.productCode].qty -= item.qty;
+                    const deductQty = item.stockDeductQty != null ? item.stockDeductQty : item.qty;
+                    inventory[item.productCode].qty -= deductQty;
                     item.cost = unitCost;
                     item.profit = (item.price - unitCost) * item.qty;
-                    addStockMovement(item.productCode, item.productName, 'out', -item.qty, inventory[item.productCode].qty, 'فاتورة بيع #' + getNextDocNumber(invoices.filter(i => i.type === 'sale')).toString().padStart(4, '0'), 'خصم تلقائي من فاتورة البيع');
+                    addStockMovement(item.productCode, item.productName, 'out', -deductQty, inventory[item.productCode].qty, 'فاتورة بيع #' + getNextDocNumber(invoices.filter(i => i.type === 'sale')).toString().padStart(4, '0'), 'خصم تلقائي من فاتورة البيع' + (item.stockDeductQty != null && item.stockDeductQty !== item.qty ? ' (بيع بالقطاعي)' : ''));
                 }
             });
             saveInventory();
