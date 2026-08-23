@@ -2333,7 +2333,8 @@
                 .then(() => showToast('تمت إعادة المزامنة بنجاح فعليًا ✓'))
                 .catch(err => {
                     console.error('Manual stock resync failed:', err);
-                    showToast('فشلت المزامنة، تأكد من الاتصال بالإنترنت وحاول تاني', 'error');
+                    const reason = (err && (err.code || err.message)) ? (err.code || err.message) : 'خطأ غير معروف';
+                    showToast('فشلت المزامنة — السبب: ' + reason, 'error');
                 });
         }
 
