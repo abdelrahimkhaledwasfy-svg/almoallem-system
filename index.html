@@ -2290,7 +2290,7 @@
         // ==================== CUSTOMER ORDERS (من أبليكشن العملاء) ====================
         // كل طلب بييجي من الأبليكشن بيتخزن كـ Document منفصل في Collection مستقلة "customerOrders"
         // (مش جوه الـ storeData الكبيرة) عشان طلبات كتير تقدر توصل في نفس اللحظة من غير ما تدوس على بعض.
-        let customerOrders = [];
+        let customerOrders = JSON.parse(localStorage.getItem('customerOrders') || '[]');
         let ordersListenerStarted = false;
         let stockLevelsSyncTimer = null;
 
@@ -2327,12 +2327,27 @@
             ordersListenerStarted = true;
             db.collection('customerOrders').orderBy('createdAt', 'desc').onSnapshot(function(snap) {
                 customerOrders = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+                localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
                 renderCustomerOrders();
                 updatePendingOrdersBadge();
             }, function(err) {
                 console.error('Orders listener error:', err);
             });
         }
+
+        window.addEventListener('storage', function(e) {
+            if (e.key === 'customerOrders') {
+                var appOrders = JSON.parse(e.newValue || '[]');
+                var existingIds = new Set(customerOrders.map(function(o){ return o.id; }));
+                var newOrders = appOrders.filter(function(o){ return !existingIds.has(o.id); });
+                if (newOrders.length > 0) {
+                    customerOrders = newOrders.concat(customerOrders);
+                    renderCustomerOrders();
+                    updatePendingOrdersBadge();
+                    showToast('طلب جديد من أبليكشن العملاء!', 3000);
+                }
+            }
+        });
 
         function updatePendingOrdersBadge() {
             const badge = document.getElementById('pendingOrdersBadge');
@@ -2473,6 +2488,8 @@
 
                 return db.collection('customerOrders').doc(order.id).update({ status: 'fulfilled', fulfilledAt: Date.now(), fulfilledBy: DEVICE_ID, invoiceNumber: invoice.number });
             }).then(function() {
+                order.status = 'fulfilled';
+                localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
                 showToast('تم تجهيز الطلب وخصم المخزون بنجاح');
                 updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderInventory(); renderMovements(); renderLowStock(); renderCustomers();
             }).catch(function(err) {
@@ -2485,7 +2502,12 @@
             if (!db) return;
             if (!confirm('تأكيد رفض هذا الطلب؟')) return;
             db.collection('customerOrders').doc(orderId).update({ status: 'rejected', rejectedAt: Date.now(), rejectedBy: DEVICE_ID })
-                .then(() => showToast('تم رفض الطلب'))
+                .then(function() {
+                    var ord = customerOrders.find(function(o){ return o.id === orderId; });
+                    if (ord) ord.status = 'rejected';
+                    localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
+                    showToast('تم رفض الطلب');
+                })
                 .catch(err => { console.error(err); showToast('تعذر رفض الطلب', 'error'); });
         }
 
