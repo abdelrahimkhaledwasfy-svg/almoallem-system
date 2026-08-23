@@ -2304,22 +2304,37 @@
         }
 
         function pushStockLevelsToCloud() {
-            if (!db) return;
-            const batch = db.batch();
-            Object.keys(inventory).forEach(code => {
-                const ref = db.collection('stockLevels').doc(code);
-                batch.set(ref, { code, qty: inventory[code].qty || 0, updatedAt: Date.now() });
+            if (!db) return Promise.reject(new Error('لا يوجد اتصال بالسحابة'));
+            // Firestore بيمنع أكتر من 500 عملية كتابة في نفس الـ batch، فلو عدد الأصناف كبير
+            // بنقسمهم لدفعات (batches) متعددة ونستنى كل الدفعات تخلص فعليًا قبل ما نقول "تم"
+            const codes = Object.keys(inventory);
+            const BATCH_LIMIT = 450;
+            const chunks = [];
+            for (let i = 0; i < codes.length; i += BATCH_LIMIT) chunks.push(codes.slice(i, i + BATCH_LIMIT));
+            const commits = chunks.map(chunkCodes => {
+                const batch = db.batch();
+                chunkCodes.forEach(code => {
+                    const ref = db.collection('stockLevels').doc(code);
+                    batch.set(ref, { code, qty: inventory[code].qty || 0, updatedAt: Date.now() });
+                });
+                return batch.commit();
             });
-            batch.commit().catch(err => console.error('Stock levels sync failed:', err));
+            return Promise.all(commits);
         }
 
         // زرار يدوي لإصلاح أي أصناف "عالقة" ظهرت مختفية من الأبليكشن بسبب مشكلة توقيت قديمة في المزامنة
+        // الرسالة النهائية (نجاح/فشل) بتتوقف فعليًا على نتيجة الإرسال الحقيقية للسحابة، مش على توقيت ثابت،
+        // عشان مع النت البطيء ميظهرش "تم" قبل ما البيانات توصل فعلًا.
         function manualResyncStockLevels() {
             if (!db) { showToast('لا يوجد اتصال بالسحابة حاليًا', 'error'); return; }
             if (!confirm('هيتم إرسال أحدث كميات المخزون الموجودة عندك دلوقتي لكل الأصناف، وتحديث ظهورها في الأبليكشن فورًا. متابعة؟')) return;
-            showToast('جاري إعادة المزامنة...');
-            pushStockLevelsToCloud();
-            setTimeout(() => showToast('تمت إعادة المزامنة بنجاح ✓'), 1200);
+            showToast('جاري إعادة المزامنة... من فضلك استنى ولا تقفل الصفحة');
+            pushStockLevelsToCloud()
+                .then(() => showToast('تمت إعادة المزامنة بنجاح فعليًا ✓'))
+                .catch(err => {
+                    console.error('Manual stock resync failed:', err);
+                    showToast('فشلت المزامنة، تأكد من الاتصال بالإنترنت وحاول تاني', 'error');
+                });
         }
 
         function startOrdersListener() {
