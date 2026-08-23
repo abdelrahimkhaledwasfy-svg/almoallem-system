@@ -1269,6 +1269,8 @@
                 <div style="padding:0 20px 15px;">
                     <button class="btn btn-warning btn-sm" onclick="manualResyncStockLevels()"><i class="fas fa-sync"></i> إعادة مزامنة المخزون مع الأبليكشن الآن</button>
                     <div style="font-size:12px;color:var(--text-light);margin-top:6px;">استخدم الزرار ده لو لاحظت إن صنف موجود ومتوفر عندك بس مش ظاهر في الأبليكشن.</div>
+                    <button class="btn btn-warning btn-sm" style="margin-top:10px;" onclick="manualFullResync()"><i class="fas fa-cloud-upload-alt"></i> إعادة مزامنة كل بيانات المتجر (منتجات/فئات/براندات/بانرات/عروض)</button>
+                    <div style="font-size:12px;color:var(--text-light);margin-top:6px;">استخدم الزرار ده لو المنتجات أو الشركات/الماركات أو البانرات ظاهرة عندك في السيستم بس فاضية في الأبليكشن.</div>
                 </div>
             </div>
 
@@ -2197,7 +2199,7 @@
         }
 
         function pushStateToCloud() {
-            if (!db) return;
+            if (!db) return Promise.reject(new Error('لا يوجد اتصال بالسحابة'));
             const payload = {
                 products, customers, suppliers, salesmen, invoices, purchaseInvoices,
                 inventory, stockMovements, expenses, treasury, salesReturns, purchaseReturns,
@@ -2206,9 +2208,23 @@
                 updatedAt: Date.now(),
                 updatedBy: DEVICE_ID
             };
-            db.collection('storeData').doc('main').set(JSON.parse(JSON.stringify(payload)))
+            return db.collection('storeData').doc('main').set(JSON.parse(JSON.stringify(payload)))
                 .then(() => updateSyncBadge('synced'))
-                .catch(err => { console.error('Cloud sync failed:', err); updateSyncBadge('error'); });
+                .catch(err => { console.error('Cloud sync failed:', err); updateSyncBadge('error'); throw err; });
+        }
+
+        // زرار يدوي لإجبار رفع كل بيانات المتجر (منتجات/فئات/براندات/بانرات/عروض) للسحابة دفعة واحدة،
+        // لو حصل قبل كده إن الرفع كان بيفشل بصمت (زي مشكلة صلاحيات الكتابة) والبيانات في الأبليكشن فاضلة قديمة/فاضية
+        function manualFullResync() {
+            if (!db) { showToast('لا يوجد اتصال بالسحابة حاليًا', 'error'); return; }
+            if (!confirm('هيتم رفع كل بيانات المتجر (المنتجات، الفئات، البراندات، البانرات، العروض...) للسحابة دلوقتي. متابعة؟')) return;
+            showToast('جاري رفع كل البيانات... من فضلك استنى ولا تقفل الصفحة');
+            pushStateToCloud()
+                .then(() => showToast('تمت مزامنة كل بيانات المتجر بنجاح فعليًا ✓'))
+                .catch(err => {
+                    const reason = (err && (err.code || err.message)) ? (err.code || err.message) : 'خطأ غير معروف';
+                    showToast('فشلت المزامنة — السبب: ' + reason, 'error');
+                });
         }
 
         function startCloudListener() {
