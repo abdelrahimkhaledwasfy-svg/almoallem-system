@@ -1710,21 +1710,12 @@
                 </div>
                 <div class="form-group"><label class="form-label">اسم الصنف</label><input type="text" class="form-control" id="productName" placeholder="اسم الصنف"></div>
                 <div class="form-group"><label class="form-label">الوحدة</label><input type="text" class="form-control" id="productUnit" placeholder="مثال: قطعة، كرتونة، كيلو"></div>
-                <div class="form-group"><label class="form-label">القسم</label>
-                    <select class="form-control" id="productCategory">
-                        <option value="">بدون قسم</option>
-                        <optgroup label="مواد غذائية">
-                            <option value="مواد غذائية - مشروبات">مشروبات</option>
-                            <option value="مواد غذائية - ألبان وأجبان">ألبان وأجبان</option>
-                            <option value="مواد غذائية - زيوت وسمن">زيوت وسمن</option>
-                            <option value="مواد غذائية - معلبات">معلبات</option>
-                            <option value="مواد غذائية - بقالة جافة">بقالة جافة</option>
-                            <option value="مواد غذائية - بسكويت وسناكس">بسكويت وسناكس</option>
-                            <option value="مواد غذائية - توابل">توابل</option>
-                        </optgroup>
-                        <option value="منظفات">منظفات</option>
-                        <option value="ورقيات">ورقيات</option>
-                        <option value="خردوات">خردوات</option>
+                <div class="form-group"><label class="form-label">الشركة / الماركة</label>
+                    <select class="form-control" id="productBrand" onchange="onProductBrandChange()"><option value="">بدون تحديد</option></select>
+                </div>
+                <div class="form-group"><label class="form-label">القسم <span style="font-size:11px;color:var(--text-light);">(بيتحدد تلقائي حسب الشركة المختارة)</span></label>
+                    <select class="form-control" id="productCategory" disabled>
+                        <option value="">اختر الشركة أولاً</option>
                     </select>
                 </div>
                 <div class="form-group"><label class="form-label">سعر البيع</label><input type="number" class="form-control" id="productPrice" placeholder="0.00"></div>
@@ -1732,9 +1723,6 @@
                 <div class="form-group"><label class="form-label">المخزون الافتتاحي</label><input type="number" class="form-control" id="productInitialStock" placeholder="0" value="0"></div>
                 <div class="form-group"><label class="form-label">الحد الأدنى للمخزون</label><input type="number" class="form-control" id="productMinStock" placeholder="0" value="0"></div>
                 <div class="form-group"><label class="form-label">الحد الأقصى للطلب الواحد (أبليكشن العملاء)</label><input type="number" class="form-control" id="productMaxOrderQty" placeholder="اتركه فارغاً لعدم وضع حد" min="0"></div>
-                <div class="form-group"><label class="form-label">الشركة / الماركة (اختياري - لعرضها في الأبليكشن)</label>
-                    <select class="form-control" id="productBrand"><option value="">بدون تحديد</option></select>
-                </div>
                 <div class="form-group"><label class="form-label"><input type="checkbox" id="productShowInApp" checked> إظهار هذا الصنف في أبليكشن العملاء</label></div>
                 <div class="form-group">
                     <label class="form-label"><input type="checkbox" id="productHasSecondaryUnit" onchange="toggleSecondaryUnitFields()"> السماح ببيع الصنف بوحدة تانية كمان (مثال: قطاعي جنب الكرتونة)</label>
@@ -2183,7 +2171,6 @@
                 hookLocalStorageForCloudSync();
                 startCloudListener();
                 startOrdersListener();
-                scheduleStockLevelsSync();
             } catch (e) {
                 console.error('Firebase init error:', e);
                 updateSyncBadge('error');
@@ -2227,6 +2214,7 @@
                 if (!docSnap.exists) {
                     // أول مرة يشتغل فيها النظام: ما فيش بيانات على السحابة بعد، فارفع نسخة الجهاز الحالي
                     pushStateToCloud();
+                    scheduleStockLevelsSync();
                     return;
                 }
                 const data = docSnap.data();
@@ -2283,6 +2271,8 @@
                 localStorage.setItem('appNeighborhoods', JSON.stringify(appNeighborhoods));
                 localStorage.setItem('appNotifications', JSON.stringify(appNotifications));
                 applyingRemoteUpdate = false;
+                // دلوقتي عندنا فعليًا آخر نسخة مؤكدة من المخزون من السحابة، فنبعتها لمخزون الأبليكشن الحي بأمان
+                scheduleStockLevelsSync();
 
                 try { loadAllData(); } catch (e) { console.error('refresh after remote update failed:', e); }
                 showToast('تم تحديث البيانات من جهاز آخر', 'info');
@@ -3023,12 +3013,34 @@
         }
 
         // ==================== PRODUCTS ====================
+        // القسم بيتحدد تلقائي من الشركة المختارة (المنتج ← الشركة ← القسم)
+        function onProductBrandChange(existingCategoryForLegacyProduct) {
+            const brandName = document.getElementById('productBrand').value;
+            const catSelect = document.getElementById('productCategory');
+            if (!brandName) {
+                // مفيش شركة محددة: نسمح باختيار قسم يدوي مؤقتًا (للأصناف اللي لسه معملهاش شركة)
+                catSelect.disabled = false;
+                const manualOptions = appCategories.map(c => `<option value="${c.name}">${c.name}</option>`);
+                if (existingCategoryForLegacyProduct && !appCategories.find(c => c.name === existingCategoryForLegacyProduct)) {
+                    manualOptions.push(`<option value="${existingCategoryForLegacyProduct}">${existingCategoryForLegacyProduct} (قديم)</option>`);
+                }
+                catSelect.innerHTML = '<option value="">بدون قسم</option>' + manualOptions.join('');
+                catSelect.value = existingCategoryForLegacyProduct || '';
+                return;
+            }
+            const brand = appBrands.find(b => b.name === brandName);
+            const categoryName = brand ? brand.categoryName : '';
+            catSelect.disabled = true;
+            catSelect.innerHTML = categoryName
+                ? `<option value="${categoryName}" selected>${categoryName}</option>`
+                : `<option value="">هذه الشركة غير مربوطة بقسم بعد (من "إدارة الأبليكشن")</option>`;
+        }
+
         function openProductModal(product = null) {
             editingProduct = product;
             document.getElementById('productCode').value = product ? product.code : '';
             document.getElementById('productName').value = product ? product.name : '';
             document.getElementById('productUnit').value = product ? product.unit : '';
-            document.getElementById('productCategory').value = product ? (product.category || '') : '';
             document.getElementById('productPrice').value = product ? product.price : '';
             document.getElementById('productCost').value = product ? (product.cost || '') : '';
             document.getElementById('productInitialStock').value = product ? (inventory[product.code]?.qty || 0) : 0;
@@ -3037,6 +3049,7 @@
             const brandSel = document.getElementById('productBrand');
             brandSel.innerHTML = '<option value="">بدون تحديد</option>' + appBrands.map(b => `<option value="${b.name}">${b.name}</option>`).join('');
             brandSel.value = product ? (product.brand || '') : '';
+            onProductBrandChange(product ? product.category : null);
             document.getElementById('productShowInApp').checked = product ? (product.showInApp !== false) : true;
             document.getElementById('productImageUrl').value = product ? (product.imageUrl || '') : '';
             document.getElementById('productImageFile').value = '';
