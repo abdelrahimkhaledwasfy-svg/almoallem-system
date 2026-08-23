@@ -1245,7 +1245,7 @@
             <div class="card">
                 <div class="card-header"><div class="card-title"><i class="fas fa-shopping-basket"></i> طلبات العملاء (من الأبليكشن)</div></div>
                 <div class="table-container">
-                    <table><thead><tr><th>رقم الطلب</th><th>العميل</th><th>الأصناف</th><th>الإجمالي</th><th>وقت الطلب</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="customerOrdersTable"></tbody></table>
+                    <table><thead><tr><th>رقم الطلب</th><th>العميل</th><th>الأصناف</th><th>عنوان التوصيل</th><th>الإجمالي</th><th>وقت الطلب</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="customerOrdersTable"></tbody></table>
                 </div>
             </div>
         </section>
@@ -1265,6 +1265,10 @@
                     <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-offers" onclick="switchAppMgmtTab('offers')"><i class="fas fa-percent"></i> العروض</button>
                     <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-geo" onclick="switchAppMgmtTab('geo')"><i class="fas fa-map-marked-alt"></i> المناطق الجغرافية</button>
                     <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-notifications" onclick="switchAppMgmtTab('notifications')"><i class="fas fa-bell"></i> الإشعارات</button>
+                </div>
+                <div style="padding:0 20px 15px;">
+                    <button class="btn btn-warning btn-sm" onclick="manualResyncStockLevels()"><i class="fas fa-sync"></i> إعادة مزامنة المخزون مع الأبليكشن الآن</button>
+                    <div style="font-size:12px;color:var(--text-light);margin-top:6px;">استخدم الزرار ده لو لاحظت إن صنف موجود ومتوفر عندك بس مش ظاهر في الأبليكشن.</div>
                 </div>
             </div>
 
@@ -2309,6 +2313,15 @@
             batch.commit().catch(err => console.error('Stock levels sync failed:', err));
         }
 
+        // زرار يدوي لإصلاح أي أصناف "عالقة" ظهرت مختفية من الأبليكشن بسبب مشكلة توقيت قديمة في المزامنة
+        function manualResyncStockLevels() {
+            if (!db) { showToast('لا يوجد اتصال بالسحابة حاليًا', 'error'); return; }
+            if (!confirm('هيتم إرسال أحدث كميات المخزون الموجودة عندك دلوقتي لكل الأصناف، وتحديث ظهورها في الأبليكشن فورًا. متابعة؟')) return;
+            showToast('جاري إعادة المزامنة...');
+            pushStockLevelsToCloud();
+            setTimeout(() => showToast('تمت إعادة المزامنة بنجاح ✓'), 1200);
+        }
+
         function startOrdersListener() {
             if (!db || ordersListenerStarted) return;
             ordersListenerStarted = true;
@@ -2333,7 +2346,7 @@
             const tbody = document.getElementById('customerOrdersTable');
             if (!tbody) return;
             if (customerOrders.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" class="empty-state"><i class="fas fa-shopping-basket"></i><h3>لا توجد طلبات حالياً</h3></td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="empty-state"><i class="fas fa-shopping-basket"></i><h3>لا توجد طلبات حالياً</h3></td></tr>`;
                 return;
             }
             const statusMap = {
@@ -2345,12 +2358,15 @@
                 const st = statusMap[o.status] || statusMap.pending;
                 const itemsSummary = (o.items || []).map(i => `${i.productName} × ${i.qty}`).join('، ');
                 const time = o.createdAt ? new Date(o.createdAt).toLocaleString('ar-EG') : '-';
+                const deliveryLabel = o.deliveryTime === 'evening' ? 'مسائي' : (o.deliveryTime === 'morning' ? 'صباحي' : '-');
+                const addressInfo = [o.shopName, o.addressDetail].filter(Boolean).join(' - ') || '-';
                 const actions = o.status === 'pending'
                     ? `<button class="btn btn-success btn-sm" onclick="fulfillOrder('${o.id}')"><i class="fas fa-check"></i> تجهيز الطلب</button>
                        <button class="btn btn-danger btn-sm" onclick="rejectOrder('${o.id}')"><i class="fas fa-times"></i> رفض</button>`
                     : '-';
-                return `<tr><td><span class="badge badge-primary">${o.id.slice(-6)}</span></td><td>${o.customerName || o.customerCode || '-'}</td>
+                return `<tr><td><span class="badge badge-primary">${o.id.slice(-6)}</span></td><td>${o.customerName || o.customerCode || '-'}<br><span style="font-size:11px;color:var(--text-light);">${o.phone || o.customerCode || ''}</span></td>
                 <td style="max-width:280px;">${itemsSummary}</td>
+                <td style="max-width:180px;font-size:12px;">${addressInfo}<br><span class="badge badge-info" style="margin-top:4px;">${deliveryLabel}</span></td>
                 <td><strong style="color:var(--accent);">${(o.total || 0).toFixed(2)} ر.س</strong></td>
                 <td>${time}</td><td><span class="badge ${st.cls}">${st.label}</span></td>
                 <td>${actions}</td></tr>`;
@@ -2429,20 +2445,36 @@
                 localStorage.setItem('invoices', JSON.stringify(invoices));
                 logAction('تجهيز طلب أبليكشن', `تم تجهيز الطلب #${order.id.slice(-6)} للعميل ${invoice.customerName} وتحويله لفاتورة بيع #${invoice.number}`);
 
+                // العميل اللي طلب من الأبليكشن قد يكون أول مرة يتعامل معانا (سجّل برقمه بس، مش مضاف يدويًا في نظام المعلم).
+                // في الحالة دي، ننشئله ملف عميل تلقائي هنا عشان النقاط والفواتير القادمة ترتبط بيه صح.
+                let finalCust = cust;
+                if (!finalCust && order.customerCode) {
+                    finalCust = {
+                        code: order.customerCode,
+                        name: order.customerName || order.customerCode,
+                        phone: order.phone || order.customerCode,
+                        address: [order.shopName, order.addressDetail].filter(Boolean).join(' - '),
+                        creditLimit: null,
+                        loyaltyPoints: 0
+                    };
+                    customers.push(finalCust);
+                    logAction('إنشاء عميل تلقائي من الأبليكشن', `تم إنشاء ملف للعميل ${finalCust.name} (${finalCust.code}) عند أول طلب له`);
+                }
+
                 // منح نقاط ولاء تلقائيًا للعميل بناءً على قيمة الطلب
-                if (cust) {
+                if (finalCust) {
                     const earnedPoints = Math.floor(grandTotal / (loyaltySettings.pointsPerAmount || 10));
                     if (earnedPoints > 0) {
-                        cust.loyaltyPoints = (cust.loyaltyPoints || 0) + earnedPoints;
-                        localStorage.setItem('customers', JSON.stringify(customers));
-                        logAction('منح نقاط ولاء', `العميل ${cust.name}: +${earnedPoints} نقطة (رصيده الآن ${cust.loyaltyPoints})`);
+                        finalCust.loyaltyPoints = (finalCust.loyaltyPoints || 0) + earnedPoints;
+                        logAction('منح نقاط ولاء', `العميل ${finalCust.name}: +${earnedPoints} نقطة (رصيده الآن ${finalCust.loyaltyPoints})`);
                     }
+                    localStorage.setItem('customers', JSON.stringify(customers));
                 }
 
                 return db.collection('customerOrders').doc(order.id).update({ status: 'fulfilled', fulfilledAt: Date.now(), fulfilledBy: DEVICE_ID, invoiceNumber: invoice.number });
             }).then(function() {
                 showToast('تم تجهيز الطلب وخصم المخزون بنجاح');
-                updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderInventory(); renderMovements(); renderLowStock();
+                updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderInventory(); renderMovements(); renderLowStock(); renderCustomers();
             }).catch(function(err) {
                 console.error('Fulfill order failed:', err);
                 showToast(err.message || 'تعذر تنفيذ الطلب، الكمية غير متوفرة أو حدث خطأ في الاتصال', 'error');
