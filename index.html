@@ -1896,6 +1896,29 @@
     </div>
 
     <!-- View Invoice Modal (Professional Layout) -->
+    <!-- عرض/تعديل طلب العميل بشكل فاتورة -->
+    <div class="modal-overlay" id="orderInvoiceModal">
+        <div class="modal" style="max-width:700px;">
+            <div class="modal-header"><h3 class="modal-title">فاتورة طلب العميل</h3><button class="modal-close" onclick="closeModal('orderInvoiceModal')">&times;</button></div>
+            <div class="modal-body">
+                <div id="orderInvoiceContent" style="background:#fff;padding:5px;"></div>
+                <div id="orderInvoiceEditWrap" style="display:none;margin-top:15px;border-top:2px dashed #ddd;padding-top:15px;">
+                    <table style="width:100%;">
+                        <thead><tr><th style="text-align:right;">الصنف</th><th>الوحدة</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th><th></th></tr></thead>
+                        <tbody id="orderInvoiceEditBody"></tbody>
+                    </table>
+                    <div style="text-align:left;margin-top:10px;font-weight:800;">الإجمالي الجديد: <span id="orderInvoiceNewTotal">0.00</span> ر.س</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('orderInvoiceModal')">إغلاق</button>
+                <button class="btn btn-warning" id="orderInvoiceEditBtn" onclick="toggleOrderInvoiceEdit()"><i class="fas fa-edit"></i> تعديل الطلب</button>
+                <button class="btn btn-success" onclick="printOrderInvoice()"><i class="fas fa-file-pdf"></i> طباعة / تصدير PDF</button>
+                <button class="btn btn-primary" id="orderInvoiceSaveBtn" style="display:none;" onclick="saveOrderInvoiceEdits()"><i class="fas fa-save"></i> حفظ التعديلات</button>
+            </div>
+        </div>
+    </div>
+
     <div class="modal-overlay" id="viewInvoiceModal">
         <div class="modal" style="max-width:650px;">
             <div class="modal-header"><h3 class="modal-title">عرض الفاتورة</h3><button class="modal-close" onclick="closeModal('viewInvoiceModal')">&times;</button></div>
@@ -1913,6 +1936,7 @@
     <div class="modal-overlay" id="editInvoiceModal">
         <div class="modal" style="max-width:700px;">
             <div class="modal-header"><h3 class="modal-title" id="editInvoiceModalTitle">تعديل الفاتورة</h3><button class="modal-close" onclick="closeModal('editInvoiceModal')">&times;</button></div>
+
             <div class="modal-body">
                 <div class="inventory-alert no-print" style="margin-bottom:15px;">
                     <i class="fas fa-info-circle"></i>
@@ -2408,9 +2432,10 @@
                 const deliveryLabel = o.deliveryTime === 'evening' ? 'مسائي' : (o.deliveryTime === 'morning' ? 'صباحي' : '-');
                 const addressInfo = [o.shopName, o.addressDetail].filter(Boolean).join(' - ') || '-';
                 const actions = o.status === 'pending'
-                    ? `<button class="btn btn-success btn-sm" onclick="fulfillOrder('${o.id}')"><i class="fas fa-check"></i> تجهيز الطلب</button>
+                    ? `<button class="btn btn-primary btn-sm" onclick="viewOrderAsInvoice('${o.id}')"><i class="fas fa-file-invoice"></i> فتح الفاتورة</button>
+                       <button class="btn btn-success btn-sm" onclick="fulfillOrder('${o.id}')"><i class="fas fa-check"></i> تجهيز الطلب</button>
                        <button class="btn btn-danger btn-sm" onclick="rejectOrder('${o.id}')"><i class="fas fa-times"></i> رفض</button>`
-                    : '-';
+                    : `<button class="btn btn-primary btn-sm" onclick="viewOrderAsInvoice('${o.id}')"><i class="fas fa-file-invoice"></i> عرض الفاتورة</button>`;
                 return `<tr><td><span class="badge badge-primary">${o.id.slice(-6)}</span></td><td>${o.customerName || o.customerCode || '-'}<br><span style="font-size:11px;color:var(--text-light);">${o.phone || o.customerCode || ''}</span></td>
                 <td style="max-width:280px;">${itemsSummary}</td>
                 <td style="max-width:180px;font-size:12px;">${addressInfo}<br><span class="badge badge-info" style="margin-top:4px;">${deliveryLabel}</span></td>
@@ -5261,6 +5286,152 @@
         }
 
         let currentlyViewedInvoice = null;
+
+        // ==================== عرض/تعديل طلب العميل كفاتورة ====================
+        let currentlyViewedOrder = null;
+
+        function buildOrderInvoiceHtml(order) {
+            const dateStr = order.createdAt ? new Date(order.createdAt).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' }) : '-';
+            const statusMap = { pending: 'جديد - قيد الانتظار', fulfilled: 'تم التجهيز', rejected: 'مرفوض' };
+            const itemsRows = (order.items || []).map((item, idx) => `
+                <tr>
+                    <td style="text-align:center;">${idx + 1}</td>
+                    <td>${item.productName}</td>
+                    <td style="text-align:center;">${item.unit}</td>
+                    <td style="text-align:center;">${item.qty}</td>
+                    <td style="text-align:center;">${(item.price || 0).toFixed(2)}</td>
+                    <td style="text-align:center;font-weight:700;">${(item.total || (item.price * item.qty) || 0).toFixed(2)}</td>
+                </tr>`).join('');
+            const grandTotal = (order.items || []).reduce((s, it) => s + (it.total || (it.price * it.qty) || 0), 0);
+            return `
+            <div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;border:1px solid #ddd;border-radius:10px;overflow:hidden;">
+                <div style="background:linear-gradient(135deg,#8b1e1e,#5e1414);color:#fff;padding:20px;text-align:center;">
+                    <h2 style="margin:0;font-size:26px;">المعلم</h2>
+                    <div style="font-size:13px;opacity:0.9;">لتجارة وتوزيع المواد الغذائية</div>
+                </div>
+                <div style="padding:20px;">
+                    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;margin-bottom:15px;border-bottom:2px dashed #ddd;padding-bottom:15px;">
+                        <div><strong>طلب عميل (أبليكشن)</strong><br><span style="color:#8b1e1e;font-weight:700;font-size:18px;">#${order.id.slice(-6)}</span></div>
+                        <div style="text-align:left;"><strong>التاريخ:</strong> ${dateStr}<br><strong>الحالة:</strong> ${statusMap[order.status] || order.status}</div>
+                    </div>
+                    <div style="margin-bottom:6px;"><strong>العميل:</strong> ${order.customerName || order.customerCode || '-'}</div>
+                    <div style="margin-bottom:6px;"><strong>المحل:</strong> ${order.shopName || '-'}</div>
+                    <div style="margin-bottom:6px;"><strong>التليفون:</strong> ${order.phone || order.customerCode || '-'}</div>
+                    <div style="margin-bottom:15px;"><strong>عنوان التوصيل:</strong> ${order.addressDetail || '-'}</div>
+                    <table style="width:100%;border-collapse:collapse;font-size:14px;">
+                        <thead><tr style="background:#f5f0e8;">
+                            <th style="padding:8px;border:1px solid #ddd;">م</th>
+                            <th style="padding:8px;border:1px solid #ddd;">الصنف</th>
+                            <th style="padding:8px;border:1px solid #ddd;">الوحدة</th>
+                            <th style="padding:8px;border:1px solid #ddd;">الكمية</th>
+                            <th style="padding:8px;border:1px solid #ddd;">السعر</th>
+                            <th style="padding:8px;border:1px solid #ddd;">الإجمالي</th>
+                        </tr></thead>
+                        <tbody>${itemsRows}</tbody>
+                    </table>
+                    <div style="text-align:left;margin-top:20px;padding-top:15px;border-top:2px dashed #ddd;font-size:20px;font-weight:800;color:#8b1e1e;">
+                        الإجمالي الكلي: ${grandTotal.toFixed(2)} ر.س
+                    </div>
+                </div>
+                <div style="background:#f9f9f9;text-align:center;padding:10px;font-size:12px;color:#999;">شكرًا لتعاملكم مع المعلم</div>
+            </div>`;
+        }
+
+        function viewOrderAsInvoice(orderId) {
+            const order = customerOrders.find(o => o.id === orderId);
+            if (!order) return;
+            currentlyViewedOrder = order;
+            document.getElementById('orderInvoiceContent').innerHTML = buildOrderInvoiceHtml(order);
+            document.getElementById('orderInvoiceEditWrap').style.display = 'none';
+            document.getElementById('orderInvoiceContent').style.display = 'block';
+            document.getElementById('orderInvoiceSaveBtn').style.display = 'none';
+            const editBtn = document.getElementById('orderInvoiceEditBtn');
+            editBtn.innerHTML = '<i class="fas fa-edit"></i> تعديل الطلب';
+            editBtn.style.display = order.status === 'pending' ? 'inline-flex' : 'none';
+            openModal('orderInvoiceModal');
+        }
+
+        function toggleOrderInvoiceEdit() {
+            const order = currentlyViewedOrder;
+            if (!order) return;
+            const editWrap = document.getElementById('orderInvoiceEditWrap');
+            const isEditing = editWrap.style.display !== 'none';
+            if (isEditing) {
+                editWrap.style.display = 'none';
+                document.getElementById('orderInvoiceContent').style.display = 'block';
+                document.getElementById('orderInvoiceSaveBtn').style.display = 'none';
+                document.getElementById('orderInvoiceEditBtn').innerHTML = '<i class="fas fa-edit"></i> تعديل الطلب';
+                return;
+            }
+            document.getElementById('orderInvoiceContent').style.display = 'none';
+            document.getElementById('orderInvoiceEditBtn').innerHTML = '<i class="fas fa-times"></i> إلغاء التعديل';
+            document.getElementById('orderInvoiceSaveBtn').style.display = 'inline-flex';
+            const body = document.getElementById('orderInvoiceEditBody');
+            body.innerHTML = (order.items || []).map((item, idx) => `
+                <tr data-idx="${idx}">
+                    <td>${item.productName}</td>
+                    <td style="text-align:center;">${item.unit}</td>
+                    <td><input type="number" class="form-control order-edit-qty" min="0" step="any" value="${item.qty}" style="width:80px;" onchange="recalcOrderInvoiceEditRow(this)"></td>
+                    <td style="text-align:center;">${(item.price || 0).toFixed(2)}</td>
+                    <td style="text-align:center;" class="order-edit-total">${(item.total || (item.price * item.qty) || 0).toFixed(2)}</td>
+                    <td><button class="btn btn-danger btn-sm" onclick="this.closest('tr').remove(); recalcOrderInvoiceEditTotal();"><i class="fas fa-trash"></i></button></td>
+                </tr>`).join('');
+            editWrap.style.display = 'block';
+            recalcOrderInvoiceEditTotal();
+        }
+
+        function recalcOrderInvoiceEditRow(input) {
+            const row = input.closest('tr');
+            const idx = parseInt(row.dataset.idx);
+            const item = currentlyViewedOrder.items[idx];
+            const qty = parseFloat(input.value) || 0;
+            row.querySelector('.order-edit-total').textContent = (qty * (item.price || 0)).toFixed(2);
+            recalcOrderInvoiceEditTotal();
+        }
+
+        function recalcOrderInvoiceEditTotal() {
+            let total = 0;
+            document.querySelectorAll('#orderInvoiceEditBody tr').forEach(row => {
+                total += parseFloat(row.querySelector('.order-edit-total').textContent) || 0;
+            });
+            document.getElementById('orderInvoiceNewTotal').textContent = total.toFixed(2);
+        }
+
+        function saveOrderInvoiceEdits() {
+            const order = currentlyViewedOrder;
+            if (!order || !db) return;
+            const rows = document.querySelectorAll('#orderInvoiceEditBody tr');
+            const newItems = [];
+            rows.forEach(row => {
+                const idx = parseInt(row.dataset.idx);
+                const item = order.items[idx];
+                const qty = parseFloat(row.querySelector('.order-edit-qty').value) || 0;
+                if (qty <= 0) return; // صف اتمسح أو الكمية اتصفرت = يتشال من الطلب
+                newItems.push(Object.assign({}, item, { qty, total: qty * (item.price || 0) }));
+            });
+            if (newItems.length === 0) { showToast('لازم يفضل صنف واحد على الأقل في الطلب', 'error'); return; }
+            const newTotal = newItems.reduce((s, it) => s + it.total, 0);
+            db.collection('customerOrders').doc(order.id).update({ items: newItems, total: newTotal, editedAt: Date.now(), editedBy: DEVICE_ID })
+                .then(() => {
+                    showToast('تم حفظ تعديلات الطلب ✓');
+                    order.items = newItems; order.total = newTotal;
+                    document.getElementById('orderInvoiceContent').innerHTML = buildOrderInvoiceHtml(order);
+                    toggleOrderInvoiceEdit();
+                })
+                .catch(err => { console.error(err); showToast('تعذر حفظ التعديلات، حاول تاني', 'error'); });
+        }
+
+        function printOrderInvoice() {
+            if (!currentlyViewedOrder) return;
+            const html = buildOrderInvoiceHtml(currentlyViewedOrder);
+            const area = document.getElementById('printInvoiceArea');
+            area.innerHTML = html;
+            document.body.classList.add('printing-invoice-mode');
+            setTimeout(function() {
+                window.print();
+                setTimeout(function() { document.body.classList.remove('printing-invoice-mode'); }, 500);
+            }, 100);
+        }
 
         function buildInvoiceHtml(invoice, type) {
             const typeName = type === 'sale' ? 'فاتورة بيع' : 'فاتورة شراء';
