@@ -2378,12 +2378,38 @@
                 });
         }
 
+        // لو الطلب جاي من عميل جديد لسه مش مسجل في "قاعدة العملاء"، بنضيفه تلقائيًا
+        // بحيث تقدر تتابع مديونيته ونقاطه زي أي عميل تاني في النظام
+        function syncCustomerFromOrder(order) {
+            if (!order.customerCode) return false;
+            const exists = customers.find(c => c.code === order.customerCode);
+            if (exists) return false;
+            const addressParts = [order.addressDetail, order.neighborhood, order.city, order.governorate].filter(Boolean);
+            customers.push({
+                code: order.customerCode,
+                name: order.customerName || order.shopName || order.customerCode,
+                phone: order.phone || order.customerCode,
+                address: addressParts.join(' - '),
+                creditLimit: null,
+                shopName: order.shopName || '',
+                source: 'app'
+            });
+            return true;
+        }
+
         function startOrdersListener() {
             if (!db || ordersListenerStarted) return;
             ordersListenerStarted = true;
             db.collection('customerOrders').orderBy('createdAt', 'desc').onSnapshot(function(snap) {
                 customerOrders = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
                 localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
+                let addedAny = false;
+                customerOrders.forEach(function(o) { if (syncCustomerFromOrder(o)) addedAny = true; });
+                if (addedAny) {
+                    localStorage.setItem('customers', JSON.stringify(customers));
+                    if (typeof renderCustomers === 'function' && document.getElementById('customers-section') && document.getElementById('customers-section').classList.contains('active')) renderCustomers();
+                    updateInvoiceDropdowns();
+                }
                 renderCustomerOrders();
                 updatePendingOrdersBadge();
             }, function(err) {
