@@ -1404,10 +1404,11 @@
             <div class="card" id="appMgmtTab-notifications" style="display:none;">
                 <div class="card-header"><div class="card-title"><i class="fas fa-bell"></i> إرسال إشعار للعملاء</div></div>
                 <div style="padding:0 20px 20px;max-width:450px;">
-                    <div class="form-group"><label class="form-label">المستلم</label>
-                        <select class="form-control" id="notificationTarget">
-                            <option value="all">كل العملاء</option>
-                        </select>
+                    <div class="form-group" style="position:relative;">
+                        <label class="form-label">المستلم</label>
+                        <input type="text" class="form-control" id="notificationTargetSearch" placeholder="اكتب اسم العميل للبحث... أو اتركه فارغ لإرسال لكل العملاء" autocomplete="off" oninput="filterNotificationTargets()" onfocus="filterNotificationTargets()" onblur="setTimeout(hideNotificationTargetResults, 150)">
+                        <input type="hidden" id="notificationTarget" value="all">
+                        <div id="notificationTargetResults" style="display:none;position:absolute;z-index:50;background:#fff;border:1px solid var(--border);max-height:240px;overflow-y:auto;width:100%;box-shadow:0 4px 12px rgba(0,0,0,0.12);border-radius:6px;margin-top:2px;"></div>
                     </div>
                     <div class="form-group"><label class="form-label">عنوان الإشعار</label><input type="text" class="form-control" id="notificationTitle" placeholder="مثال: وصل عرض جديد!"></div>
                     <div class="form-group"><label class="form-label">نص الرسالة</label><textarea class="form-control" id="notificationMessage" rows="3" placeholder="تفاصيل الإشعار..."></textarea></div>
@@ -4321,9 +4322,43 @@
 
         // ==================== الإشعارات ====================
         function renderNotificationsTab() {
-            const sel = document.getElementById('notificationTarget');
-            sel.innerHTML = '<option value="all">كل العملاء</option>' + customers.map(c => `<option value="${c.code}">${c.name}</option>`).join('');
+            document.getElementById('notificationTarget').value = 'all';
+            document.getElementById('notificationTargetSearch').value = 'كل العملاء';
+            hideNotificationTargetResults();
             renderNotificationsLog();
+        }
+
+        function hideNotificationTargetResults() {
+            const box = document.getElementById('notificationTargetResults');
+            if (box) box.style.display = 'none';
+        }
+
+        function selectNotificationTarget(code, name) {
+            document.getElementById('notificationTarget').value = code;
+            document.getElementById('notificationTargetSearch').value = name;
+            hideNotificationTargetResults();
+        }
+
+        function filterNotificationTargets() {
+            const q = document.getElementById('notificationTargetSearch').value.trim().toLowerCase();
+            const box = document.getElementById('notificationTargetResults');
+            let matches;
+            if (!q || 'كل العملاء'.includes(q)) {
+                matches = customers.slice(0, 50);
+            } else {
+                matches = customers.filter(c => (c.name || '').toLowerCase().includes(q) || (c.code || '').toLowerCase().includes(q) || (c.phone || '').includes(q)).slice(0, 50);
+            }
+            let html = `<div style="padding:8px 12px;cursor:pointer;font-weight:600;color:var(--primary,#2563eb);border-bottom:1px solid var(--border);" onmousedown="selectNotificationTarget('all','كل العملاء')">📢 كل العملاء</div>`;
+            if (matches.length === 0) {
+                html += `<div style="padding:10px 12px;color:#888;">لا يوجد عملاء مطابقين</div>`;
+            } else {
+                html += matches.map(c => `<div style="padding:8px 12px;cursor:pointer;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background=''" onmousedown="selectNotificationTarget('${c.code}', '${(c.name || '').replace(/'/g, "\\'")}')">${c.name}${c.phone ? ' <span style=\"color:#999;font-size:12px;\">(' + c.phone + ')</span>' : ''}</div>`).join('');
+                if (customers.filter(c => (c.name || '').toLowerCase().includes(q) || (c.code || '').toLowerCase().includes(q) || (c.phone || '').includes(q)).length > 50) {
+                    html += `<div style="padding:6px 12px;color:#999;font-size:12px;">في نتايج أكتر، ضيّق البحث أكتر...</div>`;
+                }
+            }
+            box.innerHTML = html;
+            box.style.display = 'block';
         }
 
         function sendAppNotification() {
