@@ -1774,6 +1774,8 @@
                 <div class="form-group"><label class="form-label">الحد الأدنى للمخزون</label><input type="number" class="form-control" id="productMinStock" placeholder="0" value="0"></div>
                 <div class="form-group"><label class="form-label">الحد الأقصى للطلب الواحد (أبليكشن العملاء)</label><input type="number" class="form-control" id="productMaxOrderQty" placeholder="اتركه فارغاً لعدم وضع حد" min="0"></div>
                 <div class="form-group"><label class="form-label"><input type="checkbox" id="productShowInApp" checked> إظهار هذا الصنف في أبليكشن العملاء</label></div>
+                <div class="form-group"><label class="form-label"><input type="checkbox" id="productBestSeller" onchange="document.getElementById('productBestSellerOrderWrap').style.display = this.checked ? 'block' : 'none';"> إظهاره في شريط "الأكثر طلبًا" بالأبليكشن</label></div>
+                <div class="form-group" id="productBestSellerOrderWrap" style="display:none;"><label class="form-label">ترتيب الظهور في الشريط (الأصغر يظهر أولاً)</label><input type="number" class="form-control" id="productBestSellerOrder" placeholder="0" value="0"></div>
                 <div class="form-group">
                     <label class="form-label"><input type="checkbox" id="productHasSecondaryUnit" onchange="toggleSecondaryUnitFields()"> السماح ببيع الصنف بوحدة تانية كمان (مثال: قطاعي جنب الكرتونة)</label>
                 </div>
@@ -3535,6 +3537,9 @@
             brandSel.value = product ? (product.brand || '') : '';
             onProductBrandChange(product ? product.category : null);
             document.getElementById('productShowInApp').checked = product ? (product.showInApp !== false) : true;
+            document.getElementById('productBestSeller').checked = product ? !!product.bestSeller : false;
+            document.getElementById('productBestSellerOrder').value = product ? (product.bestSellerOrder || 0) : 0;
+            document.getElementById('productBestSellerOrderWrap').style.display = (product && product.bestSeller) ? 'block' : 'none';
             document.getElementById('productImageUrl').value = product ? (product.imageUrl || '') : '';
             document.getElementById('productImageFile').value = '';
             const preview = document.getElementById('productImagePreview');
@@ -4259,6 +4264,8 @@
             const maxOrderQty = maxOrderQtyRaw === '' ? null : parseFloat(maxOrderQtyRaw);
             const brand = document.getElementById('productBrand').value || null;
             const showInApp = document.getElementById('productShowInApp').checked;
+            const bestSeller = document.getElementById('productBestSeller').checked;
+            const bestSellerOrder = parseFloat(document.getElementById('productBestSellerOrder').value) || 0;
             let secondaryUnit = null;
             if (document.getElementById('productHasSecondaryUnit').checked) {
                 const secName = document.getElementById('productSecondaryUnitName').value.trim();
@@ -4273,7 +4280,7 @@
                 const idx = products.findIndex(p => p.code === editingProduct.code);
                 if (idx !== -1) {
                     const oldCode = editingProduct.code;
-                    products[idx] = { code, name, unit, category, price, cost, minStock, maxOrderQty, secondaryUnit, imageUrl, brand, showInApp };
+                    products[idx] = { code, name, unit, category, price, cost, minStock, maxOrderQty, secondaryUnit, imageUrl, brand, showInApp, bestSeller, bestSellerOrder };
                     if (oldCode !== code && inventory[oldCode]) {
                         inventory[code] = { ...inventory[oldCode], code };
                         delete inventory[oldCode];
@@ -4287,7 +4294,7 @@
                 }
             } else {
                 if (products.find(p => p.code === code)) { showToast('كود الصنف موجود مسبقاً', 'error'); return; }
-                products.push({ code, name, unit, category, price, cost, minStock, maxOrderQty, secondaryUnit, imageUrl, brand, showInApp });
+                products.push({ code, name, unit, category, price, cost, minStock, maxOrderQty, secondaryUnit, imageUrl, brand, showInApp, bestSeller, bestSellerOrder });
                 inventory[code] = { code, qty: initialStock, cost, minStock };
                 if (initialStock > 0) addStockMovement(code, name, 'initial', initialStock, initialStock, 'إضافة صنف', 'رصيد أولي');
             }
@@ -4319,7 +4326,7 @@
             tbody.innerHTML = products.map(p => {
                 const profit = p.price - (p.cost || 0);
                 const margin = p.cost > 0 ? ((profit / p.price) * 100).toFixed(1) : 0;
-                return `<tr><td><span class="badge badge-primary">${p.code}</span></td><td>${p.imageUrl ? `<img src="${p.imageUrl}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-left:8px;">` : ''}<strong>${p.name}</strong>${p.showInApp === false ? ' <i class="fas fa-mobile-alt" style="color:var(--text-light);" title="مخفي من الأبليكشن"></i><i class="fas fa-slash" style="color:#c0392b;margin-right:-14px;font-size:10px;"></i>' : ''}</td><td>${p.unit}${p.secondaryUnit ? ' / ' + p.secondaryUnit.name : ''}</td><td>${p.category || '-'}</td>
+                return `<tr><td><span class="badge badge-primary">${p.code}</span></td><td>${p.imageUrl ? `<img src="${p.imageUrl}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-left:8px;">` : ''}<strong>${p.name}</strong>${p.showInApp === false ? ' <i class="fas fa-mobile-alt" style="color:var(--text-light);" title="مخفي من الأبليكشن"></i><i class="fas fa-slash" style="color:#c0392b;margin-right:-14px;font-size:10px;"></i>' : ''}${p.bestSeller ? ' <i class="fas fa-star" style="color:#d4a017;" title="ضمن الأكثر طلبًا بالأبليكشن"></i>' : ''}</td><td>${p.unit}${p.secondaryUnit ? ' / ' + p.secondaryUnit.name : ''}</td><td>${p.category || '-'}</td>
                 <td><strong style="color:var(--accent);">${p.price.toFixed(2)} ر.س</strong></td>
                 <td><span class="cost-highlight">${(p.cost || 0).toFixed(2)} ر.س</span></td>
                 <td><span class="profit-highlight">${profit.toFixed(2)} ر.س</span> <span class="margin-badge ${margin >= 30 ? 'high' : (margin >= 15 ? 'medium' : 'low')}">${margin}%</span></td>
