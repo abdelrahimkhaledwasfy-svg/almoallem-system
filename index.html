@@ -1339,12 +1339,20 @@
                 <div class="card-header">
                     <div class="card-title"><i class="fas fa-key"></i> أكواد تفعيل العملاء الجدد</div>
                     <div style="display:flex;gap:8px;">
-                        <button class="btn btn-success btn-sm" onclick="generateActivationCode()"><i class="fas fa-plus"></i> توليد كود</button>
+                        <button class="btn btn-primary btn-sm" onclick="generateAndSendActivationCode()"><i class="fab fa-whatsapp"></i> توليد وإرسال لعميل</button>
+                        <button class="btn btn-success btn-sm" onclick="generateActivationCode()"><i class="fas fa-plus"></i> توليد كود عام</button>
                         <button class="btn btn-secondary btn-sm" onclick="generateActivationCodesBatch()"><i class="fas fa-layer-group"></i> توليد دفعة أكواد</button>
                     </div>
                 </div>
+                <div style="padding:14px 20px;border-bottom:1px solid var(--border);background:#f8f5f0;">
+                    <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;">
+                        <input type="checkbox" id="requireActivationCodeToggle" onchange="toggleRequireActivationCode(this.checked)">
+                        اشتراط إدخال كود تفعيل صحيح عشان أي عميل جديد يقدر يسجّل من الأبليكشن
+                    </label>
+                    <div style="font-size:11px;color:var(--text-light);margin-top:6px;">لو الخيار ده مقفول، أي حد يقدر يعمل حساب في الأبليكشن بمجرد رقم الهاتف من غير أي كود.</div>
+                </div>
                 <div class="table-container">
-                    <table><thead><tr><th>الكود</th><th>تاريخ الإنشاء</th><th>الحالة</th><th>استخدمه العميل</th><th>تاريخ الاستخدام</th><th>الإجراءات</th></tr></thead><tbody id="activationCodesTable"></tbody></table>
+                    <table><thead><tr><th>الكود</th><th>مخصص لهاتف</th><th>تاريخ الإنشاء</th><th>الحالة</th><th>استخدمه العميل</th><th>تاريخ الاستخدام</th><th>الإجراءات</th></tr></thead><tbody id="activationCodesTable"></tbody></table>
                 </div>
             </div>
 
@@ -2174,6 +2182,7 @@
         let appCategories = JSON.parse(localStorage.getItem('appCategories')) || [];
         let appBrands = JSON.parse(localStorage.getItem('appBrands')) || [];
         let activationCodes = JSON.parse(localStorage.getItem('activationCodes')) || [];
+        let requireActivationCode = JSON.parse(localStorage.getItem('requireActivationCode') || 'false');
         let loyaltySettings = JSON.parse(localStorage.getItem('loyaltySettings')) || { pointsPerAmount: 10, pointValue: 1 };
         let appBanners = JSON.parse(localStorage.getItem('appBanners')) || [];
         let appOffers = JSON.parse(localStorage.getItem('appOffers')) || [];
@@ -2215,8 +2224,41 @@
         const CLOUD_SYNCED_KEYS = new Set([
             'products', 'customers', 'suppliers', 'salesmen', 'invoices', 'purchaseInvoices',
             'inventory', 'stockMovements', 'expenses', 'treasury', 'salesReturns',
-            'purchaseReturns', 'users', 'auditLog', 'appCategories', 'appBrands', 'activationCodes', 'loyaltySettings', 'appBanners', 'appOffers', 'appCities', 'appRegions', 'appNeighborhoods', 'appNotifications'
+            'purchaseReturns', 'users', 'auditLog', 'appCategories', 'appBrands', 'activationCodes', 'requireActivationCode', 'loyaltySettings', 'appBanners', 'appOffers', 'appCities', 'appRegions', 'appNeighborhoods', 'appNotifications'
         ]);
+
+        // ==================== الإشعارات الفورية (OneSignal) ====================
+        // ⚠️ حط هنا القيمتين بتاعتك من لوحة تحكم OneSignal (Settings > Keys & IDs)
+        const ONESIGNAL_APP_ID = "bd9f1359-0a6b-4dba-8a72-7401da5b809a";
+        const ONESIGNAL_REST_API_KEY = "os_v2_app_xwprgwiknng3vctsoqa5uw4atlrwmyshbv3eo25mck6vd5rsf3tqbvjiugzse5yymqkdegxfzh6b7uffp7d5xxxpj5n527tfrivg4ei";
+
+        // بيرسل إشعار فوري لعميل واحد بعينه (targetPhone) أو لكل العملاء المشتركين (targetPhone = 'all')
+        // ده بيتنفذ من متصفح الأدمن مباشرة وقت الحدث (تجهيز/رفض طلب، أو إرسال يدوي)، من غير أي سيرفر وسيط.
+        function sendPushNotification(targetPhone, title, message) {
+            if (!ONESIGNAL_APP_ID || ONESIGNAL_APP_ID.indexOf('ضع-') === 0) {
+                console.warn('OneSignal لسه مش متظبط (App ID/REST API Key فاضيين) — الإشعار متبعتش.');
+                return Promise.resolve(false);
+            }
+            const body = {
+                app_id: ONESIGNAL_APP_ID,
+                target_channel: 'push',
+                headings: { ar: title, en: title },
+                contents: { ar: message, en: message }
+            };
+            if (targetPhone === 'all') { body.included_segments = ['Subscribed Users']; }
+            else { body.include_aliases = { external_id: [targetPhone] }; body.target_channel = 'push'; }
+
+            return fetch('https://api.onesignal.com/notifications', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Key ' + ONESIGNAL_REST_API_KEY },
+                body: JSON.stringify(body)
+            }).then(function(res) { return res.json(); })
+              .then(function(data) {
+                  if (data.errors) { console.error('OneSignal send error:', data.errors); return false; }
+                  return true;
+              })
+              .catch(function(err) { console.error('OneSignal request failed:', err); return false; });
+        }
 
         let db = null;
         let cloudSyncTimer = null;
@@ -2247,6 +2289,7 @@
                 hookLocalStorageForCloudSync();
                 startCloudListener();
                 startOrdersListener();
+                startActivationUsesListener();
             } catch (e) {
                 console.error('Firebase init error:', e);
                 updateSyncBadge('error');
@@ -2273,7 +2316,7 @@
             const payload = {
                 products, customers, suppliers, salesmen, invoices, purchaseInvoices,
                 inventory, stockMovements, expenses, treasury, salesReturns, purchaseReturns,
-                users, auditLog, appCategories, appBrands, activationCodes, loyaltySettings, appBanners, appOffers,
+                users, auditLog, appCategories, appBrands, activationCodes, requireActivationCode, loyaltySettings, appBanners, appOffers,
                 appCities, appRegions, appNeighborhoods, appNotifications,
                 updatedAt: Date.now(),
                 updatedBy: DEVICE_ID
@@ -2328,6 +2371,7 @@
                 appCategories = data.appCategories || [];
                 appBrands = data.appBrands || [];
                 activationCodes = data.activationCodes || [];
+                requireActivationCode = data.requireActivationCode || false;
                 loyaltySettings = data.loyaltySettings || loyaltySettings;
                 appBanners = data.appBanners || [];
                 appOffers = data.appOffers || [];
@@ -2353,6 +2397,7 @@
                 localStorage.setItem('appCategories', JSON.stringify(appCategories));
                 localStorage.setItem('appBrands', JSON.stringify(appBrands));
                 localStorage.setItem('activationCodes', JSON.stringify(activationCodes));
+                localStorage.setItem('requireActivationCode', JSON.stringify(requireActivationCode));
                 localStorage.setItem('loyaltySettings', JSON.stringify(loyaltySettings));
                 localStorage.setItem('appBanners', JSON.stringify(appBanners));
                 localStorage.setItem('appOffers', JSON.stringify(appOffers));
@@ -2865,6 +2910,7 @@
                 order.status = 'fulfilled';
                 localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
                 if (!opts.silent) showToast('تم تجهيز الطلب وخصم المخزون بنجاح');
+                if (order.customerCode) sendPushNotification(order.customerCode, 'طلبك جاهز ✅', 'تم تجهيز طلبك #' + order.id.slice(-6) + ' وهيوصلك قريب');
                 updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderInventory(); renderMovements(); renderLowStock(); renderCustomers();
                 return true;
             }).catch(function(err) {
@@ -2939,6 +2985,7 @@
                     if (ord) { ord.status = 'rejected'; if (updateData.rejectionReason) ord.rejectionReason = updateData.rejectionReason; }
                     localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
                     showToast('تم رفض الطلب');
+                    if (ord && ord.customerCode) sendPushNotification(ord.customerCode, 'تم رفض طلبك', updateData.rejectionReason ? ('السبب: ' + updateData.rejectionReason) : 'للاستفسار كلم المعلم');
                 })
                 .catch(err => { console.error(err); showToast('تعذر رفض الطلب', 'error'); });
         }
@@ -3771,11 +3818,54 @@
 
         function generateActivationCode() {
             const code = generateRandomCode();
-            activationCodes.push({ code, createdAt: Date.now(), used: false, usedBy: null, usedAt: null });
+            activationCodes.push({ code, forPhone: null, createdAt: Date.now(), used: false, usedBy: null, usedAt: null });
             localStorage.setItem('activationCodes', JSON.stringify(activationCodes));
             logAction('توليد كود تفعيل', `تم توليد الكود: ${code}`);
             renderActivationCodes();
             showToast('تم توليد كود جديد: ' + code);
+        }
+
+        // توليد كود مخصص لعميل بعينه، وفتح واتساب فورًا برسالة جاهزة فيها الكود عشان تتبعت له مباشرة
+        function generateAndSendActivationCode() {
+            let phone = prompt('رقم هاتف العميل (اللي هيستلم الكود على واتساب):', '');
+            if (!phone) return;
+            phone = phone.trim().replace(/[^0-9]/g, '');
+            if (phone.length < 10) { showToast('رقم الهاتف غير صحيح', 'error'); return; }
+            const code = generateRandomCode();
+            activationCodes.push({ code, forPhone: phone, createdAt: Date.now(), used: false, usedBy: null, usedAt: null });
+            localStorage.setItem('activationCodes', JSON.stringify(activationCodes));
+            logAction('توليد كود تفعيل مخصص', `تم توليد الكود: ${code} للعميل ${phone}`);
+            renderActivationCodes();
+            sendActivationCodeWhatsApp(code, phone);
+        }
+
+        function sendActivationCodeWhatsApp(code, phone) {
+            let intlPhone = phone.replace(/^0/, '20'); // تحويل الرقم المصري لصيغة دولية (بدون +)
+            const msg = encodeURIComponent(`أهلاً بيك في تطبيق المعلم 👋\nكود تفعيل حسابك هو: ${code}\nادخل بيه في شاشة "إنشاء حساب جديد" داخل الأبليكشن.`);
+            window.open(`https://wa.me/${intlPhone}?text=${msg}`, '_blank');
+        }
+
+        // إرسال كود موجود بالفعل (سواء كان مخصص لعميل أو عام) عبر واتساب
+        function resendActivationCode(code) {
+            const item = activationCodes.find(c => c.code === code);
+            if (!item) return;
+            let phone = item.forPhone;
+            if (!phone) {
+                phone = prompt('ابعت الكود ده لهاتف رقم إيه؟', '');
+                if (!phone) return;
+                phone = phone.trim().replace(/[^0-9]/g, '');
+                if (phone.length < 10) { showToast('رقم الهاتف غير صحيح', 'error'); return; }
+                item.forPhone = phone;
+                localStorage.setItem('activationCodes', JSON.stringify(activationCodes));
+                renderActivationCodes();
+            }
+            sendActivationCodeWhatsApp(code, phone);
+        }
+
+        function toggleRequireActivationCode(checked) {
+            requireActivationCode = checked;
+            localStorage.setItem('requireActivationCode', JSON.stringify(requireActivationCode));
+            showToast(checked ? 'بقى لازم كود تفعيل صحيح لأي تسجيل جديد' : 'اتقفل شرط كود التفعيل، أي حد يقدر يسجل بمجرد رقم الهاتف');
         }
 
         function generateActivationCodesBatch() {
@@ -3783,7 +3873,7 @@
             const count = parseInt(countRaw);
             if (!count || count <= 0) return;
             for (let i = 0; i < count; i++) {
-                activationCodes.push({ code: generateRandomCode(), createdAt: Date.now(), used: false, usedBy: null, usedAt: null });
+                activationCodes.push({ code: generateRandomCode(), forPhone: null, createdAt: Date.now(), used: false, usedBy: null, usedAt: null });
             }
             localStorage.setItem('activationCodes', JSON.stringify(activationCodes));
             logAction('توليد دفعة أكواد تفعيل', `تم توليد ${count} كود`);
@@ -3804,22 +3894,52 @@
             showToast('تم نسخ الكود: ' + code);
         }
 
+        // العميل بيستخدم الكود من جوه الأبليكشن نفسه، فالأبليكشن بيسجّل الاستخدام في كوليكشن منفصلة وصغيرة
+        // (activationCodeUses) بدل ما يكتب في مستند storeData الكبير مباشرة (عشان أمان بيانات المتجر كله)،
+        // وإحنا هنا بنسمعها ونحدث حالة الكود في القايمة المحلية تبعنا
+        let activationUsesListenerStarted = false;
+        function startActivationUsesListener() {
+            if (!db || activationUsesListenerStarted) return;
+            activationUsesListenerStarted = true;
+            db.collection('activationCodeUses').onSnapshot(function(snap) {
+                let changed = false;
+                snap.docChanges().forEach(function(change) {
+                    if (change.type !== 'added') return;
+                    const use = change.doc.data();
+                    const item = activationCodes.find(c => c.code === use.code);
+                    if (item && !item.used) {
+                        item.used = true; item.usedBy = use.usedBy; item.usedAt = use.usedAt || Date.now();
+                        changed = true;
+                    }
+                });
+                if (changed) {
+                    localStorage.setItem('activationCodes', JSON.stringify(activationCodes));
+                    renderActivationCodes();
+                }
+            }, function(err) { console.error('Activation uses listener error:', err); });
+        }
+
         function renderActivationCodes() {
             const tbody = document.getElementById('activationCodesTable');
             if (!tbody) return;
+            const toggle = document.getElementById('requireActivationCodeToggle');
+            if (toggle) toggle.checked = !!requireActivationCode;
             if (activationCodes.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="empty-state"><i class="fas fa-key"></i><h3>لا توجد أكواد بعد</h3><p>ولّد أكواد جديدة عشان تديها للعملاء الجدد</p></td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" class="empty-state"><i class="fas fa-key"></i><h3>لا توجد أكواد بعد</h3><p>ولّد أكواد جديدة عشان تديها للعملاء الجدد</p></td></tr>`;
                 return;
             }
             const sorted = [...activationCodes].sort((a, b) => b.createdAt - a.createdAt);
             tbody.innerHTML = sorted.map(c => `
                 <tr>
                     <td><span class="badge badge-primary" style="font-family:monospace;font-size:14px;letter-spacing:1px;">${c.code}</span></td>
+                    <td>${c.forPhone ? c.forPhone : '<span style="color:var(--text-light);">عام</span>'}</td>
                     <td>${new Date(c.createdAt).toLocaleDateString('ar-EG')}</td>
                     <td><span class="badge ${c.used ? 'badge-success' : 'badge-warning'}">${c.used ? 'مستخدم' : 'متاح'}</span></td>
                     <td>${c.usedBy || '-'}</td>
                     <td>${c.usedAt ? new Date(c.usedAt).toLocaleDateString('ar-EG') : '-'}</td>
-                    <td><button class="btn btn-secondary btn-icon btn-sm" onclick="copyActivationCode('${c.code}')" title="نسخ"><i class="fas fa-copy"></i></button>
+                    <td>
+                    ${!c.used ? `<button class="btn btn-success btn-icon btn-sm" onclick="resendActivationCode('${c.code}')" title="إرسال عبر واتساب"><i class="fab fa-whatsapp"></i></button>` : ''}
+                    <button class="btn btn-secondary btn-icon btn-sm" onclick="copyActivationCode('${c.code}')" title="نسخ"><i class="fas fa-copy"></i></button>
                     ${!c.used ? `<button class="btn btn-danger btn-icon btn-sm" onclick="deleteActivationCode('${c.code}')"><i class="fas fa-trash"></i></button>` : ''}</td>
                 </tr>`).join('');
         }
@@ -4218,7 +4338,9 @@
             document.getElementById('notificationTitle').value = '';
             document.getElementById('notificationMessage').value = '';
             renderNotificationsLog();
-            showToast('تم إرسال الإشعار بنجاح');
+            sendPushNotification(target, title, message).then(function(ok) {
+                showToast(ok ? 'تم إرسال الإشعار فعليًا للعميل/العملاء ✓' : 'تعذر إرسال الإشعار — تأكد إن إعدادات OneSignal متظبطة صح', ok ? 'success' : 'error', 5000);
+            });
         }
 
         function renderNotificationsLog() {
