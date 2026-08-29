@@ -2840,7 +2840,9 @@
                         const unitCost = inventory[item.productCode].cost || (products.find(p => p.code === item.productCode) || {}).cost || 0;
                         inventory[item.productCode].qty -= item.stockDeductQty;
                         item.cost = unitCost;
-                        item.profit = (item.price - unitCost) * item.qty;
+                        // التكلفة بتتحسب على أساس الكمية الفعلية المخصومة من المخزون (بوحدة الكرتونة)
+                        // مش على أساس كمية البيع، عشان لو البيع كان بالقطاعي (علبة) يبقى الحساب صح
+                        item.profit = (item.price * item.qty) - (unitCost * item.stockDeductQty);
                         addStockMovement(item.productCode, item.productName, 'out', -item.stockDeductQty, inventory[item.productCode].qty, 'طلب أبليكشن #' + order.id.slice(-6), 'خصم تلقائي من طلب عميل عبر الأبليكشن');
                     }
                 });
@@ -2868,7 +2870,7 @@
                     notes: 'طلب وارد من أبليكشن العملاء #' + order.id.slice(-6) + (appliedDiscount > 0 ? ` (خصم نقاط ولاء: ${appliedDiscount.toFixed(2)} ر.س)` : ''),
                     items: order.items, grandTotal: grandTotal,
                     discount: appliedDiscount,
-                    totalCost: order.items.reduce((sum, it) => sum + ((it.cost || 0) * it.qty), 0),
+                    totalCost: order.items.reduce((sum, it) => sum + ((it.cost || 0) * (it.stockDeductQty != null ? it.stockDeductQty : it.qty)), 0),
                     totalProfit: order.items.reduce((sum, it) => sum + (it.profit || 0), 0),
                     sourceOrderId: order.id
                 };
@@ -5450,7 +5452,9 @@
                     const deductQty = item.stockDeductQty != null ? item.stockDeductQty : item.qty;
                     inventory[item.productCode].qty -= deductQty;
                     item.cost = unitCost;
-                    item.profit = (item.price - unitCost) * item.qty;
+                    // التكلفة بتتحسب على أساس الكمية الفعلية المخصومة من المخزون (بوحدة الكرتونة)
+                    // مش على أساس كمية البيع، عشان لو البيع كان بالقطاعي (علبة) يبقى الحساب صح
+                    item.profit = (item.price * item.qty) - (unitCost * deductQty);
                     addStockMovement(item.productCode, item.productName, 'out', -deductQty, inventory[item.productCode].qty, 'فاتورة بيع #' + getNextDocNumber(invoices.filter(i => i.type === 'sale')).toString().padStart(4, '0'), 'خصم تلقائي من فاتورة البيع' + (item.stockDeductQty != null && item.stockDeductQty !== item.qty ? ' (بيع بالقطاعي)' : ''));
                 }
             });
@@ -5471,7 +5475,7 @@
                 paymentMethod: paymentMethod,
                 notes: document.getElementById('invoiceNotes').value, items,
                 grandTotal: grandTotal,
-                totalCost: items.reduce((sum, item) => sum + ((item.cost || 0) * item.qty), 0),
+                totalCost: items.reduce((sum, item) => sum + ((item.cost || 0) * (item.stockDeductQty != null ? item.stockDeductQty : item.qty)), 0),
                 totalProfit: items.reduce((sum, item) => sum + (item.profit || 0), 0)
             };
             invoices.push(invoice);
@@ -5741,9 +5745,15 @@
 
         function updateEditInvoiceItemQty(idx, val) {
             const qty = parseFloat(val) || 0;
-            editInvoiceItems[idx].qty = qty;
-            editInvoiceItems[idx].total = qty * editInvoiceItems[idx].price;
-            if (editInvoiceItems[idx].cost != null) editInvoiceItems[idx].profit = (editInvoiceItems[idx].price - editInvoiceItems[idx].cost) * qty;
+            const item = editInvoiceItems[idx];
+            const oldQty = item.qty || 0;
+            const oldDeductQty = item.stockDeductQty != null ? item.stockDeductQty : oldQty;
+            // نحافظ على نفس نسبة تحويل الوحدة (كرتونة/علبة) لما الكمية تتغير في التعديل
+            const unitRatio = oldQty > 0 ? (oldDeductQty / oldQty) : 1;
+            item.qty = qty;
+            item.stockDeductQty = qty * unitRatio;
+            item.total = qty * item.price;
+            if (item.cost != null) item.profit = (item.price * qty) - (item.cost * item.stockDeductQty);
             renderEditInvoiceItems();
         }
 
@@ -5760,21 +5770,23 @@
             if (editingInvoiceType === 'sale') {
                 const inv = invoices.find(i => i.id === editingInvoiceId);
                 if (!inv) return;
-                // استرجاع الكميات القديمة للمخزون أولاً
+                // استرجاع الكميات القديمة للمخزون أولاً (بوحدة الكرتونة الأساسية، حتى لو البيع كان بالقطاعي)
                 inv.items.forEach(item => {
                     if (inventory[item.productCode]) {
-                        inventory[item.productCode].qty += item.qty;
-                        addStockMovement(item.productCode, item.productName, 'in', item.qty, inventory[item.productCode].qty, 'تعديل فاتورة', 'استرجاع مخزون قبل تعديل فاتورة بيع #' + inv.number);
+                        const deductQty = item.stockDeductQty != null ? item.stockDeductQty : item.qty;
+                        inventory[item.productCode].qty += deductQty;
+                        addStockMovement(item.productCode, item.productName, 'in', deductQty, inventory[item.productCode].qty, 'تعديل فاتورة', 'استرجاع مخزون قبل تعديل فاتورة بيع #' + inv.number);
                     }
                 });
                 if (inv.paymentMethod === 'نقدي' || inv.paymentMethod === 'بطاقة' || inv.paymentMethod === 'تحويل بنكي') {
                     addTreasuryEntry('out', inv.grandTotal, inv.customerCode || 'عميل', 'customer', 'عكس المبلغ القديم قبل تعديل فاتورة بيع #' + inv.number, 'تعديل', false);
                 }
-                // خصم الكميات الجديدة
+                // خصم الكميات الجديدة (بوحدة الكرتونة الأساسية)
                 editInvoiceItems.forEach(item => {
                     if (inventory[item.productCode]) {
-                        inventory[item.productCode].qty -= item.qty;
-                        addStockMovement(item.productCode, item.productName, 'out', -item.qty, inventory[item.productCode].qty, 'تعديل فاتورة', 'خصم مخزون بعد تعديل فاتورة بيع #' + inv.number);
+                        const deductQty = item.stockDeductQty != null ? item.stockDeductQty : item.qty;
+                        inventory[item.productCode].qty -= deductQty;
+                        addStockMovement(item.productCode, item.productName, 'out', -deductQty, inventory[item.productCode].qty, 'تعديل فاتورة', 'خصم مخزون بعد تعديل فاتورة بيع #' + inv.number);
                     }
                 });
                 const newGrandTotal = editInvoiceItems.reduce((s, i) => s + i.total, 0);
@@ -5783,7 +5795,7 @@
                 }
                 inv.items = editInvoiceItems;
                 inv.grandTotal = newGrandTotal;
-                inv.totalCost = editInvoiceItems.reduce((s, i) => s + ((i.cost || 0) * i.qty), 0);
+                inv.totalCost = editInvoiceItems.reduce((s, i) => s + ((i.cost || 0) * (i.stockDeductQty != null ? i.stockDeductQty : i.qty)), 0);
                 inv.totalProfit = editInvoiceItems.reduce((s, i) => s + (i.profit || 0), 0);
                 localStorage.setItem('invoices', JSON.stringify(invoices));
                 saveInventory();
@@ -6062,7 +6074,10 @@
             tbody.innerHTML = invoice.items.map((item, idx) => {
                 const returnedBefore = alreadyReturned[item.productCode] || 0;
                 const maxQty = Math.max(0, item.qty - returnedBefore);
-                return `<tr data-code="${item.productCode}" data-name="${item.productName}" data-unit="${item.unit}" data-price="${item.price}" data-cost="${item.cost || 0}" data-max="${maxQty}">
+                // نسبة تحويل الوحدة (كرتونة/علبة) بتاعت الصنف ده في الفاتورة الأصلية، عشان نستخدمها في المرتجع
+                const origDeductQty = item.stockDeductQty != null ? item.stockDeductQty : item.qty;
+                const unitRatio = item.qty > 0 ? (origDeductQty / item.qty) : 1;
+                return `<tr data-code="${item.productCode}" data-name="${item.productName}" data-unit="${item.unit}" data-price="${item.price}" data-cost="${item.cost || 0}" data-max="${maxQty}" data-unit-ratio="${unitRatio}">
                     <td><input type="checkbox" onchange="calcSalesReturnRow(this)"></td>
                     <td>${item.productName}${returnedBefore > 0 ? `<div style="font-size:11px;color:var(--text-light);">مرتجع سابقاً: ${returnedBefore}</div>` : ''}</td>
                     <td>${item.unit}</td>
@@ -6109,8 +6124,10 @@
                 if (checkbox.checked && qty > 0) {
                     const price = parseFloat(row.dataset.price) || 0;
                     const cost = parseFloat(row.dataset.cost) || 0;
+                    const unitRatio = parseFloat(row.dataset.unitRatio) || 1;
+                    const stockDeductQty = qty * unitRatio; // بالكرتونة الأساسية، حتى لو الإرجاع بالقطاعي
                     items.push({ productCode: row.dataset.code, productName: row.dataset.name, unit: row.dataset.unit,
-                        qty, price, cost, total: qty * price, profit: (price - cost) * qty });
+                        qty, price, cost, stockDeductQty, total: qty * price, profit: (qty * price) - (cost * stockDeductQty) });
                 }
             });
             if (items.length === 0) { showToast('الرجاء تحديد صنف واحد على الأقل للإرجاع', 'error'); return; }
@@ -6119,11 +6136,12 @@
             const totalProfit = items.reduce((s, it) => s + it.profit, 0);
             const isCash = invoice.paymentMethod !== 'آجل';
 
-            // Update inventory back
+            // Update inventory back (بوحدة الكرتونة الأساسية، حتى لو الإرجاع كان بالقطاعي)
             items.forEach(item => {
                 if (!inventory[item.productCode]) inventory[item.productCode] = { code: item.productCode, qty: 0, cost: item.cost, minStock: 0 };
-                inventory[item.productCode].qty += item.qty;
-                addStockMovement(item.productCode, item.productName, 'in', item.qty, inventory[item.productCode].qty, 'مرتجع بيع', 'استرجاع من مرتجع فاتورة بيع #' + invoice.number);
+                const deductQty = item.stockDeductQty != null ? item.stockDeductQty : item.qty;
+                inventory[item.productCode].qty += deductQty;
+                addStockMovement(item.productCode, item.productName, 'in', deductQty, inventory[item.productCode].qty, 'مرتجع بيع', 'استرجاع من مرتجع فاتورة بيع #' + invoice.number);
             });
             saveInventory();
 
@@ -6560,13 +6578,15 @@
 
                 inv.items.forEach(item => {
                     const itemCost = item.cost || inventory[item.productCode]?.cost || products.find(p => p.code === item.productCode)?.cost || 0;
-                    const itemProfit = (item.price - itemCost) * item.qty;
+                    const deductQty = item.stockDeductQty != null ? item.stockDeductQty : item.qty;
+                    // بنستخدم الربح المحفوظ في الصنف نفسه لو موجود (محسوب صح وقت البيع)، وإلا بنحسبه بنفس المنطق الصحيح
+                    const itemProfit = item.profit != null ? item.profit : ((item.total != null ? item.total : item.price * item.qty) - (itemCost * deductQty));
                     if (!productProfit[item.productCode]) {
                         productProfit[item.productCode] = { name: item.productName, unit: item.unit, qty: 0, sales: 0, cost: 0, profit: 0 };
                     }
                     productProfit[item.productCode].qty += item.qty;
                     productProfit[item.productCode].sales += item.total;
-                    productProfit[item.productCode].cost += itemCost * item.qty;
+                    productProfit[item.productCode].cost += itemCost * deductQty;
                     productProfit[item.productCode].profit += itemProfit;
                 });
 
@@ -6775,7 +6795,8 @@
             invoices.forEach(inv => {
                 inv.items.forEach(item => {
                     const itemCost = item.cost || inventory[item.productCode]?.cost || products.find(p => p.code === item.productCode)?.cost || 0;
-                    const itemProfit = (item.price - itemCost) * item.qty;
+                    const deductQty = item.stockDeductQty != null ? item.stockDeductQty : item.qty;
+                    const itemProfit = item.profit != null ? item.profit : ((item.total != null ? item.total : item.price * item.qty) - (itemCost * deductQty));
                     if (!stats[item.productCode]) stats[item.productCode] = { name: item.productName, unit: item.unit, qty: 0, sales: 0, profit: 0 };
                     stats[item.productCode].qty += item.qty;
                     stats[item.productCode].sales += item.total;
