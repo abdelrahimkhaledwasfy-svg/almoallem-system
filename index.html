@@ -2277,8 +2277,6 @@
 
         let db = null;
         let cloudSyncTimer = null;
-        let firestorePersistenceReady = false;
-        let invoiceMirrorListenerStarted = false;
         let applyingRemoteUpdate = false;
         let cloudListenerStarted = false;
         let lastKnownServerUpdatedAt = 0; // آخر updatedAt عارفينه من السحابة، بنستخدمه عشان نمنع أي جهاز قديم من مسح تحديثات أحدث
@@ -2304,19 +2302,10 @@
             badge.innerHTML = s.html + `<span>${s.label}</span>`;
         }
 
-        async function initFirebaseSync() {
+        function initFirebaseSync() {
             try {
                 const app = firebase.initializeApp(firebaseConfig);
                 db = firebase.firestore();
-                // تفعيل التخزين المحلي الدائم لـ Firestore: عمليات الكتابة المباشرة
-                // تظل في طابور IndexedDB حتى لو حصل Refresh أو انقطع النت لحظيًا.
-                try {
-                    await db.enablePersistence({ synchronizeTabs: true });
-                    firestorePersistenceReady = true;
-                } catch (pErr) {
-                    // قد يفشل فقط إذا كان المتصفح/التبويبات لا تدعم persistence؛ نكمل بالسلوك العادي.
-                    console.warn('Firestore persistence unavailable:', pErr);
-                }
                 hookLocalStorageForCloudSync();
                 // لو الصفحة اتعمل لها ريفريش (أو اتقفلت) وكان لسه فيه تعديل محلي معلّق ما اترفعش للسحابة
                 // (زي فاتورة اتحفظت على الجهاز للتو بس مهلة الـ 900ms قبل الرفع ما خلصتش قبل الريفريش)،
@@ -2329,7 +2318,6 @@
                     pushStateToCloud().catch(function() {});
                 }
                 startCloudListener();
-                startInvoiceMirrorListener();
                 startOrdersListener();
                 startActivationUsesListener();
                 setupStaleTabAutoRefresh();
@@ -2469,73 +2457,7 @@
                 });
         }
 
-        // ==================== INVOICE DURABLE MIRROR ====================
-        // الفواتير الجديدة تُحفظ أيضًا كـ Documents مستقلة؛ حتى لا تعتمد سلامتها على
-        // رفع مستند storeData/main الضخم كاملًا. هذا لا يغيّر أي حسابات مالية.
-        function mirrorInvoiceToCloud(invoice, collectionName) {
-            if (!db || !invoice || invoice.id == null) return Promise.resolve(false);
-            const ref = db.collection(collectionName).doc(String(invoice.id));
-            const data = JSON.parse(JSON.stringify(invoice));
-            data._mirrorUpdatedAt = Date.now();
-            data._mirrorUpdatedBy = SYNC_SESSION_ID;
-            return ref.set(data, { merge: true }).then(function() { return true; });
-        }
-
-        function mirrorInvoiceAndSync(invoice, collectionName) {
-            if (!db || !invoice) return Promise.resolve(false);
-            // نبدأ المرآة المستقلة فورًا؛ وفي نفس الوقت نترك المزامنة الشاملة تعمل كالمعتاد.
-            return mirrorInvoiceToCloud(invoice, collectionName).then(function() {
-                // لو تم الحفظ الفعلي، فرفع الحالة الكاملة يصبح تحديثًا متسقًا لاحقًا.
-                scheduleCloudSync();
-                return true;
-            }).catch(function(err) {
-                console.error('Invoice mirror failed:', err);
-                scheduleCloudSync();
-                return false;
-            });
-        }
-
-        function startInvoiceMirrorListener() {
-            if (!db || invoiceMirrorListenerStarted) return;
-            invoiceMirrorListenerStarted = true;
-            db.collection('invoices').onSnapshot(function(snapshot) {
-                let changed = false;
-                snapshot.docChanges().forEach(function(change) {
-                    const item = change.doc.data();
-                    const id = item && item.id != null ? item.id : Number(change.doc.id);
-                    if (change.type === 'removed') {
-                        return;
-                    }
-                    const idx = invoices.findIndex(function(x) { return String(x.id) === String(id); });
-                    if (idx >= 0) invoices[idx] = item;
-                    else invoices.push(item);
-                    changed = true;
-                });
-                if (changed && !applyingRemoteUpdate) {
-                    _origLocalStorageSetItem('invoices', JSON.stringify(invoices));
-                    loadAllData();
-                }
-            }, function(err) { console.error('Invoice mirror listener error:', err); });
-
-            db.collection('purchaseInvoices').onSnapshot(function(snapshot) {
-                let changed = false;
-                snapshot.docChanges().forEach(function(change) {
-                    const item = change.doc.data();
-                    const id = item && item.id != null ? item.id : Number(change.doc.id);
-                    if (change.type === 'removed') return;
-                    const idx = purchaseInvoices.findIndex(function(x) { return String(x.id) === String(id); });
-                    if (idx >= 0) purchaseInvoices[idx] = item;
-                    else purchaseInvoices.push(item);
-                    changed = true;
-                });
-                if (changed && !applyingRemoteUpdate) {
-                    _origLocalStorageSetItem('purchaseInvoices', JSON.stringify(purchaseInvoices));
-                    loadAllData();
-                }
-            }, function(err) { console.error('Purchase invoice mirror listener error:', err); });
-        }
-
-                function startCloudListener() {
+        function startCloudListener() {
             if (!db || cloudListenerStarted) return;
             cloudListenerStarted = true;
             db.collection('storeData').doc('main').onSnapshot(function(docSnap) {
@@ -5719,8 +5641,6 @@
             };
             invoices.push(invoice);
             localStorage.setItem('invoices', JSON.stringify(invoices));
-            // حفظ مستقل للفواتير: لا ننتظر مؤقت الـ900ms الخاص بالمزامنة العامة.
-            mirrorInvoiceAndSync(invoice, 'invoices');
             logAction('فاتورة بيع', `تم إنشاء فاتورة بيع #${invoice.number} للعميل ${invoice.customerName} بقيمة ${grandTotal.toFixed(2)} ر.س`);
             showToast('تم حفظ الفاتورة وخصم المخزون بنجاح');
             resetInvoice(); updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderTopProducts(); renderPaymentSummary(); updateSalesChart(); renderInventory(); renderMovements(); renderLowStock(); renderTreasury();
@@ -5845,8 +5765,6 @@
             };
             purchaseInvoices.push(invoice);
             localStorage.setItem('purchaseInvoices', JSON.stringify(purchaseInvoices));
-            // حفظ مستقل للفواتير: لا ننتظر مؤقت الـ900ms الخاص بالمزامنة العامة.
-            mirrorInvoiceAndSync(invoice, 'purchaseInvoices');
             logAction('فاتورة شراء', `تم إنشاء فاتورة شراء #${invoice.number} من المورد ${invoice.supplier} بقيمة ${grandTotal.toFixed(2)} ر.س`);
             showToast('تم حفظ فاتورة الشراء وإضافة المخزون بنجاح');
             resetPurchaseInvoice(); updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderInventory(); renderMovements(); renderLowStock(); renderTreasury();
@@ -6041,7 +5959,6 @@
                 inv.totalCost = editInvoiceItems.reduce((s, i) => s + ((i.cost || 0) * (i.stockDeductQty != null ? i.stockDeductQty : i.qty)), 0);
                 inv.totalProfit = editInvoiceItems.reduce((s, i) => s + (i.profit || 0), 0);
                 localStorage.setItem('invoices', JSON.stringify(invoices));
-                mirrorInvoiceAndSync(inv, 'invoices');
                 saveInventory();
                 logAction('تعديل فاتورة بيع', `تم تعديل الفاتورة #${inv.number} وتصحيح المخزون تلقائيًا`);
             } else {
@@ -6069,7 +5986,6 @@
                 inv.items = editInvoiceItems;
                 inv.grandTotal = newGrandTotal;
                 localStorage.setItem('purchaseInvoices', JSON.stringify(purchaseInvoices));
-                mirrorInvoiceAndSync(inv, 'purchaseInvoices');
                 saveInventory();
                 logAction('تعديل فاتورة شراء', `تم تعديل الفاتورة #${inv.number} وتصحيح المخزون تلقائيًا`);
             }
