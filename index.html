@@ -462,59 +462,64 @@
 
         <!-- Dashboard Section -->
         <section id="dashboard-section" class="section active">
+            <div class="date-filter" style="margin-bottom:15px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <label style="font-weight:600;"><i class="fas fa-calendar-alt"></i> فترة عرض الإحصائيات:</label>
+                <select class="form-control" id="dashboardPeriodSelect" style="max-width:220px;" onchange="updateDashboardStats()"></select>
+                <span style="font-size:12px;color:var(--text-light);">(ديون العملاء/الموردين والمخزون ورصيد الخزنة دايمًا بيعرضوا الإجمالي الكلي، مهما كانت الفترة المختارة)</span>
+            </div>
             <div class="stats-grid">
                 <div class="stat-card sales" data-role-card="sales" onclick="showSection('invoices')">
                     <div class="stat-icon"><i class="fas fa-money-bill-wave"></i></div>
                     <div class="stat-value" id="totalSales">0 ر.س</div>
-                    <div class="stat-label">إجمالي المبيعات</div>
+                    <div class="stat-label" id="totalSalesLabel">إجمالي المبيعات</div>
                     <div class="stat-change positive"><i class="fas fa-arrow-up"></i> نشط</div>
                 </div>
                 <div class="stat-card purchases" data-role-card="purchases" onclick="showSection('invoices')">
                     <div class="stat-icon"><i class="fas fa-cart-plus"></i></div>
                     <div class="stat-value" id="totalPurchases">0 ر.س</div>
-                    <div class="stat-label">إجمالي المشتريات</div>
+                    <div class="stat-label" id="totalPurchasesLabel">إجمالي المشتريات</div>
                     <div class="stat-change positive"><i class="fas fa-arrow-up"></i> جديد</div>
                 </div>
                 <div class="stat-card profit" data-role-card="profit" onclick="showSection('profit')">
                     <div class="stat-icon"><i class="fas fa-chart-line"></i></div>
                     <div class="stat-value" id="totalProfit">0 ر.س</div>
-                    <div class="stat-label">صافي الربح بعد المصروفات</div>
+                    <div class="stat-label" id="totalProfitLabel">صافي الربح بعد المصروفات</div>
                     <div class="stat-change positive"><i class="fas fa-arrow-up"></i> صافي</div>
                 </div>
                 <div class="stat-card expenses" data-role-card="expenses" onclick="showSection('expenses')">
                     <div class="stat-icon"><i class="fas fa-wallet"></i></div>
                     <div class="stat-value" id="totalExpenses">0 ر.س</div>
-                    <div class="stat-label">إجمالي المصروفات</div>
+                    <div class="stat-label" id="totalExpensesLabel">إجمالي المصروفات</div>
                     <div class="stat-change negative"><i class="fas fa-arrow-down"></i> خصم</div>
                 </div>
                 <div class="stat-card treasury" data-role-card="treasury" onclick="showSection('treasury')">
                     <div class="stat-icon"><i class="fas fa-coins"></i></div>
                     <div class="stat-value" id="treasuryBalance">0 ر.س</div>
-                    <div class="stat-label">رصيد الخزنة</div>
+                    <div class="stat-label">رصيد الخزنة (إجمالي)</div>
                     <div class="stat-change positive"><i class="fas fa-wallet"></i> نقدي</div>
                 </div>
                 <div class="stat-card credit" data-role-card="credit" onclick="showSection('collections')">
                     <div class="stat-icon"><i class="fas fa-hand-holding-usd"></i></div>
                     <div class="stat-value" id="totalCustomersDebt">0 ر.س</div>
-                    <div class="stat-label">ديون العملاء (آجل)</div>
+                    <div class="stat-label">ديون العملاء (آجل - إجمالي)</div>
                     <div class="stat-change negative"><i class="fas fa-exclamation-circle"></i> مستحق</div>
                 </div>
                 <div class="stat-card suppliers" data-role-card="suppliers" onclick="showSection('suppliers')">
                     <div class="stat-icon"><i class="fas fa-truck"></i></div>
                     <div class="stat-value" id="totalSuppliersDebt">0 ر.س</div>
-                    <div class="stat-label">ديون الموردين (آجل)</div>
+                    <div class="stat-label">ديون الموردين (آجل - إجمالي)</div>
                     <div class="stat-change negative"><i class="fas fa-exclamation-circle"></i> مستحق</div>
                 </div>
                 <div class="stat-card inventory" data-role-card="inventory" onclick="showSection('inventory')">
                     <div class="stat-icon"><i class="fas fa-warehouse"></i></div>
                     <div class="stat-value" id="totalInventoryItems">0</div>
-                    <div class="stat-label">إجمالي وحدات المخزون</div>
+                    <div class="stat-label">إجمالي وحدات المخزون (إجمالي)</div>
                     <div class="stat-change positive"><i class="fas fa-boxes"></i> متاح</div>
                 </div>
                 <div class="stat-card invoices" data-role-card="invoices" onclick="showSection('invoices')">
                     <div class="stat-icon"><i class="fas fa-file-invoice"></i></div>
                     <div class="stat-value" id="totalInvoices">0</div>
-                    <div class="stat-label">عدد فواتير البيع</div>
+                    <div class="stat-label">عدد فواتير البيع (إجمالي)</div>
                     <div class="stat-change positive"><i class="fas fa-arrow-up"></i> جديد</div>
                 </div>
                 <div class="stat-card products" data-role-card="products" onclick="showSection('products')">
@@ -1135,7 +1140,9 @@
                 <div class="date-filter" style="margin-bottom:0;">
                     <label>من:</label><input type="date" id="profitFromDate" onchange="renderProfitData()">
                     <label>إلى:</label><input type="date" id="profitToDate" onchange="renderProfitData()">
-                    <button class="btn btn-primary btn-sm" onclick="resetProfitDates()"><i class="fas fa-sync"></i> إعادة تعيين</button>
+                    <button class="btn btn-primary btn-sm" onclick="setProfitDatesPreset('thisMonth')"><i class="fas fa-calendar-day"></i> الشهر الحالي</button>
+                    <button class="btn btn-secondary btn-sm" onclick="setProfitDatesPreset('lastMonth')"><i class="fas fa-calendar-minus"></i> الشهر اللي فات</button>
+                    <button class="btn btn-secondary btn-sm" onclick="setProfitDatesPreset('all')"><i class="fas fa-infinity"></i> كل الفترة</button>
                 </div>
             </div>
 
@@ -2265,6 +2272,7 @@
         let cloudSyncTimer = null;
         let applyingRemoteUpdate = false;
         let cloudListenerStarted = false;
+        let lastKnownServerUpdatedAt = 0; // آخر updatedAt عارفينه من السحابة، بنستخدمه عشان نمنع أي جهاز قديم من مسح تحديثات أحدث
         const _origLocalStorageSetItem = localStorage.setItem.bind(localStorage);
 
         function updateSyncBadge(status) {
@@ -2291,10 +2299,25 @@
                 startCloudListener();
                 startOrdersListener();
                 startActivationUsesListener();
+                setupStaleTabAutoRefresh();
             } catch (e) {
                 console.error('Firebase init error:', e);
                 updateSyncBadge('error');
             }
+        }
+
+        // لو الجهاز/التاب اتسايب مفتوح في الخلفية فترة طويلة، بنعمله تحديث تلقائي أول ما يرجع نشط
+        // عشان نمنع إنه يشتغل ببيانات قديمة ويرفعها فوق تحديثات أجهزة تانية
+        function setupStaleTabAutoRefresh() {
+            let hiddenAt = null;
+            const STALE_LIMIT_MS = 5 * 60 * 1000; // 5 دقايق
+            document.addEventListener('visibilitychange', function() {
+                if (document.hidden) {
+                    hiddenAt = Date.now();
+                } else if (hiddenAt && (Date.now() - hiddenAt) > STALE_LIMIT_MS) {
+                    location.reload();
+                }
+            });
         }
 
         // نعترض localStorage.setItem عشان أي حفظ محلي (من أي دالة في النظام) يطلق مزامنة سحابية تلقائيًا
@@ -2322,9 +2345,33 @@
                 updatedAt: Date.now(),
                 updatedBy: DEVICE_ID
             };
-            return db.collection('storeData').doc('main').set(JSON.parse(JSON.stringify(payload)))
-                .then(() => updateSyncBadge('synced'))
-                .catch(err => { console.error('Cloud sync failed:', err); updateSyncBadge('error'); throw err; });
+            const cleanPayload = JSON.parse(JSON.stringify(payload));
+            const docRef = db.collection('storeData').doc('main');
+            // معاملة (transaction) بتتأكد وقت الكتابة نفسه إن مفيش نسخة أحدث اتسجلت من جهاز تاني
+            // من غير ما الجهاز الحالي ياخدها؛ لو لقى نسخة أحدث، بيرفض يكتب فوقها بدل ما يمسحها
+            return db.runTransaction(function(transaction) {
+                return transaction.get(docRef).then(function(docSnap) {
+                    const serverUpdatedAt = docSnap.exists ? (docSnap.data().updatedAt || 0) : 0;
+                    if (serverUpdatedAt > lastKnownServerUpdatedAt) {
+                        throw { staleLocalData: true, serverUpdatedAt };
+                    }
+                    transaction.set(docRef, cleanPayload);
+                });
+            }).then(() => {
+                lastKnownServerUpdatedAt = cleanPayload.updatedAt;
+                updateSyncBadge('synced');
+            }).catch(err => {
+                if (err && err.staleLocalData) {
+                    console.warn('تم إيقاف الرفع: البيانات المحلية قديمة، هيتم تحديث الصفحة لجلب أحدث نسخة بدل مسحها.');
+                    updateSyncBadge('syncing');
+                    showToast('تم اكتشاف بيانات أحدث من جهاز تاني، جاري تحديث الصفحة...', 'error');
+                    setTimeout(() => location.reload(), 1200);
+                    return;
+                }
+                console.error('Cloud sync failed:', err);
+                updateSyncBadge('error');
+                throw err;
+            });
         }
 
         // زرار يدوي لإجبار رفع كل بيانات المتجر (منتجات/فئات/براندات/بانرات/عروض) للسحابة دفعة واحدة،
@@ -2352,6 +2399,7 @@
                     return;
                 }
                 const data = docSnap.data();
+                lastKnownServerUpdatedAt = data.updatedAt || Date.now();
                 if (data.updatedBy === DEVICE_ID) { updateSyncBadge('synced'); return; }
 
                 applyingRemoteUpdate = true;
@@ -6524,15 +6572,30 @@
 
         // ==================== PROFIT SECTION ====================
         function initProfitChartDates() {
-            const today = new Date();
-            const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-            document.getElementById('profitFromDate').value = thirtyDaysAgo.toISOString().split('T')[0];
-            document.getElementById('profitToDate').value = today.toISOString().split('T')[0];
+            setProfitDatesPreset('thisMonth');
+        }
+
+        function setProfitDatesPreset(preset) {
+            const now = new Date();
+            let from, to;
+            if (preset === 'thisMonth') {
+                from = new Date(now.getFullYear(), now.getMonth(), 1);
+                to = now;
+            } else if (preset === 'lastMonth') {
+                from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                to = new Date(now.getFullYear(), now.getMonth(), 0); // آخر يوم في الشهر اللي فات
+            } else { // all
+                const allDates = invoices.map(i => new Date(i.date)).filter(d => !isNaN(d));
+                from = allDates.length ? new Date(Math.min(...allDates)) : new Date(now.getFullYear(), now.getMonth(), 1);
+                to = now;
+            }
+            document.getElementById('profitFromDate').value = from.toISOString().split('T')[0];
+            document.getElementById('profitToDate').value = to.toISOString().split('T')[0];
+            renderProfitData();
         }
 
         function resetProfitDates() {
-            initProfitChartDates();
-            renderProfitData();
+            setProfitDatesPreset('thisMonth');
         }
 
         function getProfitFilteredInvoices() {
@@ -6619,12 +6682,12 @@
                 returnsProfit += r.totalProfit || 0;
                 totalSales -= r.grandTotal;
                 totalProfit -= (r.totalProfit || 0);
-                totalCost -= r.items.reduce((s, it) => s + (it.cost || 0) * it.qty, 0);
+                totalCost -= r.items.reduce((s, it) => s + (it.cost || 0) * (it.stockDeductQty != null ? it.stockDeductQty : it.qty), 0);
                 r.items.forEach(item => {
                     if (productProfit[item.productCode]) {
                         productProfit[item.productCode].qty -= item.qty;
                         productProfit[item.productCode].sales -= item.total;
-                        productProfit[item.productCode].cost -= (item.cost || 0) * item.qty;
+                        productProfit[item.productCode].cost -= (item.cost || 0) * (item.stockDeductQty != null ? item.stockDeductQty : item.qty);
                         productProfit[item.productCode].profit -= (item.profit || 0);
                     }
                 });
@@ -7088,7 +7151,7 @@
                 if (!groups[key]) groups[key] = { count: 0, sales: 0, cost: 0, profit: 0, sortKey: sortKeyFor(r.date) };
                 groups[key].sales -= r.grandTotal;
                 groups[key].profit -= (r.totalProfit || 0);
-                groups[key].cost -= r.items.reduce((s, it) => s + (it.cost || 0) * it.qty, 0);
+                groups[key].cost -= r.items.reduce((s, it) => s + (it.cost || 0) * (it.stockDeductQty != null ? it.stockDeductQty : it.qty), 0);
             });
             const entries = Object.entries(groups).sort((a, b) => b[1].sortKey - a[1].sortKey);
             if (entries.length === 0) {
@@ -7268,18 +7331,20 @@
             const stats = {};
             invoices.forEach(inv => inv.items.forEach(item => {
                 if (!stats[item.productCode]) stats[item.productCode] = { name: item.productName, unit: item.unit, qty: 0, sales: 0, cost: 0, profit: 0, price: item.price, lastSaleDate: inv.date };
+                const deductQty = item.stockDeductQty != null ? item.stockDeductQty : item.qty;
                 stats[item.productCode].qty += item.qty;
                 stats[item.productCode].sales += item.total;
-                stats[item.productCode].cost += (item.cost || 0) * item.qty;
-                stats[item.productCode].profit += (item.price - (item.cost || 0)) * item.qty;
+                stats[item.productCode].cost += (item.cost || 0) * deductQty;
+                stats[item.productCode].profit += item.profit != null ? item.profit : ((item.total != null ? item.total : item.price * item.qty) - (item.cost || 0) * deductQty);
                 stats[item.productCode].price = item.price;
                 if (new Date(inv.date) > new Date(stats[item.productCode].lastSaleDate)) stats[item.productCode].lastSaleDate = inv.date;
             }));
             salesReturns.forEach(r => r.items.forEach(item => {
                 if (stats[item.productCode]) {
+                    const deductQty = item.stockDeductQty != null ? item.stockDeductQty : item.qty;
                     stats[item.productCode].qty -= item.qty;
                     stats[item.productCode].sales -= item.total;
-                    stats[item.productCode].cost -= (item.cost || 0) * item.qty;
+                    stats[item.productCode].cost -= (item.cost || 0) * deductQty;
                     stats[item.productCode].profit -= (item.profit || 0);
                 }
             }));
@@ -7551,12 +7616,77 @@
         }
 
         // ==================== DASHBOARD ENHANCEMENTS ====================
+        // ---- فترة عرض إحصائيات لوحة التحكم (بتتقلب على الشهر الجديد تلقائيًا) ----
+        function getMonthRange(year, monthIndex0) {
+            const start = new Date(year, monthIndex0, 1, 0, 0, 0, 0);
+            const end = new Date(year, monthIndex0 + 1, 0, 23, 59, 59, 999);
+            return { start, end };
+        }
+
+        function getDashboardAvailableMonths() {
+            const set = new Set();
+            invoices.forEach(inv => { const d = new Date(inv.date); if (!isNaN(d)) set.add(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')); });
+            purchaseInvoices.forEach(inv => { const d = new Date(inv.date); if (!isNaN(d)) set.add(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')); });
+            return Array.from(set).sort().reverse();
+        }
+
+        const arabicMonthNames = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+
+        function populateDashboardPeriodSelect() {
+            const select = document.getElementById('dashboardPeriodSelect');
+            if (!select) return;
+            const now = new Date();
+            const currentMonthKey = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+            const months = getDashboardAvailableMonths().filter(m => m !== currentMonthKey);
+            let options = `<option value="current">الشهر الحالي (${arabicMonthNames[now.getMonth()]} ${now.getFullYear()})</option>`;
+            months.forEach(m => {
+                const [y, mo] = m.split('-').map(Number);
+                options += `<option value="${m}">${arabicMonthNames[mo - 1]} ${y}</option>`;
+            });
+            options += `<option value="all">كل الفترة (كل البيانات)</option>`;
+            const prevValue = select.value;
+            select.innerHTML = options;
+            if (prevValue && [...select.options].some(o => o.value === prevValue)) select.value = prevValue;
+        }
+
+        function getDashboardPeriodRange() {
+            const select = document.getElementById('dashboardPeriodSelect');
+            const value = select ? select.value : 'current';
+            const now = new Date();
+            if (value === 'all') return null; // null = بدون فلتر تاريخ (كل الفترة)
+            if (value === 'current' || !value) return getMonthRange(now.getFullYear(), now.getMonth());
+            const [y, mo] = value.split('-').map(Number);
+            return getMonthRange(y, mo - 1);
+        }
+
+        function getDashboardPeriodLabel() {
+            const select = document.getElementById('dashboardPeriodSelect');
+            if (!select) return '';
+            const opt = select.options[select.selectedIndex];
+            return opt ? ` (${opt.textContent})` : '';
+        }
+
         function updateDashboardStats() {
-            const totalSales = invoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
-            const totalPurchases = purchaseInvoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
-            const totalProfit = invoices.reduce((sum, inv) => sum + (inv.totalProfit || 0), 0);
-            const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+            populateDashboardPeriodSelect();
+            const range = getDashboardPeriodRange();
+            const periodLabel = getDashboardPeriodLabel();
+            const inRange = (dateStr) => {
+                if (!range) return true;
+                const d = new Date(dateStr);
+                return d >= range.start && d <= range.end;
+            };
+
+            const periodSaleInvoices = invoices.filter(inv => inRange(inv.date));
+            const periodPurchaseInvoices = purchaseInvoices.filter(inv => inRange(inv.date));
+            const periodExpenses = expenses.filter(e => inRange(e.date));
+
+            const totalSales = periodSaleInvoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
+            const totalPurchases = periodPurchaseInvoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
+            const totalProfit = periodSaleInvoices.reduce((sum, inv) => sum + (inv.totalProfit || 0), 0);
+            const totalExpenses = periodExpenses.reduce((sum, e) => sum + e.amount, 0);
             const netProfit = totalProfit - totalExpenses;
+
+            // دول دايمًا إجمالي كلي (تراكمي) مهما كانت الفترة المختارة، لأنها أرصدة مش نشاط فترة
             const totalCustomersDebt = customers.reduce((sum, c) => sum + Math.max(0, getCustomerBalance(c.code)), 0);
             const totalSuppliersDebt = suppliers.reduce((sum, s) => sum + Math.max(0, getSupplierBalance(s.code)), 0);
             let totalInventoryQty = 0;
@@ -7566,6 +7696,10 @@
             document.getElementById('totalPurchases').textContent = totalPurchases.toFixed(2) + ' ر.س';
             document.getElementById('totalProfit').textContent = netProfit.toFixed(2) + ' ر.س';
             document.getElementById('totalExpenses').textContent = totalExpenses.toFixed(2) + ' ر.س';
+            document.getElementById('totalSalesLabel').textContent = 'إجمالي المبيعات' + periodLabel;
+            document.getElementById('totalPurchasesLabel').textContent = 'إجمالي المشتريات' + periodLabel;
+            document.getElementById('totalProfitLabel').textContent = 'صافي الربح بعد المصروفات' + periodLabel;
+            document.getElementById('totalExpensesLabel').textContent = 'إجمالي المصروفات' + periodLabel;
             document.getElementById('treasuryBalance').textContent = getTreasuryBalance().toFixed(2) + ' ر.س';
             document.getElementById('totalCustomersDebt').textContent = totalCustomersDebt.toFixed(2) + ' ر.س';
             document.getElementById('totalSuppliersDebt').textContent = totalSuppliersDebt.toFixed(2) + ' ر.س';
@@ -7575,19 +7709,20 @@
             document.getElementById('totalCustomers').textContent = customers.length;
             document.getElementById('totalSalesmen').textContent = salesmen.filter(s => s.status === 'نشط').length;
 
-            renderTopCustomers();
+            renderTopCustomers(range);
             renderTopDebts();
             renderPerformanceComparison();
             renderDashboardStockout();
         }
 
-        // ---- أكثر العملاء شراءً (لوحة التحكم) ----
-        function renderTopCustomers() {
+        // ---- أكثر العملاء شراءً (لوحة التحكم) - بتتبع نفس فترة العرض المختارة ----
+        function renderTopCustomers(range) {
             const list = document.getElementById('topCustomersList');
             if (!list) return;
             const summary = {};
             invoices.forEach(inv => {
                 if (!inv.customerCode) return;
+                if (range) { const d = new Date(inv.date); if (d < range.start || d > range.end) return; }
                 if (!summary[inv.customerCode]) summary[inv.customerCode] = { name: inv.customerName, total: 0, count: 0 };
                 summary[inv.customerCode].total += inv.grandTotal;
                 summary[inv.customerCode].count++;
