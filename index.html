@@ -2215,12 +2215,15 @@
         let salesChartInstance = null;
         let profitChartInstance = null;
         let excelCustomersData = [];
-        // مهم: بنستخدم sessionStorage مش localStorage عشان كل تاب مفتوح ياخد رقم تعريف (Device ID) خاص
-        // بيه لوحده، حتى لو التابات دي كلها في نفس المتصفح ونفس الجهاز (زي فتح النظام بأكتر من يوزر
-        // في نفس الوقت). لو استخدمنا localStorage هنا، كل التابات كانت هتاخد نفس الرقم وتفتكر إن
-        // تعديلات بعضها هي تعديلاتها هي، وتتجاهلها وتكتب فوقها من غير ما تكتشف التعارض.
-        const DEVICE_ID = sessionStorage.getItem('deviceId') || 'DEV-' + Math.random().toString(36).substr(2, 9).toUpperCase();
-        if (!sessionStorage.getItem('deviceId')) sessionStorage.setItem('deviceId', DEVICE_ID);
+        const DEVICE_ID = localStorage.getItem('deviceId') || 'DEV-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+        if (!localStorage.getItem('deviceId')) localStorage.setItem('deviceId', DEVICE_ID);
+        // معرّف خاص بكل تاب/فتحة صفحة لوحدها (مش بالجهاز)، بيتجدد تلقائيًا مع كل فتح جديد لأن sessionStorage
+        // بيتصفّر لما التاب يتقفل. بنستخدمه بس عشان نميّز "ده أنا اللي بعته الآن فعلاً" وقت مزامنة السحابة،
+        // عشان لو فيه تاب قديم منسي فاتح من كذا يوم على نفس الجهاز (وبالتالي نفس DEVICE_ID)، النظام
+        // ميغلطش ويفتكر إن تحديثات التاب التاني (الجديد) دي بتاعته هو، فيتجاهلها ويفضل واقف على بيانات قديمة
+        // وهو مقتنع إنه متزامن — وده اللي كان بيخلي أي حفظ منه يمسح بيانات الأيام اللي فاتت.
+        const SYNC_SESSION_ID = sessionStorage.getItem('syncSessionId') || DEVICE_ID + '-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6);
+        if (!sessionStorage.getItem('syncSessionId')) sessionStorage.setItem('syncSessionId', SYNC_SESSION_ID);
 
         // ==================== CLOUD SYNC (Firebase Firestore) ====================
         const firebaseConfig = {
@@ -2304,6 +2307,16 @@
                 const app = firebase.initializeApp(firebaseConfig);
                 db = firebase.firestore();
                 hookLocalStorageForCloudSync();
+                // لو الصفحة اتعمل لها ريفريش (أو اتقفلت) وكان لسه فيه تعديل محلي معلّق ما اترفعش للسحابة
+                // (زي فاتورة اتحفظت على الجهاز للتو بس مهلة الـ 900ms قبل الرفع ما خلصتش قبل الريفريش)،
+                // بنعرف ده من علامة باقية في localStorage من الجلسة اللي فاتت (متخزنة، عكس pendingLocalSync
+                // اللي بيتصفر مع كل ريفريش). لو موجودة، بنحاول نرفع البيانات الحالية فورًا الأول، قبل ما نسمح
+                // لأي تحديث وارد من السحابة يكتب فوقها ويمسحها وهي لسه ما وصلتش للسحابة أصلاً
+                if (localStorage.getItem('_syncOutboxPending') === '1') {
+                    pendingLocalSync = true;
+                    updateSyncBadge('syncing');
+                    pushStateToCloud().catch(function() {});
+                }
                 startCloudListener();
                 startOrdersListener();
                 startActivationUsesListener();
@@ -2313,6 +2326,18 @@
                 updateSyncBadge('error');
             }
         }
+
+        // لو التاب هيتقفل أو هيتخبّى (ريفريش، تبديل تطبيق، قفل الصفحة) وفيه تعديل محلي لسه مستني
+        // مهلة الـ900ms قبل ما يترفع، بنحاول نرفعه فورًا دلوقتي من غير ما ننتظر، عشان نقلل الفترة
+        // اللي ممكن يضيع فيها التعديل لو حصل ريفريش قبل ما يوصل للسحابة
+        function flushPendingSyncNow() {
+            if (pendingLocalSync && cloudSyncTimer) {
+                clearTimeout(cloudSyncTimer);
+                pushStateToCloud().catch(function() {});
+            }
+        }
+        document.addEventListener('visibilitychange', function() { if (document.hidden) flushPendingSyncNow(); });
+        window.addEventListener('pagehide', flushPendingSyncNow);
 
         // لو الجهاز/التاب اتسايب مفتوح في الخلفية فترة طويلة، بنعمله تحديث تلقائي أول ما يرجع نشط
         // عشان نمنع إنه يشتغل ببيانات قديمة ويرفعها فوق تحديثات أجهزة تانية
@@ -2339,6 +2364,7 @@
         function scheduleCloudSync() {
             if (!db) return;
             pendingLocalSync = true;
+            _origLocalStorageSetItem('_syncOutboxPending', '1');
             updateSyncBadge('syncing');
             clearTimeout(cloudSyncTimer);
             cloudSyncTimer = setTimeout(pushStateToCloud, 900);
@@ -2354,7 +2380,7 @@
                 users, auditLog, appCategories, appBrands, activationCodes, requireActivationCode, loyaltySettings, appBanners, appOffers,
                 appCities, appRegions, appNeighborhoods, appNotifications,
                 updatedAt: Date.now(),
-                updatedBy: DEVICE_ID
+                updatedBy: SYNC_SESSION_ID
             };
             const cleanPayload = JSON.parse(JSON.stringify(payload));
             const docRef = db.collection('storeData').doc('main');
@@ -2371,6 +2397,7 @@
             }).then(() => {
                 staleSyncRetryCount = 0;
                 lastKnownServerUpdatedAt = cleanPayload.updatedAt;
+                _origLocalStorageSetItem('_syncOutboxPending', '0');
                 updateSyncBadge('synced');
                 // نجحنا في رفع تعديلنا المحلي؛ أي نسخة كانت وصلت من جهاز تاني وإحنا مستنيين هي أقدم
                 // من اللي إحنا رفعناه دلوقتي، فمفيش داعي نطبّقها فوق شغلنا الجديد
@@ -2441,7 +2468,7 @@
                     return;
                 }
                 const data = docSnap.data();
-                if (data.updatedBy === DEVICE_ID) { lastKnownServerUpdatedAt = data.updatedAt || Date.now(); updateSyncBadge('synced'); return; }
+                if (data.updatedBy === SYNC_SESSION_ID) { lastKnownServerUpdatedAt = data.updatedAt || Date.now(); updateSyncBadge('synced'); return; }
 
                 // فيه تعديل محلي لسه معلق (مثلاً طلب أبليكشن اتنفذ دلوقتي) ولسه ما اترفعش للسحابة:
                 // نأجل تطبيق تحديث الجهاز التاني، وميننساش نحدّث lastKnownServerUpdatedAt دلوقتي
@@ -5452,7 +5479,8 @@
             const rowNum = tbody.children.length + 1;
             const options = products.map(p => {
                 const inv = inventory[p.code] || { qty: 0 };
-                return `<option value="${p.code}" data-price="${p.price}" data-unit="${p.unit}" data-stock="${inv.qty}"
+                const unitCost = (inv.cost != null ? inv.cost : (p.cost || 0));
+                return `<option value="${p.code}" data-price="${p.price}" data-unit="${p.unit}" data-stock="${inv.qty}" data-cost="${unitCost}"
                     data-sec-unit="${p.secondaryUnit ? p.secondaryUnit.name : ''}" data-sec-price="${p.secondaryUnit ? p.secondaryUnit.price : ''}"
                     data-sec-factor="${p.secondaryUnit ? p.secondaryUnit.factor : ''}">${p.name} (مخزون: ${inv.qty} ${p.unit})</option>`;
             }).join('');
@@ -5463,7 +5491,7 @@
                 <td><select class="form-control unit-field" onchange="onInvoiceUnitChange(this)" style="min-width:90px;"><option value="">-</option></select></td>
                 <td><input type="number" class="form-control stock-field" readonly style="background:#f8f9fa;color:var(--primary);font-weight:700;"></td>
                 <td><input type="number" class="form-control qty-field" value="1" min="1" onchange="calculateInvoiceRow(this)"></td>
-                <td><input type="number" class="form-control price-field" readonly style="background:#f8f9fa"></td>
+                <td><input type="number" class="form-control price-field" min="0" step="0.01" onchange="calculateInvoiceRow(this)" title="السعر قابل للتعديل — مثلاً لبيع بسعر الجملة"></td>
                 <td><input type="number" class="form-control total-field" readonly style="background:#f8f9fa;font-weight:700;color:var(--primary)"></td>
                 <td><button class="btn btn-danger btn-icon btn-sm btn-delete-row" onclick="removeInvoiceRow(this)"><i class="fas fa-times"></i></button></td>`;
             tbody.appendChild(row);
@@ -5482,6 +5510,7 @@
             }
             unitSelect.innerHTML = unitOptions;
             unitSelect.dataset.baseStock = option.dataset.stock;
+            row.dataset.unitCost = option.dataset.cost || 0;
             onInvoiceUnitChange(unitSelect);
         }
 
@@ -5500,11 +5529,23 @@
         function calculateInvoiceRow(input) {
             const row = input.closest('tr');
             const qty = parseFloat(row.querySelector('.qty-field').value) || 0;
-            const price = parseFloat(row.querySelector('.price-field').value) || 0;
+            const priceField = row.querySelector('.price-field');
+            const price = parseFloat(priceField.value) || 0;
             const stock = parseFloat(row.querySelector('.stock-field').value) || 0;
             const qtyInput = row.querySelector('.qty-field');
             if (qty > stock) { qtyInput.style.borderColor = 'var(--danger)'; qtyInput.style.background = 'rgba(231,76,60,0.05)'; }
             else { qtyInput.style.borderColor = ''; qtyInput.style.background = ''; }
+            // تنبيه بصري بس (مش مانع) لو السعر اللي كتبته أقل من تكلفة الصنف، عشان تنتبه لو غلطت في الرقم
+            // بالخطأ وتبيع بخسارة من غير قصد. القرار النهائي يفضل ليك، الفاتورة بتتحفظ عادي حتى لو السعر أقل من التكلفة.
+            const factor = parseFloat(row.dataset.unitFactor) || 1;
+            const unitCost = (parseFloat(row.dataset.unitCost) || 0) / factor;
+            if (price > 0 && unitCost > 0 && price < unitCost) {
+                priceField.style.borderColor = 'var(--warning)'; priceField.style.background = 'rgba(243,156,18,0.08)';
+                priceField.title = `تنبيه: السعر ده أقل من تكلفة الصنف (${unitCost.toFixed(2)} ر.س) — هتبيع بخسارة`;
+            } else {
+                priceField.style.borderColor = ''; priceField.style.background = '';
+                priceField.title = 'السعر قابل للتعديل — مثلاً لبيع بسعر الجملة';
+            }
             row.querySelector('.total-field').value = (qty * price).toFixed(2);
             calculateGrandTotal();
         }
