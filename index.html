@@ -2217,6 +2217,13 @@
         let excelCustomersData = [];
         const DEVICE_ID = localStorage.getItem('deviceId') || 'DEV-' + Math.random().toString(36).substr(2, 9).toUpperCase();
         if (!localStorage.getItem('deviceId')) localStorage.setItem('deviceId', DEVICE_ID);
+        // معرّف خاص بكل تاب/فتحة صفحة لوحدها (مش بالجهاز)، بيتجدد تلقائيًا مع كل فتح جديد لأن sessionStorage
+        // بيتصفّر لما التاب يتقفل. بنستخدمه بس عشان نميّز "ده أنا اللي بعته الآن فعلاً" وقت مزامنة السحابة،
+        // عشان لو فيه تاب قديم منسي فاتح من كذا يوم على نفس الجهاز (وبالتالي نفس DEVICE_ID)، النظام
+        // ميغلطش ويفتكر إن تحديثات التاب التاني (الجديد) دي بتاعته هو، فيتجاهلها ويفضل واقف على بيانات قديمة
+        // وهو مقتنع إنه متزامن — وده اللي كان بيخلي أي حفظ منه يمسح بيانات الأيام اللي فاتت.
+        const SYNC_SESSION_ID = sessionStorage.getItem('syncSessionId') || DEVICE_ID + '-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6);
+        if (!sessionStorage.getItem('syncSessionId')) sessionStorage.setItem('syncSessionId', SYNC_SESSION_ID);
 
         // ==================== CLOUD SYNC (Firebase Firestore) ====================
         const firebaseConfig = {
@@ -2350,7 +2357,7 @@
                 users, auditLog, appCategories, appBrands, activationCodes, requireActivationCode, loyaltySettings, appBanners, appOffers,
                 appCities, appRegions, appNeighborhoods, appNotifications,
                 updatedAt: Date.now(),
-                updatedBy: DEVICE_ID
+                updatedBy: SYNC_SESSION_ID
             };
             const cleanPayload = JSON.parse(JSON.stringify(payload));
             const docRef = db.collection('storeData').doc('main');
@@ -2437,7 +2444,7 @@
                     return;
                 }
                 const data = docSnap.data();
-                if (data.updatedBy === DEVICE_ID) { lastKnownServerUpdatedAt = data.updatedAt || Date.now(); updateSyncBadge('synced'); return; }
+                if (data.updatedBy === SYNC_SESSION_ID) { lastKnownServerUpdatedAt = data.updatedAt || Date.now(); updateSyncBadge('synced'); return; }
 
                 // فيه تعديل محلي لسه معلق (مثلاً طلب أبليكشن اتنفذ دلوقتي) ولسه ما اترفعش للسحابة:
                 // نأجل تطبيق تحديث الجهاز التاني، وميننساش نحدّث lastKnownServerUpdatedAt دلوقتي
