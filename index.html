@@ -5455,7 +5455,8 @@
             const rowNum = tbody.children.length + 1;
             const options = products.map(p => {
                 const inv = inventory[p.code] || { qty: 0 };
-                return `<option value="${p.code}" data-price="${p.price}" data-unit="${p.unit}" data-stock="${inv.qty}"
+                const unitCost = (inv.cost != null ? inv.cost : (p.cost || 0));
+                return `<option value="${p.code}" data-price="${p.price}" data-unit="${p.unit}" data-stock="${inv.qty}" data-cost="${unitCost}"
                     data-sec-unit="${p.secondaryUnit ? p.secondaryUnit.name : ''}" data-sec-price="${p.secondaryUnit ? p.secondaryUnit.price : ''}"
                     data-sec-factor="${p.secondaryUnit ? p.secondaryUnit.factor : ''}">${p.name} (مخزون: ${inv.qty} ${p.unit})</option>`;
             }).join('');
@@ -5466,7 +5467,7 @@
                 <td><select class="form-control unit-field" onchange="onInvoiceUnitChange(this)" style="min-width:90px;"><option value="">-</option></select></td>
                 <td><input type="number" class="form-control stock-field" readonly style="background:#f8f9fa;color:var(--primary);font-weight:700;"></td>
                 <td><input type="number" class="form-control qty-field" value="1" min="1" onchange="calculateInvoiceRow(this)"></td>
-                <td><input type="number" class="form-control price-field" readonly style="background:#f8f9fa"></td>
+                <td><input type="number" class="form-control price-field" min="0" step="0.01" onchange="calculateInvoiceRow(this)" title="السعر قابل للتعديل — مثلاً لبيع بسعر الجملة"></td>
                 <td><input type="number" class="form-control total-field" readonly style="background:#f8f9fa;font-weight:700;color:var(--primary)"></td>
                 <td><button class="btn btn-danger btn-icon btn-sm btn-delete-row" onclick="removeInvoiceRow(this)"><i class="fas fa-times"></i></button></td>`;
             tbody.appendChild(row);
@@ -5485,6 +5486,7 @@
             }
             unitSelect.innerHTML = unitOptions;
             unitSelect.dataset.baseStock = option.dataset.stock;
+            row.dataset.unitCost = option.dataset.cost || 0;
             onInvoiceUnitChange(unitSelect);
         }
 
@@ -5503,11 +5505,23 @@
         function calculateInvoiceRow(input) {
             const row = input.closest('tr');
             const qty = parseFloat(row.querySelector('.qty-field').value) || 0;
-            const price = parseFloat(row.querySelector('.price-field').value) || 0;
+            const priceField = row.querySelector('.price-field');
+            const price = parseFloat(priceField.value) || 0;
             const stock = parseFloat(row.querySelector('.stock-field').value) || 0;
             const qtyInput = row.querySelector('.qty-field');
             if (qty > stock) { qtyInput.style.borderColor = 'var(--danger)'; qtyInput.style.background = 'rgba(231,76,60,0.05)'; }
             else { qtyInput.style.borderColor = ''; qtyInput.style.background = ''; }
+            // تنبيه بصري بس (مش مانع) لو السعر اللي كتبته أقل من تكلفة الصنف، عشان تنتبه لو غلطت في الرقم
+            // بالخطأ وتبيع بخسارة من غير قصد. القرار النهائي يفضل ليك، الفاتورة بتتحفظ عادي حتى لو السعر أقل من التكلفة.
+            const factor = parseFloat(row.dataset.unitFactor) || 1;
+            const unitCost = (parseFloat(row.dataset.unitCost) || 0) / factor;
+            if (price > 0 && unitCost > 0 && price < unitCost) {
+                priceField.style.borderColor = 'var(--warning)'; priceField.style.background = 'rgba(243,156,18,0.08)';
+                priceField.title = `تنبيه: السعر ده أقل من تكلفة الصنف (${unitCost.toFixed(2)} ر.س) — هتبيع بخسارة`;
+            } else {
+                priceField.style.borderColor = ''; priceField.style.background = '';
+                priceField.title = 'السعر قابل للتعديل — مثلاً لبيع بسعر الجملة';
+            }
             row.querySelector('.total-field').value = (qty * price).toFixed(2);
             calculateGrandTotal();
         }
