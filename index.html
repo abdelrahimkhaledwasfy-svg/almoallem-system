@@ -2274,6 +2274,10 @@
         let cloudListenerStarted = false;
         let lastKnownServerUpdatedAt = 0; // آخر updatedAt عارفينه من السحابة، بنستخدمه عشان نمنع أي جهاز قديم من مسح تحديثات أحدث
         const _origLocalStorageSetItem = localStorage.setItem.bind(localStorage);
+        // لو عندنا تعديل محلي (زي تنفيذ طلب أبليكشن) لسه ما اترفعش للسحابة، بنأجل أي تحديث وارد من جهاز
+        // تاني لحد ما رفعنا تعديلنا إحنا الأول، عشان تحديث الجهاز التاني ميمسحش تعديلنا اللي لسه معلق
+        let pendingLocalSync = false;
+        let latestPendingSnapshotData = null;
 
         function updateSyncBadge(status) {
             const icon = document.getElementById('cloudSyncIcon');
@@ -2330,10 +2334,13 @@
 
         function scheduleCloudSync() {
             if (!db) return;
+            pendingLocalSync = true;
             updateSyncBadge('syncing');
             clearTimeout(cloudSyncTimer);
             cloudSyncTimer = setTimeout(pushStateToCloud, 900);
         }
+
+        let staleSyncRetryCount = 0;
 
         function pushStateToCloud() {
             if (!db) return Promise.reject(new Error('لا يوجد اتصال بالسحابة'));
@@ -2353,25 +2360,56 @@
                 return transaction.get(docRef).then(function(docSnap) {
                     const serverUpdatedAt = docSnap.exists ? (docSnap.data().updatedAt || 0) : 0;
                     if (serverUpdatedAt > lastKnownServerUpdatedAt) {
-                        throw { staleLocalData: true, serverUpdatedAt };
+                        throw { staleLocalData: true, serverUpdatedAt, serverData: docSnap.data() };
                     }
                     transaction.set(docRef, cleanPayload);
                 });
             }).then(() => {
+                staleSyncRetryCount = 0;
                 lastKnownServerUpdatedAt = cleanPayload.updatedAt;
                 updateSyncBadge('synced');
+                // نجحنا في رفع تعديلنا المحلي؛ أي نسخة كانت وصلت من جهاز تاني وإحنا مستنيين هي أقدم
+                // من اللي إحنا رفعناه دلوقتي، فمفيش داعي نطبّقها فوق شغلنا الجديد
+                finishLocalSync(true);
             }).catch(err => {
                 if (err && err.staleLocalData) {
-                    console.warn('تم إيقاف الرفع: البيانات المحلية قديمة، هيتم تحديث الصفحة لجلب أحدث نسخة بدل مسحها.');
-                    updateSyncBadge('syncing');
-                    showToast('تم اكتشاف بيانات أحدث من جهاز تاني، جاري تحديث الصفحة...', 'error');
-                    setTimeout(() => location.reload(), 1200);
-                    return;
+                    // وصلت نسخة أحدث من جهاز تاني قبل ما نخلص رفع تعديلنا. بدل ما نمسح تعديلنا
+                    // (زي فاتورة طلب أبليكشن لسه معلقة) أو نعمل reload يضيعها، بندمجها مع
+                    // أحدث نسخة من السحابة ونحاول نرفع تاني (بحد أقصى 3 محاولات تلقائية)
+                    if (staleSyncRetryCount >= 3) {
+                        staleSyncRetryCount = 0;
+                        console.warn('فشل الدمج بعد عدة محاولات، هيتم تحديث الصفحة.');
+                        updateSyncBadge('syncing');
+                        showToast('تم اكتشاف تعارض في المزامنة، جاري تحديث الصفحة...', 'error');
+                        finishLocalSync(true);
+                        setTimeout(() => location.reload(), 1200);
+                        return;
+                    }
+                    staleSyncRetryCount++;
+                    lastKnownServerUpdatedAt = err.serverUpdatedAt;
+                    applyRemoteSnapshot(err.serverData || {}, { mergeWithLocal: true });
+                    return pushStateToCloud();
                 }
                 console.error('Cloud sync failed:', err);
                 updateSyncBadge('error');
+                finishLocalSync(false);
                 throw err;
             });
+        }
+
+        // بيتنفذ بعد ما رفعنا (أو حاولنا نرفع) تعديلاتنا المحلية للسحابة: نفتح الباب تاني لتحديثات
+        // الأجهزة التانية. discardQueued=true بعد نجاح الرفع (تعديلنا بقى فعليًا أحدث حاجة، فمفيش
+        // داعي نطبّق نسخة كانت وصلت وإحنا لسه بنرفع). discardQueued=false بعد فشل غير متعلق بالتعارض،
+        // بندمج أي نسخة وصلتنا عشان الفاتورة/الحركة المحلية المعلقة تفضل موجودة لحد ما ترفع تاني.
+        function finishLocalSync(discardQueued) {
+            pendingLocalSync = false;
+            if (latestPendingSnapshotData) {
+                const data = latestPendingSnapshotData;
+                latestPendingSnapshotData = null;
+                if (discardQueued) return;
+                lastKnownServerUpdatedAt = data.updatedAt || lastKnownServerUpdatedAt;
+                applyRemoteSnapshot(data, { mergeWithLocal: true });
+            }
         }
 
         // زرار يدوي لإجبار رفع كل بيانات المتجر (منتجات/فئات/براندات/بانرات/عروض) للسحابة دفعة واحدة،
@@ -2399,24 +2437,58 @@
                     return;
                 }
                 const data = docSnap.data();
+                if (data.updatedBy === DEVICE_ID) { lastKnownServerUpdatedAt = data.updatedAt || Date.now(); updateSyncBadge('synced'); return; }
+
+                // فيه تعديل محلي لسه معلق (مثلاً طلب أبليكشن اتنفذ دلوقتي) ولسه ما اترفعش للسحابة:
+                // نأجل تطبيق تحديث الجهاز التاني، وميننساش نحدّث lastKnownServerUpdatedAt دلوقتي
+                // عشان لو رفعنا تعديلنا قبل ما نطبّق تحديث الجهاز التاني، النظام يكتشف إن السحابة
+                // اتغيرت من تحتينا ويعمل دمج (مش مسح) بدل ما يكتب فوقها
+                if (pendingLocalSync) {
+                    latestPendingSnapshotData = data;
+                    return;
+                }
                 lastKnownServerUpdatedAt = data.updatedAt || Date.now();
-                if (data.updatedBy === DEVICE_ID) { updateSyncBadge('synced'); return; }
+                applyRemoteSnapshot(data);
+            }, function(err) {
+                console.error('Cloud listener error:', err);
+                updateSyncBadge('error');
+            });
+        }
+
+        // بيدمج عناصر الأرشيف اللي زيادة عن السحابة (فواتير/حركات مخزون/سجل أحداث اتعملت محليًا
+        // ولسه معلقة) مع نسخة السحابة، بدل ما نمسحها لو كانت مش موجودة عندها لسه
+        function mergeAppendOnlyById(serverArr, localArr) {
+            serverArr = serverArr || [];
+            localArr = localArr || [];
+            const serverIds = new Set(serverArr.map(function(x) { return x && x.id; }));
+            const extra = localArr.filter(function(x) { return x && !serverIds.has(x.id); });
+            return serverArr.concat(extra);
+        }
+
+        // opts.mergeWithLocal = true: بندمج فواتير/حركات مخزون/سجل الأحداث المحلية المعلقة مع بيانات
+        // السحابة الجديدة بدل ما نمسحها بالكامل (بنستخدمها لما يكتشف الرفع إن فيه تعديل أحدث وصل
+        // من جهاز تاني وإحنا لسه شايلين تعديل محلي معلق زي فاتورة طلب أبليكشن)
+        function applyRemoteSnapshot(data, opts) {
+                opts = opts || {};
+                const mergeInvoices = opts.mergeWithLocal ? mergeAppendOnlyById(data.invoices, invoices) : (data.invoices || []);
+                const mergeStockMovements = opts.mergeWithLocal ? mergeAppendOnlyById(data.stockMovements, stockMovements) : (data.stockMovements || []);
+                const mergeAuditLog = opts.mergeWithLocal ? mergeAppendOnlyById(data.auditLog, auditLog) : (data.auditLog || []);
 
                 applyingRemoteUpdate = true;
                 products = data.products || [];
                 customers = data.customers || [];
                 suppliers = data.suppliers || [];
                 salesmen = data.salesmen || [];
-                invoices = data.invoices || [];
+                invoices = mergeInvoices;
                 purchaseInvoices = data.purchaseInvoices || [];
                 inventory = data.inventory || {};
-                stockMovements = data.stockMovements || [];
+                stockMovements = mergeStockMovements;
                 expenses = data.expenses || [];
                 treasury = data.treasury || [];
                 salesReturns = data.salesReturns || [];
                 purchaseReturns = data.purchaseReturns || [];
                 users = data.users || users;
-                auditLog = data.auditLog || [];
+                auditLog = mergeAuditLog;
                 appCategories = data.appCategories || [];
                 appBrands = data.appBrands || [];
                 activationCodes = data.activationCodes || [];
@@ -2461,10 +2533,6 @@
                 try { loadAllData(); } catch (e) { console.error('refresh after remote update failed:', e); }
                 showToast('تم تحديث البيانات من جهاز آخر', 'info');
                 updateSyncBadge('synced');
-            }, function(err) {
-                console.error('Cloud listener error:', err);
-                updateSyncBadge('error');
-            });
         }
 
         // ==================== CUSTOMER ORDERS (من أبليكشن العملاء) ====================
