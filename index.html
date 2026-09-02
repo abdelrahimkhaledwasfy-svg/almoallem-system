@@ -2215,15 +2215,12 @@
         let salesChartInstance = null;
         let profitChartInstance = null;
         let excelCustomersData = [];
-        const DEVICE_ID = localStorage.getItem('deviceId') || 'DEV-' + Math.random().toString(36).substr(2, 9).toUpperCase();
-        if (!localStorage.getItem('deviceId')) localStorage.setItem('deviceId', DEVICE_ID);
-        // معرّف خاص بكل تاب/فتحة صفحة لوحدها (مش بالجهاز)، بيتجدد تلقائيًا مع كل فتح جديد لأن sessionStorage
-        // بيتصفّر لما التاب يتقفل. بنستخدمه بس عشان نميّز "ده أنا اللي بعته الآن فعلاً" وقت مزامنة السحابة،
-        // عشان لو فيه تاب قديم منسي فاتح من كذا يوم على نفس الجهاز (وبالتالي نفس DEVICE_ID)، النظام
-        // ميغلطش ويفتكر إن تحديثات التاب التاني (الجديد) دي بتاعته هو، فيتجاهلها ويفضل واقف على بيانات قديمة
-        // وهو مقتنع إنه متزامن — وده اللي كان بيخلي أي حفظ منه يمسح بيانات الأيام اللي فاتت.
-        const SYNC_SESSION_ID = sessionStorage.getItem('syncSessionId') || DEVICE_ID + '-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6);
-        if (!sessionStorage.getItem('syncSessionId')) sessionStorage.setItem('syncSessionId', SYNC_SESSION_ID);
+        // مهم: بنستخدم sessionStorage مش localStorage عشان كل تاب مفتوح ياخد رقم تعريف (Device ID) خاص
+        // بيه لوحده، حتى لو التابات دي كلها في نفس المتصفح ونفس الجهاز (زي فتح النظام بأكتر من يوزر
+        // في نفس الوقت). لو استخدمنا localStorage هنا، كل التابات كانت هتاخد نفس الرقم وتفتكر إن
+        // تعديلات بعضها هي تعديلاتها هي، وتتجاهلها وتكتب فوقها من غير ما تكتشف التعارض.
+        const DEVICE_ID = sessionStorage.getItem('deviceId') || 'DEV-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+        if (!sessionStorage.getItem('deviceId')) sessionStorage.setItem('deviceId', DEVICE_ID);
 
         // ==================== CLOUD SYNC (Firebase Firestore) ====================
         const firebaseConfig = {
@@ -2236,10 +2233,13 @@
             measurementId: "G-C5HBP932YR"
         };
 
+        // ملحوظة: الفواتير، فواتير الشراء، حركات المخزون، وسجل الأحداث بقى ليهم مكانهم المستقل بتاعهم
+        // (Collections منفصلة في فايرستور) بدل ما يتكدسوا في نفس المستند الكبير ده، عشان تعديل واحد
+        // منهم ميضربش تعديل تاني حصل في نفس اللحظة تقريبًا. شوف startInvoiceRecordsListener وأخواتها.
         const CLOUD_SYNCED_KEYS = new Set([
-            'products', 'customers', 'suppliers', 'salesmen', 'invoices', 'purchaseInvoices',
-            'inventory', 'stockMovements', 'expenses', 'treasury', 'salesReturns',
-            'purchaseReturns', 'users', 'auditLog', 'appCategories', 'appBrands', 'activationCodes', 'requireActivationCode', 'loyaltySettings', 'appBanners', 'appOffers', 'appCities', 'appRegions', 'appNeighborhoods', 'appNotifications'
+            'products', 'customers', 'suppliers', 'salesmen',
+            'inventory', 'expenses', 'treasury', 'salesReturns',
+            'purchaseReturns', 'users', 'appCategories', 'appBrands', 'activationCodes', 'requireActivationCode', 'loyaltySettings', 'appBanners', 'appOffers', 'appCities', 'appRegions', 'appNeighborhoods', 'appNotifications'
         ]);
 
         // ==================== الإشعارات الفورية (OneSignal) ====================
@@ -2307,18 +2307,13 @@
                 const app = firebase.initializeApp(firebaseConfig);
                 db = firebase.firestore();
                 hookLocalStorageForCloudSync();
-                // لو الصفحة اتعمل لها ريفريش (أو اتقفلت) وكان لسه فيه تعديل محلي معلّق ما اترفعش للسحابة
-                // (زي فاتورة اتحفظت على الجهاز للتو بس مهلة الـ 900ms قبل الرفع ما خلصتش قبل الريفريش)،
-                // بنعرف ده من علامة باقية في localStorage من الجلسة اللي فاتت (متخزنة، عكس pendingLocalSync
-                // اللي بيتصفر مع كل ريفريش). لو موجودة، بنحاول نرفع البيانات الحالية فورًا الأول، قبل ما نسمح
-                // لأي تحديث وارد من السحابة يكتب فوقها ويمسحها وهي لسه ما وصلتش للسحابة أصلاً
-                if (localStorage.getItem('_syncOutboxPending') === '1') {
-                    pendingLocalSync = true;
-                    updateSyncBadge('syncing');
-                    pushStateToCloud().catch(function() {});
-                }
                 startCloudListener();
                 startOrdersListener();
+                startInvoiceRecordsListener();
+                startPurchaseInvoiceRecordsListener();
+                startStockMovementRecordsListener();
+                startAuditLogRecordsListener();
+                migrateLegacyRecordsIfNeeded();
                 startActivationUsesListener();
                 setupStaleTabAutoRefresh();
             } catch (e) {
@@ -2326,18 +2321,6 @@
                 updateSyncBadge('error');
             }
         }
-
-        // لو التاب هيتقفل أو هيتخبّى (ريفريش، تبديل تطبيق، قفل الصفحة) وفيه تعديل محلي لسه مستني
-        // مهلة الـ900ms قبل ما يترفع، بنحاول نرفعه فورًا دلوقتي من غير ما ننتظر، عشان نقلل الفترة
-        // اللي ممكن يضيع فيها التعديل لو حصل ريفريش قبل ما يوصل للسحابة
-        function flushPendingSyncNow() {
-            if (pendingLocalSync && cloudSyncTimer) {
-                clearTimeout(cloudSyncTimer);
-                pushStateToCloud().catch(function() {});
-            }
-        }
-        document.addEventListener('visibilitychange', function() { if (document.hidden) flushPendingSyncNow(); });
-        window.addEventListener('pagehide', flushPendingSyncNow);
 
         // لو الجهاز/التاب اتسايب مفتوح في الخلفية فترة طويلة، بنعمله تحديث تلقائي أول ما يرجع نشط
         // عشان نمنع إنه يشتغل ببيانات قديمة ويرفعها فوق تحديثات أجهزة تانية
@@ -2364,7 +2347,6 @@
         function scheduleCloudSync() {
             if (!db) return;
             pendingLocalSync = true;
-            _origLocalStorageSetItem('_syncOutboxPending', '1');
             updateSyncBadge('syncing');
             clearTimeout(cloudSyncTimer);
             cloudSyncTimer = setTimeout(pushStateToCloud, 900);
@@ -2375,12 +2357,12 @@
         function pushStateToCloud() {
             if (!db) return Promise.reject(new Error('لا يوجد اتصال بالسحابة'));
             const payload = {
-                products, customers, suppliers, salesmen, invoices, purchaseInvoices,
-                inventory, stockMovements, expenses, treasury, salesReturns, purchaseReturns,
-                users, auditLog, appCategories, appBrands, activationCodes, requireActivationCode, loyaltySettings, appBanners, appOffers,
+                products, customers, suppliers, salesmen,
+                inventory, expenses, treasury, salesReturns, purchaseReturns,
+                users, appCategories, appBrands, activationCodes, requireActivationCode, loyaltySettings, appBanners, appOffers,
                 appCities, appRegions, appNeighborhoods, appNotifications,
                 updatedAt: Date.now(),
-                updatedBy: SYNC_SESSION_ID
+                updatedBy: DEVICE_ID
             };
             const cleanPayload = JSON.parse(JSON.stringify(payload));
             const docRef = db.collection('storeData').doc('main');
@@ -2397,7 +2379,6 @@
             }).then(() => {
                 staleSyncRetryCount = 0;
                 lastKnownServerUpdatedAt = cleanPayload.updatedAt;
-                _origLocalStorageSetItem('_syncOutboxPending', '0');
                 updateSyncBadge('synced');
                 // نجحنا في رفع تعديلنا المحلي؛ أي نسخة كانت وصلت من جهاز تاني وإحنا مستنيين هي أقدم
                 // من اللي إحنا رفعناه دلوقتي، فمفيش داعي نطبّقها فوق شغلنا الجديد
@@ -2468,7 +2449,7 @@
                     return;
                 }
                 const data = docSnap.data();
-                if (data.updatedBy === SYNC_SESSION_ID) { lastKnownServerUpdatedAt = data.updatedAt || Date.now(); updateSyncBadge('synced'); return; }
+                if (data.updatedBy === DEVICE_ID) { lastKnownServerUpdatedAt = data.updatedAt || Date.now(); updateSyncBadge('synced'); return; }
 
                 // فيه تعديل محلي لسه معلق (مثلاً طلب أبليكشن اتنفذ دلوقتي) ولسه ما اترفعش للسحابة:
                 // نأجل تطبيق تحديث الجهاز التاني، وميننساش نحدّث lastKnownServerUpdatedAt دلوقتي
@@ -2501,25 +2482,18 @@
         // من جهاز تاني وإحنا لسه شايلين تعديل محلي معلق زي فاتورة طلب أبليكشن)
         function applyRemoteSnapshot(data, opts) {
                 opts = opts || {};
-                const mergeInvoices = opts.mergeWithLocal ? mergeAppendOnlyById(data.invoices, invoices) : (data.invoices || []);
-                const mergeStockMovements = opts.mergeWithLocal ? mergeAppendOnlyById(data.stockMovements, stockMovements) : (data.stockMovements || []);
-                const mergeAuditLog = opts.mergeWithLocal ? mergeAppendOnlyById(data.auditLog, auditLog) : (data.auditLog || []);
 
                 applyingRemoteUpdate = true;
                 products = data.products || [];
                 customers = data.customers || [];
                 suppliers = data.suppliers || [];
                 salesmen = data.salesmen || [];
-                invoices = mergeInvoices;
-                purchaseInvoices = data.purchaseInvoices || [];
                 inventory = data.inventory || {};
-                stockMovements = mergeStockMovements;
                 expenses = data.expenses || [];
                 treasury = data.treasury || [];
                 salesReturns = data.salesReturns || [];
                 purchaseReturns = data.purchaseReturns || [];
                 users = data.users || users;
-                auditLog = mergeAuditLog;
                 appCategories = data.appCategories || [];
                 appBrands = data.appBrands || [];
                 activationCodes = data.activationCodes || [];
@@ -2536,16 +2510,12 @@
                 localStorage.setItem('customers', JSON.stringify(customers));
                 localStorage.setItem('suppliers', JSON.stringify(suppliers));
                 localStorage.setItem('salesmen', JSON.stringify(salesmen));
-                localStorage.setItem('invoices', JSON.stringify(invoices));
-                localStorage.setItem('purchaseInvoices', JSON.stringify(purchaseInvoices));
                 localStorage.setItem('inventory', JSON.stringify(inventory));
-                localStorage.setItem('stockMovements', JSON.stringify(stockMovements));
                 localStorage.setItem('expenses', JSON.stringify(expenses));
                 localStorage.setItem('treasury', JSON.stringify(treasury));
                 localStorage.setItem('salesReturns', JSON.stringify(salesReturns));
                 localStorage.setItem('purchaseReturns', JSON.stringify(purchaseReturns));
                 localStorage.setItem('users', JSON.stringify(users));
-                localStorage.setItem('auditLog', JSON.stringify(auditLog));
                 localStorage.setItem('appCategories', JSON.stringify(appCategories));
                 localStorage.setItem('appBrands', JSON.stringify(appBrands));
                 localStorage.setItem('activationCodes', JSON.stringify(activationCodes));
@@ -2638,6 +2608,87 @@
                 source: 'app'
             });
             return true;
+        }
+
+        // ==================== فواتير البيع/الشراء وحركات المخزون وسجل الأحداث (Collections مستقلة) ====================
+        // كل واحدة من دول بقى ليها "مكان" منفصل بذاته في فايرستور (Collection) بدل ما تتكدس كلها
+        // جوه مستند storeData الكبير. كده لو جهازين اشتغلوا في نفس اللحظة بالظبط، كل واحد بيكتب
+        // فاتورته في مكانها لوحدها من غير ما يمسح حاجة عملها التاني.
+        let invoiceRecordsListenerStarted = false, purchaseInvoiceRecordsListenerStarted = false,
+            stockMovementRecordsListenerStarted = false, auditLogRecordsListenerStarted = false;
+
+        function startInvoiceRecordsListener() {
+            if (!db || invoiceRecordsListenerStarted) return;
+            invoiceRecordsListenerStarted = true;
+            db.collection('invoiceRecords').onSnapshot(function(snap) {
+                invoices = snap.docs.map(function(d) { return d.data(); });
+                localStorage.setItem('invoices', JSON.stringify(invoices));
+                try { updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderTopProducts(); renderPaymentSummary(); updateSalesChart(); } catch (e) { console.error('refresh after invoice update failed:', e); }
+            }, function(err) { console.error('Invoice records listener error:', err); });
+        }
+
+        function startPurchaseInvoiceRecordsListener() {
+            if (!db || purchaseInvoiceRecordsListenerStarted) return;
+            purchaseInvoiceRecordsListenerStarted = true;
+            db.collection('purchaseInvoiceRecords').onSnapshot(function(snap) {
+                purchaseInvoices = snap.docs.map(function(d) { return d.data(); });
+                localStorage.setItem('purchaseInvoices', JSON.stringify(purchaseInvoices));
+                try { updateDashboardStats(); renderInvoices(); renderRecentInvoices(); } catch (e) { console.error('refresh after purchase invoice update failed:', e); }
+            }, function(err) { console.error('Purchase invoice records listener error:', err); });
+        }
+
+        function startStockMovementRecordsListener() {
+            if (!db || stockMovementRecordsListenerStarted) return;
+            stockMovementRecordsListenerStarted = true;
+            db.collection('stockMovementRecords').orderBy('date', 'desc').limit(2000).onSnapshot(function(snap) {
+                stockMovements = snap.docs.map(function(d) { return d.data(); });
+                localStorage.setItem('stockMovements', JSON.stringify(stockMovements));
+                try { renderMovements(); } catch (e) { console.error('refresh after stock movement update failed:', e); }
+            }, function(err) { console.error('Stock movement records listener error:', err); });
+        }
+
+        function startAuditLogRecordsListener() {
+            if (!db || auditLogRecordsListenerStarted) return;
+            auditLogRecordsListenerStarted = true;
+            db.collection('auditLogRecords').orderBy('date', 'desc').limit(2000).onSnapshot(function(snap) {
+                auditLog = snap.docs.map(function(d) { return d.data(); });
+                localStorage.setItem('auditLog', JSON.stringify(auditLog));
+                try { if (typeof renderAuditLog === 'function') renderAuditLog(); } catch (e) { console.error('refresh after audit log update failed:', e); }
+            }, function(err) { console.error('Audit log records listener error:', err); });
+        }
+
+        // ترحيل تلقائي لمرة واحدة بس: بينقل أي فواتير/حركات مخزون/سجل أحداث كانت متخزنة قبل التحديث
+        // ده جوه مستند storeData الكبير، لمكانها الجديد المستقل. بيشتغل مرة واحدة فقط من أول جهاز
+        // يفتح النسخة المحدّثة (باقي الأجهزة هتلاقي المكان الجديد مليان بالفعل وتتجاهل الترحيل).
+        function migrateLegacyRecordsIfNeeded() {
+            function migrateCollection(collectionName, localArray, doneFlagKey) {
+                if (localStorage.getItem(doneFlagKey)) return;
+                db.collection(collectionName).limit(1).get().then(function(snap) {
+                    if (!snap.empty || !localArray || localArray.length === 0) {
+                        localStorage.setItem(doneFlagKey, '1');
+                        return;
+                    }
+                    const batches = [];
+                    let batch = db.batch(), count = 0;
+                    localArray.forEach(function(item) {
+                        if (!item || item.id == null) return;
+                        batch.set(db.collection(collectionName).doc(String(item.id)), item);
+                        count++;
+                        if (count >= 400) { batches.push(batch); batch = db.batch(); count = 0; }
+                    });
+                    if (count > 0) batches.push(batch);
+                    let chain = Promise.resolve();
+                    batches.forEach(function(b) { chain = chain.then(function() { return b.commit(); }); });
+                    chain.then(function() {
+                        localStorage.setItem(doneFlagKey, '1');
+                        console.log('تم ترحيل ' + collectionName + ' بنجاح (' + localArray.length + ' عنصر)');
+                    }).catch(function(e) { console.error('فشل ترحيل ' + collectionName + ':', e); });
+                }).catch(function(e) { console.error('تعذر التحقق من ' + collectionName + ' للترحيل:', e); });
+            }
+            migrateCollection('invoiceRecords', invoices, 'migratedInvoiceRecords_v1');
+            migrateCollection('purchaseInvoiceRecords', purchaseInvoices, 'migratedPurchaseInvoiceRecords_v1');
+            migrateCollection('stockMovementRecords', stockMovements, 'migratedStockMovementRecords_v1');
+            migrateCollection('auditLogRecords', auditLog, 'migratedAuditLogRecords_v1');
         }
 
         function startOrdersListener() {
@@ -3023,6 +3074,7 @@
                 };
                 invoices.push(invoice);
                 localStorage.setItem('invoices', JSON.stringify(invoices));
+                if (db) db.collection('invoiceRecords').doc(String(invoice.id)).set(invoice).catch(function(e) { console.error('app-order invoice sync failed:', e); });
                 logAction('تجهيز طلب أبليكشن', `تم تجهيز الطلب #${order.id.slice(-6)} للعميل ${invoice.customerName} وتحويله لفاتورة بيع #${invoice.number}`);
 
                 // العميل اللي طلب من الأبليكشن قد يكون أول مرة يتعامل معانا (سجّل برقمه بس، مش مضاف يدويًا في نظام المعلم).
@@ -3284,15 +3336,17 @@
         }
 
         function logAction(type, details) {
-            auditLog.push({
-                id: Date.now() + Math.random(),
+            const entry = {
+                id: Date.now() + '-' + Math.random().toString(36).slice(2, 8),
                 date: new Date().toISOString(),
                 username: currentUser ? currentUser.username : 'غير معروف',
                 fullName: currentUser ? currentUser.fullName : 'غير معروف',
                 role: currentUser && ROLES[currentUser.role] ? ROLES[currentUser.role].label : '-',
                 type, details
-            });
+            };
+            auditLog.push(entry);
             saveAuditLog();
+            if (db) db.collection('auditLogRecords').doc(String(entry.id)).set(entry).catch(function(e) { console.error('audit log sync failed:', e); });
         }
 
         // ==================== USERS MANAGEMENT ====================
@@ -3471,9 +3525,15 @@
             return max + 1;
         }
 
+        // عداد بسيط بيتزود مع كل استدعاء عشان نضمن إن كل حركة مخزون تاخد رقم فريد تمامًا حتى لو
+        // اتسجلت أكتر من حركة في نفس الجزء من الألف من الثانية (بيحصل كتير جوه حلقة items.forEach)
+        let _stockMovementSeq = 0;
         function addStockMovement(productCode, productName, type, qty, balanceAfter, reference, notes) {
-            stockMovements.unshift({ id: Date.now(), date: new Date().toISOString(), productCode, productName, type, qty, balanceAfter, reference, notes: notes || '' });
+            _stockMovementSeq++;
+            const movement = { id: Date.now() + '-' + _stockMovementSeq + '-' + Math.random().toString(36).slice(2, 6), date: new Date().toISOString(), productCode, productName, type, qty, balanceAfter, reference, notes: notes || '' };
+            stockMovements.unshift(movement);
             saveStockMovements();
+            if (db) db.collection('stockMovementRecords').doc(String(movement.id)).set(movement).catch(function(e) { console.error('stock movement sync failed:', e); });
         }
 
         function addTreasuryEntry(type, amount, party, partyType, notes, reference, isDebtRelated = true) {
@@ -5479,8 +5539,7 @@
             const rowNum = tbody.children.length + 1;
             const options = products.map(p => {
                 const inv = inventory[p.code] || { qty: 0 };
-                const unitCost = (inv.cost != null ? inv.cost : (p.cost || 0));
-                return `<option value="${p.code}" data-price="${p.price}" data-unit="${p.unit}" data-stock="${inv.qty}" data-cost="${unitCost}"
+                return `<option value="${p.code}" data-price="${p.price}" data-unit="${p.unit}" data-stock="${inv.qty}"
                     data-sec-unit="${p.secondaryUnit ? p.secondaryUnit.name : ''}" data-sec-price="${p.secondaryUnit ? p.secondaryUnit.price : ''}"
                     data-sec-factor="${p.secondaryUnit ? p.secondaryUnit.factor : ''}">${p.name} (مخزون: ${inv.qty} ${p.unit})</option>`;
             }).join('');
@@ -5491,7 +5550,7 @@
                 <td><select class="form-control unit-field" onchange="onInvoiceUnitChange(this)" style="min-width:90px;"><option value="">-</option></select></td>
                 <td><input type="number" class="form-control stock-field" readonly style="background:#f8f9fa;color:var(--primary);font-weight:700;"></td>
                 <td><input type="number" class="form-control qty-field" value="1" min="1" onchange="calculateInvoiceRow(this)"></td>
-                <td><input type="number" class="form-control price-field" min="0" step="0.01" onchange="calculateInvoiceRow(this)" title="السعر قابل للتعديل — مثلاً لبيع بسعر الجملة"></td>
+                <td><input type="number" class="form-control price-field" readonly style="background:#f8f9fa"></td>
                 <td><input type="number" class="form-control total-field" readonly style="background:#f8f9fa;font-weight:700;color:var(--primary)"></td>
                 <td><button class="btn btn-danger btn-icon btn-sm btn-delete-row" onclick="removeInvoiceRow(this)"><i class="fas fa-times"></i></button></td>`;
             tbody.appendChild(row);
@@ -5510,7 +5569,6 @@
             }
             unitSelect.innerHTML = unitOptions;
             unitSelect.dataset.baseStock = option.dataset.stock;
-            row.dataset.unitCost = option.dataset.cost || 0;
             onInvoiceUnitChange(unitSelect);
         }
 
@@ -5529,23 +5587,11 @@
         function calculateInvoiceRow(input) {
             const row = input.closest('tr');
             const qty = parseFloat(row.querySelector('.qty-field').value) || 0;
-            const priceField = row.querySelector('.price-field');
-            const price = parseFloat(priceField.value) || 0;
+            const price = parseFloat(row.querySelector('.price-field').value) || 0;
             const stock = parseFloat(row.querySelector('.stock-field').value) || 0;
             const qtyInput = row.querySelector('.qty-field');
             if (qty > stock) { qtyInput.style.borderColor = 'var(--danger)'; qtyInput.style.background = 'rgba(231,76,60,0.05)'; }
             else { qtyInput.style.borderColor = ''; qtyInput.style.background = ''; }
-            // تنبيه بصري بس (مش مانع) لو السعر اللي كتبته أقل من تكلفة الصنف، عشان تنتبه لو غلطت في الرقم
-            // بالخطأ وتبيع بخسارة من غير قصد. القرار النهائي يفضل ليك، الفاتورة بتتحفظ عادي حتى لو السعر أقل من التكلفة.
-            const factor = parseFloat(row.dataset.unitFactor) || 1;
-            const unitCost = (parseFloat(row.dataset.unitCost) || 0) / factor;
-            if (price > 0 && unitCost > 0 && price < unitCost) {
-                priceField.style.borderColor = 'var(--warning)'; priceField.style.background = 'rgba(243,156,18,0.08)';
-                priceField.title = `تنبيه: السعر ده أقل من تكلفة الصنف (${unitCost.toFixed(2)} ر.س) — هتبيع بخسارة`;
-            } else {
-                priceField.style.borderColor = ''; priceField.style.background = '';
-                priceField.title = 'السعر قابل للتعديل — مثلاً لبيع بسعر الجملة';
-            }
             row.querySelector('.total-field').value = (qty * price).toFixed(2);
             calculateGrandTotal();
         }
@@ -5641,6 +5687,7 @@
             };
             invoices.push(invoice);
             localStorage.setItem('invoices', JSON.stringify(invoices));
+            if (db) db.collection('invoiceRecords').doc(String(invoice.id)).set(invoice).catch(function(e) { console.error('invoice sync failed:', e); showToast('تم حفظ الفاتورة محليًا لكن تعذر رفعها للسحابة، تأكد من الاتصال بالنت', 'error'); });
             logAction('فاتورة بيع', `تم إنشاء فاتورة بيع #${invoice.number} للعميل ${invoice.customerName} بقيمة ${grandTotal.toFixed(2)} ر.س`);
             showToast('تم حفظ الفاتورة وخصم المخزون بنجاح');
             resetInvoice(); updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderTopProducts(); renderPaymentSummary(); updateSalesChart(); renderInventory(); renderMovements(); renderLowStock(); renderTreasury();
@@ -5765,6 +5812,7 @@
             };
             purchaseInvoices.push(invoice);
             localStorage.setItem('purchaseInvoices', JSON.stringify(purchaseInvoices));
+            if (db) db.collection('purchaseInvoiceRecords').doc(String(invoice.id)).set(invoice).catch(function(e) { console.error('purchase invoice sync failed:', e); showToast('تم حفظ فاتورة الشراء محليًا لكن تعذر رفعها للسحابة، تأكد من الاتصال بالنت', 'error'); });
             logAction('فاتورة شراء', `تم إنشاء فاتورة شراء #${invoice.number} من المورد ${invoice.supplier} بقيمة ${grandTotal.toFixed(2)} ر.س`);
             showToast('تم حفظ فاتورة الشراء وإضافة المخزون بنجاح');
             resetPurchaseInvoice(); updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderInventory(); renderMovements(); renderLowStock(); renderTreasury();
@@ -5854,6 +5902,7 @@
                 }
                 invoices = invoices.filter(i => i.id !== id);
                 localStorage.setItem('invoices', JSON.stringify(invoices));
+                if (db) db.collection('invoiceRecords').doc(String(id)).delete().catch(function(e) { console.error('invoice delete sync failed:', e); });
             } else {
                 const inv = purchaseInvoices.find(i => i.id === id);
                 if (inv) {
@@ -5870,6 +5919,7 @@
                 }
                 purchaseInvoices = purchaseInvoices.filter(i => i.id !== id);
                 localStorage.setItem('purchaseInvoices', JSON.stringify(purchaseInvoices));
+                if (db) db.collection('purchaseInvoiceRecords').doc(String(id)).delete().catch(function(e) { console.error('purchase invoice delete sync failed:', e); });
             }
             renderInvoices(); renderRecentInvoices(); updateDashboardStats(); renderTopProducts(); renderPaymentSummary(); updateSalesChart(); renderInventory(); renderMovements(); renderLowStock(); renderTreasury();
             showToast('تم حذف الفاتورة');
@@ -5959,6 +6009,7 @@
                 inv.totalCost = editInvoiceItems.reduce((s, i) => s + ((i.cost || 0) * (i.stockDeductQty != null ? i.stockDeductQty : i.qty)), 0);
                 inv.totalProfit = editInvoiceItems.reduce((s, i) => s + (i.profit || 0), 0);
                 localStorage.setItem('invoices', JSON.stringify(invoices));
+                if (db) db.collection('invoiceRecords').doc(String(inv.id)).set(inv).catch(function(e) { console.error('invoice edit sync failed:', e); });
                 saveInventory();
                 logAction('تعديل فاتورة بيع', `تم تعديل الفاتورة #${inv.number} وتصحيح المخزون تلقائيًا`);
             } else {
@@ -5986,6 +6037,7 @@
                 inv.items = editInvoiceItems;
                 inv.grandTotal = newGrandTotal;
                 localStorage.setItem('purchaseInvoices', JSON.stringify(purchaseInvoices));
+                if (db) db.collection('purchaseInvoiceRecords').doc(String(inv.id)).set(inv).catch(function(e) { console.error('purchase invoice edit sync failed:', e); });
                 saveInventory();
                 logAction('تعديل فاتورة شراء', `تم تعديل الفاتورة #${inv.number} وتصحيح المخزون تلقائيًا`);
             }
