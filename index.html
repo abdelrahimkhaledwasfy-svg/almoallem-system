@@ -2309,12 +2309,15 @@
                 hookLocalStorageForCloudSync();
                 startCloudListener();
                 startOrdersListener();
-                startInvoiceRecordsListener();
-                startPurchaseInvoiceRecordsListener();
-                startStockMovementRecordsListener();
-                startAuditLogRecordsListener();
-                migrateLegacyRecordsIfNeeded();
                 startActivationUsesListener();
+                // نستنى الترحيل يخلص الأول (لو محتاج يشتغل)، وبعدين نفتح الاستماع الحي على الفواتير/
+                // الحركات/السجل، عشان مايبقاش فيه لحظة يلاقي فيها المكان الجديد فاضي فيمسح الشاشة
+                migrateLegacyRecordsIfNeeded().finally(function() {
+                    startInvoiceRecordsListener();
+                    startPurchaseInvoiceRecordsListener();
+                    startStockMovementRecordsListener();
+                    startAuditLogRecordsListener();
+                });
                 setupStaleTabAutoRefresh();
             } catch (e) {
                 console.error('Firebase init error:', e);
@@ -2662,8 +2665,8 @@
         // يفتح النسخة المحدّثة (باقي الأجهزة هتلاقي المكان الجديد مليان بالفعل وتتجاهل الترحيل).
         function migrateLegacyRecordsIfNeeded() {
             function migrateCollection(collectionName, localArray, doneFlagKey) {
-                if (localStorage.getItem(doneFlagKey)) return;
-                db.collection(collectionName).limit(1).get().then(function(snap) {
+                if (localStorage.getItem(doneFlagKey)) return Promise.resolve();
+                return db.collection(collectionName).limit(1).get().then(function(snap) {
                     if (!snap.empty || !localArray || localArray.length === 0) {
                         localStorage.setItem(doneFlagKey, '1');
                         return;
@@ -2679,16 +2682,20 @@
                     if (count > 0) batches.push(batch);
                     let chain = Promise.resolve();
                     batches.forEach(function(b) { chain = chain.then(function() { return b.commit(); }); });
-                    chain.then(function() {
+                    return chain.then(function() {
                         localStorage.setItem(doneFlagKey, '1');
                         console.log('تم ترحيل ' + collectionName + ' بنجاح (' + localArray.length + ' عنصر)');
                     }).catch(function(e) { console.error('فشل ترحيل ' + collectionName + ':', e); });
                 }).catch(function(e) { console.error('تعذر التحقق من ' + collectionName + ' للترحيل:', e); });
             }
-            migrateCollection('invoiceRecords', invoices, 'migratedInvoiceRecords_v1');
-            migrateCollection('purchaseInvoiceRecords', purchaseInvoices, 'migratedPurchaseInvoiceRecords_v1');
-            migrateCollection('stockMovementRecords', stockMovements, 'migratedStockMovementRecords_v1');
-            migrateCollection('auditLogRecords', auditLog, 'migratedAuditLogRecords_v1');
+            // لازم نستنى الترحيل يخلص الأول قبل ما نفتح الاستماع الحي (Listener)، عشان الاستماع
+            // ميجيش يلاقي المكان الجديد لسه فاضي فيمسح البيانات المحلية الصحيحة ظنًا منه إنها فعلاً فاضية
+            return Promise.all([
+                migrateCollection('invoiceRecords', invoices, 'migratedInvoiceRecords_v1'),
+                migrateCollection('purchaseInvoiceRecords', purchaseInvoices, 'migratedPurchaseInvoiceRecords_v1'),
+                migrateCollection('stockMovementRecords', stockMovements, 'migratedStockMovementRecords_v1'),
+                migrateCollection('auditLogRecords', auditLog, 'migratedAuditLogRecords_v1')
+            ]);
         }
 
         function startOrdersListener() {
@@ -5687,7 +5694,7 @@
             };
             invoices.push(invoice);
             localStorage.setItem('invoices', JSON.stringify(invoices));
-            if (db) db.collection('invoiceRecords').doc(String(invoice.id)).set(invoice).catch(function(e) { console.error('invoice sync failed:', e); showToast('تم حفظ الفاتورة محليًا لكن تعذر رفعها للسحابة، تأكد من الاتصال بالنت', 'error'); });
+            if (db) db.collection('invoiceRecords').doc(String(invoice.id)).set(invoice).catch(function(e) { console.error('invoice sync failed:', e); showToast('تعذر رفع الفاتورة للسحابة (' + (e && e.code ? e.code : e) + ')', 'error', 8000); });
             logAction('فاتورة بيع', `تم إنشاء فاتورة بيع #${invoice.number} للعميل ${invoice.customerName} بقيمة ${grandTotal.toFixed(2)} ر.س`);
             showToast('تم حفظ الفاتورة وخصم المخزون بنجاح');
             resetInvoice(); updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderTopProducts(); renderPaymentSummary(); updateSalesChart(); renderInventory(); renderMovements(); renderLowStock(); renderTreasury();
@@ -5812,7 +5819,7 @@
             };
             purchaseInvoices.push(invoice);
             localStorage.setItem('purchaseInvoices', JSON.stringify(purchaseInvoices));
-            if (db) db.collection('purchaseInvoiceRecords').doc(String(invoice.id)).set(invoice).catch(function(e) { console.error('purchase invoice sync failed:', e); showToast('تم حفظ فاتورة الشراء محليًا لكن تعذر رفعها للسحابة، تأكد من الاتصال بالنت', 'error'); });
+            if (db) db.collection('purchaseInvoiceRecords').doc(String(invoice.id)).set(invoice).catch(function(e) { console.error('purchase invoice sync failed:', e); showToast('تعذر رفع فاتورة الشراء للسحابة (' + (e && e.code ? e.code : e) + ')', 'error', 8000); });
             logAction('فاتورة شراء', `تم إنشاء فاتورة شراء #${invoice.number} من المورد ${invoice.supplier} بقيمة ${grandTotal.toFixed(2)} ر.س`);
             showToast('تم حفظ فاتورة الشراء وإضافة المخزون بنجاح');
             resetPurchaseInvoice(); updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderInventory(); renderMovements(); renderLowStock(); renderTreasury();
