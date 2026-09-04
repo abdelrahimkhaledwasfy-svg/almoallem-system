@@ -1268,6 +1268,7 @@
                 </div>
                 <div style="padding:0 20px;display:flex;gap:4px;border-bottom:2px solid var(--border);flex-wrap:wrap;">
                     <button class="tab-btn active" id="ordersTabBtn-pending" onclick="switchOrdersTab('pending')">🆕 جديد <span id="ordersTabCount-pending" class="badge badge-danger" style="margin-right:4px;"></span></button>
+                    <button class="tab-btn" id="ordersTabBtn-preparing" onclick="switchOrdersTab('preparing')">⏳ قيد التجهيز <span id="ordersTabCount-preparing" class="badge badge-info" style="margin-right:4px;"></span></button>
                     <button class="tab-btn" id="ordersTabBtn-fulfilled" onclick="switchOrdersTab('fulfilled')">✅ تم التجهيز <span id="ordersTabCount-fulfilled" class="badge badge-success" style="margin-right:4px;"></span></button>
                     <button class="tab-btn" id="ordersTabBtn-rejected" onclick="switchOrdersTab('rejected')">❌ مرفوض <span id="ordersTabCount-rejected" class="badge badge-danger" style="margin-right:4px;"></span></button>
                     <button class="tab-btn" id="ordersTabBtn-all" onclick="switchOrdersTab('all')">الكل <span id="ordersTabCount-all" class="badge badge-primary" style="margin-right:4px;"></span></button>
@@ -2790,9 +2791,9 @@
                 if (count > 0) { badge.textContent = count; badge.style.display = 'inline-block'; badge.classList.add('badge-pulse'); }
                 else { badge.style.display = 'none'; badge.classList.remove('badge-pulse'); }
             }
-            const counts = { pending: 0, fulfilled: 0, rejected: 0, all: customerOrders.length };
+            const counts = { pending: 0, preparing: 0, fulfilled: 0, rejected: 0, all: customerOrders.length };
             customerOrders.forEach(o => { if (counts[o.status] !== undefined) counts[o.status]++; });
-            ['pending', 'fulfilled', 'rejected', 'all'].forEach(t => {
+            ['pending', 'preparing', 'fulfilled', 'rejected', 'all'].forEach(t => {
                 const el = document.getElementById('ordersTabCount-' + t);
                 if (el) { el.textContent = counts[t]; el.style.display = counts[t] > 0 ? 'inline-block' : 'none'; }
             });
@@ -2838,6 +2839,7 @@
 
             const statusMap = {
                 pending: { label: 'جديد', cls: 'badge-warning' },
+                preparing: { label: 'قيد التجهيز', cls: 'badge-info' },
                 fulfilled: { label: 'تم التجهيز', cls: 'badge-success' },
                 rejected: { label: 'مرفوض', cls: 'badge-danger' }
             };
@@ -2848,20 +2850,28 @@
                 const time = o.createdAt ? new Date(o.createdAt).toLocaleString('ar-EG') : '-';
                 const deliveryLabel = o.deliveryTime === 'evening' ? 'مسائي' : (o.deliveryTime === 'morning' ? 'صباحي' : '-');
                 const addressInfo = [o.shopName, o.addressDetail].filter(Boolean).join(' - ') || '-';
-                const actions = o.status === 'pending'
-                    ? `<button class="btn btn-primary btn-sm" onclick="viewOrderAsInvoice('${o.id}')"><i class="fas fa-file-invoice"></i> فتح الفاتورة</button>
-                       <button class="btn btn-success btn-sm" onclick="fulfillOrder('${o.id}')"><i class="fas fa-check"></i> تجهيز الطلب</button>
-                       <button class="btn btn-danger btn-sm" onclick="rejectOrder('${o.id}')"><i class="fas fa-times"></i> رفض</button>`
-                    : `<button class="btn btn-primary btn-sm" onclick="viewOrderAsInvoice('${o.id}')"><i class="fas fa-file-invoice"></i> عرض الفاتورة</button>`;
+                let actions;
+                if (o.status === 'pending') {
+                    actions = `<button class="btn btn-primary btn-sm" onclick="viewOrderAsInvoice('${o.id}')"><i class="fas fa-file-invoice"></i> فتح الفاتورة</button>
+                       <button class="btn btn-info btn-sm" onclick="startPreparingOrder('${o.id}')"><i class="fas fa-box-open"></i> بدء التجهيز</button>
+                       <button class="btn btn-danger btn-sm" onclick="rejectOrder('${o.id}')"><i class="fas fa-times"></i> رفض</button>`;
+                } else if (o.status === 'preparing') {
+                    actions = `<button class="btn btn-primary btn-sm" onclick="viewOrderAsInvoice('${o.id}')"><i class="fas fa-file-invoice"></i> فتح الفاتورة</button>
+                       <button class="btn btn-success btn-sm" onclick="fulfillOrder('${o.id}')"><i class="fas fa-check"></i> تم التجهيز</button>
+                       <button class="btn btn-secondary btn-sm" onclick="cancelPreparingOrder('${o.id}')"><i class="fas fa-undo"></i> إلغاء التجهيز</button>
+                       <button class="btn btn-danger btn-sm" onclick="rejectOrder('${o.id}')"><i class="fas fa-times"></i> رفض</button>`;
+                } else {
+                    actions = `<button class="btn btn-primary btn-sm" onclick="viewOrderAsInvoice('${o.id}')"><i class="fas fa-file-invoice"></i> عرض الفاتورة</button>`;
+                }
 
-                // تلوين الطلب لو لسه معلّق من فترة طويلة عشان محدش ينساه
+                // تلوين الطلب لو لسه معلّق أو قيد التجهيز من فترة طويلة عشان محدش ينساه
                 let rowClass = '';
-                if (o.status === 'pending' && o.createdAt) {
+                if ((o.status === 'pending' || o.status === 'preparing') && o.createdAt) {
                     const minutesAgo = (Date.now() - o.createdAt) / 60000;
                     if (minutesAgo >= 20) rowClass = 'order-row-danger';
                     else if (minutesAgo >= 8) rowClass = 'order-row-warn';
                 }
-                const cb = o.status === 'pending'
+                const cb = (o.status === 'pending' || o.status === 'preparing')
                     ? `<input type="checkbox" class="order-select-cb" data-id="${o.id}" onchange="toggleOrderSelect('${o.id}', this.checked)" ${selectedBulkOrderIds.has(o.id) ? 'checked' : ''}>`
                     : '';
                 let ratingHtml = '';
@@ -2904,7 +2914,7 @@
 
         function switchOrdersTab(tab) {
             ordersCurrentTab = tab;
-            ['pending', 'fulfilled', 'rejected', 'all'].forEach(t => {
+            ['pending', 'preparing', 'fulfilled', 'rejected', 'all'].forEach(t => {
                 const btn = document.getElementById('ordersTabBtn-' + t);
                 if (btn) btn.classList.toggle('active', t === tab);
             });
@@ -3197,6 +3207,41 @@
                     if (ord && ord.customerCode) sendPushNotification(ord.customerCode, 'تم رفض طلبك', updateData.rejectionReason ? ('السبب: ' + updateData.rejectionReason) : 'للاستفسار كلم المعلم');
                 })
                 .catch(err => { console.error(err); showToast('تعذر رفض الطلب', 'error'); });
+        }
+
+        // بدء تجهيز الطلب: مرحلة وسيطة بين "جديد" و"تم التجهيز"، عشان تعرف إن حد فعليًا شايل الطلب
+        // ده دلوقتي، ومنع أكتر من حد يجهزوا نفس الطلب في نفس الوقت من غير ما يعرفوا
+        function startPreparingOrder(orderId) {
+            if (!db) { showToast('لا يوجد اتصال بالسحابة', 'error'); return; }
+            const order = customerOrders.find(o => o.id === orderId);
+            if (!order) return;
+            db.collection('customerOrders').doc(orderId).update({ status: 'preparing', preparingAt: Date.now(), preparingBy: DEVICE_ID })
+                .then(function() {
+                    order.status = 'preparing';
+                    localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
+                    renderCustomerOrders();
+                    updatePendingOrdersBadge();
+                    showToast('بدأ تجهيز الطلب');
+                    if (order.customerCode) sendPushNotification(order.customerCode, 'جاري تجهيز طلبك ⏳', 'طلبك #' + order.id.slice(-6) + ' دلوقتي قيد التجهيز');
+                })
+                .catch(err => { console.error(err); showToast('تعذر تحديث حالة الطلب', 'error'); });
+        }
+
+        // لو حد بدأ تجهيز طلب بالغلط، يقدر يرجّعه لـ"جديد" تاني
+        function cancelPreparingOrder(orderId) {
+            if (!db) return;
+            if (!confirm('تأكيد إلغاء التجهيز والرجوع بالطلب لحالة "جديد"؟')) return;
+            const order = customerOrders.find(o => o.id === orderId);
+            if (!order) return;
+            db.collection('customerOrders').doc(orderId).update({ status: 'pending', preparingAt: firebase.firestore.FieldValue.delete(), preparingBy: firebase.firestore.FieldValue.delete() })
+                .then(function() {
+                    order.status = 'pending';
+                    localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
+                    renderCustomerOrders();
+                    updatePendingOrdersBadge();
+                    showToast('تم إلغاء التجهيز، الطلب رجع لحالة "جديد"');
+                })
+                .catch(err => { console.error(err); showToast('تعذر تحديث حالة الطلب', 'error'); });
         }
 
         // ==================== INITIALIZATION ====================
@@ -6061,7 +6106,7 @@
 
         function buildOrderInvoiceHtml(order) {
             const dateStr = order.createdAt ? new Date(order.createdAt).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' }) : '-';
-            const statusMap = { pending: 'جديد - قيد الانتظار', fulfilled: 'تم التجهيز', rejected: 'مرفوض' };
+            const statusMap = { pending: 'جديد - قيد الانتظار', preparing: 'قيد التجهيز', fulfilled: 'تم التجهيز', rejected: 'مرفوض' };
             const itemsRows = (order.items || []).map((item, idx) => `
                 <tr>
                     <td style="text-align:center;">${idx + 1}</td>
@@ -6116,7 +6161,7 @@
             document.getElementById('orderInvoiceSaveBtn').style.display = 'none';
             const editBtn = document.getElementById('orderInvoiceEditBtn');
             editBtn.innerHTML = '<i class="fas fa-edit"></i> تعديل الطلب';
-            editBtn.style.display = order.status === 'pending' ? 'inline-flex' : 'none';
+            editBtn.style.display = (order.status === 'pending' || order.status === 'preparing') ? 'inline-flex' : 'none';
             openModal('orderInvoiceModal');
         }
 
