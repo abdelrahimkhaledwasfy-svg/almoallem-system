@@ -1273,21 +1273,27 @@
                     <div class="card-title"><i class="fas fa-shopping-basket"></i> طلبات العملاء (من الأبليكشن)</div>
                     <div style="display:flex;align-items:center;gap:14px;">
                         <span id="ordersAvgRating" style="font-size:13px;font-weight:700;color:#d4a017;"></span>
-                        <button class="btn btn-secondary btn-sm" onclick="showProductsNeededReport()"><i class="fas fa-boxes"></i> احتياج المنتجات</button>
+                        <button class="btn btn-secondary btn-sm" onclick="showProductsNeededReport()"><i class="fas fa-boxes"></i> تقرير المنتجات</button>
                         <button class="btn btn-secondary btn-sm" onclick="printDeliverySheet()"><i class="fas fa-print"></i> طباعة كشف التسليم</button>
                     </div>
                 </div>
-                <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr));padding:0 20px;margin-top:16px;">
+                <div id="ordersStatsScopeLabel" style="padding:0 20px;margin-top:14px;font-size:14px;font-weight:700;color:var(--text-light);"></div>
+                <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));padding:0 20px;margin-top:8px;">
                     <div class="stat-card invoices" style="cursor:default;">
                         <div class="stat-icon"><i class="fas fa-shopping-basket"></i></div>
                         <div class="stat-value" id="ordersTodayCount">0</div>
-                        <div class="stat-label">عدد طلبات اليوم</div>
+                        <div class="stat-label">عدد الطلبات</div>
                         <div id="ordersTodayBreakdown" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"></div>
                     </div>
                     <div class="stat-card customers" style="cursor:default;">
                         <div class="stat-icon"><i class="fas fa-users"></i></div>
                         <div class="stat-value" id="ordersTodayCustomers">0</div>
-                        <div class="stat-label">عدد العملاء اليوم</div>
+                        <div class="stat-label">عدد العملاء</div>
+                    </div>
+                    <div class="stat-card inventory" style="cursor:default;">
+                        <div class="stat-icon"><i class="fas fa-boxes"></i></div>
+                        <div class="stat-value" id="ordersTodayProducts">0</div>
+                        <div class="stat-label">عدد المنتجات (بدون تكرار)</div>
                     </div>
                     <div class="stat-card products" style="cursor:default;">
                         <div class="stat-icon"><i class="fas fa-calculator"></i></div>
@@ -1297,7 +1303,7 @@
                     <div class="stat-card sales" style="cursor:default;">
                         <div class="stat-icon"><i class="fas fa-coins"></i></div>
                         <div class="stat-value" id="ordersTodayTotal">0</div>
-                        <div class="stat-label">إجمالي طلبات اليوم</div>
+                        <div class="stat-label">إجمالي البيع</div>
                     </div>
                 </div>
                 <style>
@@ -2006,9 +2012,9 @@
     <!-- عرض/تعديل طلب العميل بشكل فاتورة -->
     <div class="modal-overlay" id="productsNeededModal">
         <div class="modal" style="max-width:750px;">
-            <div class="modal-header"><h3 class="modal-title"><i class="fas fa-boxes"></i> احتياج المنتجات (الطلبات المفتوحة)</h3><button class="modal-close" onclick="closeModal('productsNeededModal')">&times;</button></div>
+            <div class="modal-header"><h3 class="modal-title" id="productsNeededModalTitle"><i class="fas fa-boxes"></i> تقرير المنتجات</h3><button class="modal-close" onclick="closeModal('productsNeededModal')">&times;</button></div>
             <div class="modal-body">
-                <p style="color:var(--text-light);font-size:13px;margin-bottom:12px;">إجمالي الكميات المطلوبة عبر كل الطلبات "جديد" و"قيد التجهيز" حاليًا، مقارنة بالمتاح في المخزون — عشان تجهّز بضاعتك الأول قبل ما تبدأ تنفّذ الطلبات وتتفادى تعارض الكميات.</p>
+                <p style="color:var(--text-light);font-size:13px;margin-bottom:12px;">إجمالي كميات وأصناف الطلبات في التبويب المفتوح دلوقتي، مقارنة بالمتاح في المخزون.</p>
                 <div class="table-container">
                     <table>
                         <thead><tr><th>الصنف</th><th>الكمية المطلوبة</th><th>المتاح بالمخزون</th><th>الحالة</th></tr></thead>
@@ -3045,40 +3051,64 @@
 
         // كارت الملخص السريع اليومي فوق تبويبات طلبات الأبليكشن (عدد الطلبات، عدد العملاء، متوسط
         // ومجموع القيمة) — بيغطي كل طلبات اليوم بأي حالة، عشان تاخد نبضة سريعة من أول ما تفتح الصفحة
+        // بيرجع الطلبات اللي تخص "نطاق" التبويب المفتوح دلوقتي، بغض النظر عن التاريخ (كل الطلبات
+        // اللي بالحالة دي من الأول لحد دلوقتي) — نفس المنطق اللي بيتحسب بيه الكارت والتقرير مع بعض
+        function getOrdersStatusScopeForTab(tab) {
+            if (tab === 'all') return null;
+            if (tab === 'byCustomer') return ['pending', 'preparing'];
+            return [tab];
+        }
+        function getScopedOrders(tab) {
+            const statuses = getOrdersStatusScopeForTab(tab);
+            return statuses ? customerOrders.filter(o => statuses.includes(o.status)) : customerOrders.slice();
+        }
+        const ORDERS_TAB_LABELS = { pending: 'جديد', preparing: 'قيد التجهيز', fulfilled: 'تم التجهيز', rejected: 'مرفوض', all: 'كل الطلبات', byCustomer: 'الطلبات المفتوحة' };
+
+        // كارت الملخص فوق تبويبات طلبات الأبليكشن، بيحسب على أساس التبويب المفتوح دلوقتي بالظبط
+        // (كل الطلبات في التاريخ اللي بالحالة دي، مش بس اليوم)
         function updateOrdersTodayStats() {
             const countEl = document.getElementById('ordersTodayCount');
             if (!countEl) return;
-            const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
-            const todays = customerOrders.filter(o => (o.createdAt || 0) >= startOfDay.getTime());
-            const total = todays.reduce((s, o) => s + (o.total || (o.items || []).reduce((s2, it) => s2 + (it.total || (it.price * it.qty) || 0), 0)), 0);
-            const uniqueCustomers = new Set(todays.map(o => o.customerCode || o.phone || o.customerName)).size;
+            const scoped = getScopedOrders(ordersCurrentTab);
+            const total = scoped.reduce((s, o) => s + (o.total || (o.items || []).reduce((s2, it) => s2 + (it.total || (it.price * it.qty) || 0), 0)), 0);
+            const uniqueCustomers = new Set(scoped.map(o => o.customerCode || o.phone || o.customerName)).size;
+            const uniqueProducts = new Set();
+            scoped.forEach(o => (o.items || []).forEach(it => uniqueProducts.add(it.productCode || it.productName)));
             const numFmt = n => Number(n || 0).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-            countEl.textContent = todays.length.toLocaleString('ar-EG');
+            countEl.textContent = scoped.length.toLocaleString('ar-EG');
             const custEl = document.getElementById('ordersTodayCustomers'); if (custEl) custEl.textContent = uniqueCustomers.toLocaleString('ar-EG');
-            const avgEl = document.getElementById('ordersTodayAvg'); if (avgEl) avgEl.textContent = numFmt(todays.length ? (total / todays.length) : 0) + ' ر.س';
+            const prodEl = document.getElementById('ordersTodayProducts'); if (prodEl) prodEl.textContent = uniqueProducts.size.toLocaleString('ar-EG');
+            const avgEl = document.getElementById('ordersTodayAvg'); if (avgEl) avgEl.textContent = numFmt(scoped.length ? (total / scoped.length) : 0) + ' ر.س';
             const totalEl = document.getElementById('ordersTodayTotal'); if (totalEl) totalEl.textContent = numFmt(total) + ' ر.س';
 
-            // تفصيل عدد طلبات اليوم حسب الحالة، عشان تعرف على طول كام لسه جديد وكام قيد التجهيز
+            const scopeLabelEl = document.getElementById('ordersStatsScopeLabel');
+            if (scopeLabelEl) scopeLabelEl.textContent = '📊 ملخص: ' + (ORDERS_TAB_LABELS[ordersCurrentTab] || 'الطلبات');
+
+            // التفصيل حسب الحالة يظهر بس لما التبويب بيجمع أكتر من حالة (الكل / الطلبات المفتوحة)
             const breakdownEl = document.getElementById('ordersTodayBreakdown');
             if (breakdownEl) {
-                const pendingCount = todays.filter(o => o.status === 'pending').length;
-                const preparingCount = todays.filter(o => o.status === 'preparing').length;
-                const fulfilledCount = todays.filter(o => o.status === 'fulfilled').length;
-                let html = '';
-                if (pendingCount) html += `<span class="b-pending">🆕 ${pendingCount} جديد</span>`;
-                if (preparingCount) html += `<span class="b-preparing">⏳ ${preparingCount} قيد التجهيز</span>`;
-                if (fulfilledCount) html += `<span class="b-fulfilled">✅ ${fulfilledCount} تم تجهيزه</span>`;
-                breakdownEl.innerHTML = html;
+                if (ordersCurrentTab === 'all' || ordersCurrentTab === 'byCustomer') {
+                    const pendingCount = scoped.filter(o => o.status === 'pending').length;
+                    const preparingCount = scoped.filter(o => o.status === 'preparing').length;
+                    const fulfilledCount = scoped.filter(o => o.status === 'fulfilled').length;
+                    let html = '';
+                    if (pendingCount) html += `<span class="b-pending">🆕 ${pendingCount} جديد</span>`;
+                    if (preparingCount) html += `<span class="b-preparing">⏳ ${preparingCount} قيد التجهيز</span>`;
+                    if (ordersCurrentTab === 'all' && fulfilledCount) html += `<span class="b-fulfilled">✅ ${fulfilledCount} تم تجهيزه</span>`;
+                    breakdownEl.innerHTML = html;
+                } else {
+                    breakdownEl.innerHTML = '';
+                }
             }
         }
 
         // تقرير تجميع احتياج المنتجات عبر كل الطلبات المفتوحة (جديد + قيد التجهيز)، مقارنة بالمتاح
         // بالمخزون، عشان تجهّز الكميات الأول وتتفادى تعارض الكميات بين طلبين على نفس الصنف
         function showProductsNeededReport() {
-            const open = customerOrders.filter(o => o.status === 'pending' || o.status === 'preparing');
+            const scoped = getScopedOrders(ordersCurrentTab);
             const needs = {};
-            open.forEach(o => {
+            scoped.forEach(o => {
                 (o.items || []).forEach(item => {
                     const product = products.find(p => p.code === item.productCode);
                     const isSecondary = product && product.secondaryUnit && item.unit === product.secondaryUnit.name;
@@ -3094,9 +3124,12 @@
                 return { code, name: n.name, needed: n.qty, available, short };
             }).sort((a, b) => (b.short - a.short) || (b.needed - a.needed));
 
+            const titleEl = document.getElementById('productsNeededModalTitle');
+            if (titleEl) titleEl.textContent = 'تقرير المنتجات — ' + (ORDERS_TAB_LABELS[ordersCurrentTab] || 'الطلبات');
+
             const tbody = document.getElementById('productsNeededTable');
             if (rows.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" class="empty-state"><i class="fas fa-boxes"></i><h3>لا توجد طلبات مفتوحة حاليًا</h3></td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="4" class="empty-state"><i class="fas fa-boxes"></i><h3>لا توجد طلبات في هذا التبويب حاليًا</h3></td></tr>`;
             } else {
                 tbody.innerHTML = rows.map(r => `
                     <tr>
