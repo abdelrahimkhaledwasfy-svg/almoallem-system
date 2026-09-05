@@ -116,6 +116,16 @@
         .btn-success { background: var(--accent); color: white; } .btn-success:hover { background: #219a52; transform: translateY(-2px); }
         .btn-danger { background: var(--danger); color: white; } .btn-warning { background: var(--warning); color: white; }
         .btn-secondary { background: var(--secondary); color: white; } .btn-info { background: var(--info); color: white; }
+        /* قايمة إجراءات سريعة (Dropdown) لكل صف طلب، بدل ما الأزرار كلها تتكدس جنب بعض */
+        .row-actions-wrap { position: relative; display: inline-block; }
+        .row-actions-btn { background: var(--secondary); color: #fff; border: none; border-radius: 6px; padding: 7px 12px; cursor: pointer; font-size: 13px; font-family: inherit; }
+        .row-actions-menu { display: none; position: absolute; top: 100%; left: 0; background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow); z-index: 60; min-width: 180px; overflow: hidden; margin-top: 4px; }
+        .row-actions-menu.show { display: block; }
+        .row-actions-menu button { display: flex; align-items: center; gap: 8px; width: 100%; text-align: right; padding: 10px 14px; border: none; background: none; cursor: pointer; font-size: 13px; font-family: inherit; color: var(--text); }
+        .row-actions-menu button:hover { background: var(--bg); }
+        .row-actions-menu button.danger { color: #c0392b; }
+        .row-actions-menu button.success { color: #1e8449; }
+        .row-actions-menu button.info { color: #2471a3; }
         .btn-purple { background: var(--purple); color: white; } .btn-teal { background: var(--teal); color: white; }
         .btn-profit { background: var(--profit); color: white; } .btn-profit:hover { background: var(--profit-dark); transform: translateY(-2px); }
         .btn-dark { background: #2c3e50; color: white; } .btn-dark:hover { background: #1a252f; transform: translateY(-2px); }
@@ -1263,7 +1273,30 @@
                     <div class="card-title"><i class="fas fa-shopping-basket"></i> طلبات العملاء (من الأبليكشن)</div>
                     <div style="display:flex;align-items:center;gap:14px;">
                         <span id="ordersAvgRating" style="font-size:13px;font-weight:700;color:#d4a017;"></span>
+                        <button class="btn btn-secondary btn-sm" onclick="showProductsNeededReport()"><i class="fas fa-boxes"></i> احتياج المنتجات</button>
                         <button class="btn btn-secondary btn-sm" onclick="printDeliverySheet()"><i class="fas fa-print"></i> طباعة كشف التسليم</button>
+                    </div>
+                </div>
+                <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));padding:0 20px;margin-top:16px;">
+                    <div class="stat-card invoices" style="cursor:default;">
+                        <div class="stat-icon"><i class="fas fa-shopping-basket"></i></div>
+                        <div class="stat-value" id="ordersTodayCount">0</div>
+                        <div class="stat-label">عدد طلبات اليوم</div>
+                    </div>
+                    <div class="stat-card customers" style="cursor:default;">
+                        <div class="stat-icon"><i class="fas fa-users"></i></div>
+                        <div class="stat-value" id="ordersTodayCustomers">0</div>
+                        <div class="stat-label">عدد العملاء اليوم</div>
+                    </div>
+                    <div class="stat-card products" style="cursor:default;">
+                        <div class="stat-icon"><i class="fas fa-calculator"></i></div>
+                        <div class="stat-value" id="ordersTodayAvg">0</div>
+                        <div class="stat-label">متوسط قيمة الطلب</div>
+                    </div>
+                    <div class="stat-card sales" style="cursor:default;">
+                        <div class="stat-icon"><i class="fas fa-coins"></i></div>
+                        <div class="stat-value" id="ordersTodayTotal">0</div>
+                        <div class="stat-label">إجمالي طلبات اليوم</div>
                     </div>
                 </div>
                 <div style="padding:0 20px;display:flex;gap:4px;border-bottom:2px solid var(--border);flex-wrap:wrap;">
@@ -1272,6 +1305,7 @@
                     <button class="tab-btn" id="ordersTabBtn-fulfilled" onclick="switchOrdersTab('fulfilled')">✅ تم التجهيز <span id="ordersTabCount-fulfilled" class="badge badge-success" style="margin-right:4px;"></span></button>
                     <button class="tab-btn" id="ordersTabBtn-rejected" onclick="switchOrdersTab('rejected')">❌ مرفوض <span id="ordersTabCount-rejected" class="badge badge-danger" style="margin-right:4px;"></span></button>
                     <button class="tab-btn" id="ordersTabBtn-all" onclick="switchOrdersTab('all')">الكل <span id="ordersTabCount-all" class="badge badge-primary" style="margin-right:4px;"></span></button>
+                    <button class="tab-btn" id="ordersTabBtn-byCustomer" onclick="switchOrdersTab('byCustomer')">👥 حسب العميل</button>
                 </div>
                 <div style="padding:16px 20px 0;">
                     <div class="search-box" style="margin-bottom:12px;"><i class="fas fa-search"></i><input type="text" id="ordersSearch" placeholder="بحث بالاسم أو رقم الهاتف أو رقم الطلب..." oninput="renderCustomerOrders()"></div>
@@ -1288,6 +1322,9 @@
                 </div>
                 <div class="table-container">
                     <table><thead><tr><th style="width:34px;"><input type="checkbox" id="ordersSelectAll" onchange="toggleSelectAllOrders(this)"></th><th>رقم الطلب</th><th>العميل</th><th>الأصناف</th><th>عنوان التوصيل</th><th>الإجمالي</th><th>وقت الطلب</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="customerOrdersTable"></tbody></table>
+                </div>
+                <div class="table-container" id="ordersByCustomerContainer" style="display:none;">
+                    <table><thead><tr><th>العميل</th><th>عدد الطلبات المفتوحة</th><th>الإجمالي</th><th>آخر طلب</th><th></th></tr></thead><tbody id="ordersByCustomerTable"></tbody></table>
                 </div>
             </div>
         </section>
@@ -1960,6 +1997,20 @@
 
     <!-- View Invoice Modal (Professional Layout) -->
     <!-- عرض/تعديل طلب العميل بشكل فاتورة -->
+    <div class="modal-overlay" id="productsNeededModal">
+        <div class="modal" style="max-width:750px;">
+            <div class="modal-header"><h3 class="modal-title"><i class="fas fa-boxes"></i> احتياج المنتجات (الطلبات المفتوحة)</h3><button class="modal-close" onclick="closeModal('productsNeededModal')">&times;</button></div>
+            <div class="modal-body">
+                <p style="color:var(--text-light);font-size:13px;margin-bottom:12px;">إجمالي الكميات المطلوبة عبر كل الطلبات "جديد" و"قيد التجهيز" حاليًا، مقارنة بالمتاح في المخزون — عشان تجهّز بضاعتك الأول قبل ما تبدأ تنفّذ الطلبات وتتفادى تعارض الكميات.</p>
+                <div class="table-container">
+                    <table>
+                        <thead><tr><th>الصنف</th><th>الكمية المطلوبة</th><th>المتاح بالمخزون</th><th>الحالة</th></tr></thead>
+                        <tbody id="productsNeededTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
     <div class="modal-overlay" id="orderInvoiceModal">
         <div class="modal" style="max-width:700px;">
             <div class="modal-header"><h3 class="modal-title">فاتورة طلب العميل</h3><button class="modal-close" onclick="closeModal('orderInvoiceModal')">&times;</button></div>
@@ -2785,6 +2836,7 @@
         });
 
         function updatePendingOrdersBadge() {
+            updateOrdersTodayStats();
             const badge = document.getElementById('pendingOrdersBadge');
             const count = customerOrders.filter(o => o.status === 'pending').length;
             if (badge) {
@@ -2810,6 +2862,20 @@
         }
 
         function renderCustomerOrders() {
+            updateOrdersTodayStats();
+            const normalTableWrap = document.getElementById('customerOrdersTable') ? document.getElementById('customerOrdersTable').closest('.table-container') : null;
+            const byCustomerWrap = document.getElementById('ordersByCustomerContainer');
+            if (ordersCurrentTab === 'byCustomer') {
+                if (normalTableWrap) normalTableWrap.style.display = 'none';
+                if (byCustomerWrap) byCustomerWrap.style.display = '';
+                const bulkBar = document.getElementById('ordersBulkBar');
+                if (bulkBar) bulkBar.classList.remove('show');
+                renderOrdersByCustomer();
+                return;
+            }
+            if (normalTableWrap) normalTableWrap.style.display = '';
+            if (byCustomerWrap) byCustomerWrap.style.display = 'none';
+
             const tbody = document.getElementById('customerOrdersTable');
             if (!tbody) return;
 
@@ -2853,13 +2919,23 @@
                 let actions;
                 if (o.status === 'pending') {
                     actions = `<button class="btn btn-primary btn-sm" onclick="viewOrderAsInvoice('${o.id}')"><i class="fas fa-file-invoice"></i> فتح الفاتورة</button>
-                       <button class="btn btn-info btn-sm" onclick="startPreparingOrder('${o.id}')"><i class="fas fa-box-open"></i> بدء التجهيز</button>
-                       <button class="btn btn-danger btn-sm" onclick="rejectOrder('${o.id}')"><i class="fas fa-times"></i> رفض</button>`;
+                       <div class="row-actions-wrap">
+                         <button class="row-actions-btn" onclick="toggleRowActionsMenu(this)">الإجراء <i class="fas fa-caret-down"></i></button>
+                         <div class="row-actions-menu">
+                           <button class="info" onclick="startPreparingOrder('${o.id}')"><i class="fas fa-box-open"></i> بدء التجهيز</button>
+                           <button class="danger" onclick="rejectOrder('${o.id}')"><i class="fas fa-times"></i> رفض الطلب</button>
+                         </div>
+                       </div>`;
                 } else if (o.status === 'preparing') {
                     actions = `<button class="btn btn-primary btn-sm" onclick="viewOrderAsInvoice('${o.id}')"><i class="fas fa-file-invoice"></i> فتح الفاتورة</button>
-                       <button class="btn btn-success btn-sm" onclick="fulfillOrder('${o.id}')"><i class="fas fa-check"></i> تم التجهيز</button>
-                       <button class="btn btn-secondary btn-sm" onclick="cancelPreparingOrder('${o.id}')"><i class="fas fa-undo"></i> إلغاء التجهيز</button>
-                       <button class="btn btn-danger btn-sm" onclick="rejectOrder('${o.id}')"><i class="fas fa-times"></i> رفض</button>`;
+                       <div class="row-actions-wrap">
+                         <button class="row-actions-btn" onclick="toggleRowActionsMenu(this)">الإجراء <i class="fas fa-caret-down"></i></button>
+                         <div class="row-actions-menu">
+                           <button class="success" onclick="fulfillOrder('${o.id}')"><i class="fas fa-check"></i> تم التجهيز</button>
+                           <button onclick="cancelPreparingOrder('${o.id}')"><i class="fas fa-undo"></i> إلغاء التجهيز</button>
+                           <button class="danger" onclick="rejectOrder('${o.id}')"><i class="fas fa-times"></i> رفض الطلب</button>
+                         </div>
+                       </div>`;
                 } else {
                     actions = `<button class="btn btn-primary btn-sm" onclick="viewOrderAsInvoice('${o.id}')"><i class="fas fa-file-invoice"></i> عرض الفاتورة</button>`;
                 }
@@ -2914,13 +2990,116 @@
 
         function switchOrdersTab(tab) {
             ordersCurrentTab = tab;
-            ['pending', 'preparing', 'fulfilled', 'rejected', 'all'].forEach(t => {
+            ['pending', 'preparing', 'fulfilled', 'rejected', 'all', 'byCustomer'].forEach(t => {
                 const btn = document.getElementById('ordersTabBtn-' + t);
                 if (btn) btn.classList.toggle('active', t === tab);
             });
             selectedBulkOrderIds.clear();
             renderCustomerOrders();
         }
+
+        // تجميع الطلبات المفتوحة (جديد + قيد التجهيز) حسب العميل، عشان تشوف مين أكتر عميل نشط
+        // دلوقتي من غير ما تتصفح كل طلب لوحده
+        function renderOrdersByCustomer() {
+            const tbody = document.getElementById('ordersByCustomerTable');
+            if (!tbody) return;
+            const searchEl = document.getElementById('ordersSearch');
+            const q = searchEl ? searchEl.value.trim().toLowerCase() : '';
+            const open = customerOrders.filter(o => (o.status === 'pending' || o.status === 'preparing') && (!q || [o.customerName, o.shopName, o.phone, o.customerCode].filter(Boolean).join(' ').toLowerCase().indexOf(q) !== -1));
+            if (open.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="empty-state"><i class="fas fa-shopping-basket"></i><h3>لا توجد طلبات مفتوحة حاليًا</h3></td></tr>`;
+                return;
+            }
+            const groups = {};
+            open.forEach(o => {
+                const key = o.customerCode || o.phone || o.customerName || 'غير معروف';
+                if (!groups[key]) groups[key] = { customerName: o.customerName || o.customerCode || 'غير معروف', customerCode: o.customerCode || '', phone: o.phone || '', count: 0, total: 0, lastOrderAt: 0 };
+                groups[key].count++;
+                groups[key].total += (o.total || (o.items || []).reduce((s, it) => s + (it.total || (it.price * it.qty) || 0), 0));
+                if ((o.createdAt || 0) > groups[key].lastOrderAt) groups[key].lastOrderAt = o.createdAt || 0;
+            });
+            const rows = Object.values(groups).sort((a, b) => b.total - a.total).map(g => `
+                <tr>
+                    <td>${g.customerName}<br><span style="font-size:11px;color:var(--text-light);">${g.phone || g.customerCode || ''}</span></td>
+                    <td><span class="badge badge-warning">${g.count}</span></td>
+                    <td><strong style="color:var(--accent);">${g.total.toFixed(2)} ر.س</strong></td>
+                    <td>${g.lastOrderAt ? new Date(g.lastOrderAt).toLocaleString('ar-EG') : '-'}</td>
+                    <td><button class="btn btn-primary btn-sm" onclick="viewCustomerOpenOrders('${(g.customerCode || '').replace(/'/g, "\\'")}', '${(g.customerName || '').replace(/'/g, "\\'")}')"><i class="fas fa-eye"></i> عرض طلباته</button></td>
+                </tr>`).join('');
+            tbody.innerHTML = rows;
+        }
+
+        // من عرض "حسب العميل"، تدوس على عميل تشوف كل طلباته المفتوحة لوحدها في العرض العادي
+        function viewCustomerOpenOrders(customerCode, customerName) {
+            const searchEl = document.getElementById('ordersSearch');
+            if (searchEl) searchEl.value = customerCode || customerName || '';
+            switchOrdersTab('all');
+        }
+
+        // كارت الملخص السريع اليومي فوق تبويبات طلبات الأبليكشن (عدد الطلبات، عدد العملاء، متوسط
+        // ومجموع القيمة) — بيغطي كل طلبات اليوم بأي حالة، عشان تاخد نبضة سريعة من أول ما تفتح الصفحة
+        function updateOrdersTodayStats() {
+            const countEl = document.getElementById('ordersTodayCount');
+            if (!countEl) return;
+            const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
+            const todays = customerOrders.filter(o => (o.createdAt || 0) >= startOfDay.getTime());
+            const total = todays.reduce((s, o) => s + (o.total || (o.items || []).reduce((s2, it) => s2 + (it.total || (it.price * it.qty) || 0), 0)), 0);
+            const uniqueCustomers = new Set(todays.map(o => o.customerCode || o.phone || o.customerName)).size;
+            countEl.textContent = todays.length;
+            const custEl = document.getElementById('ordersTodayCustomers'); if (custEl) custEl.textContent = uniqueCustomers;
+            const avgEl = document.getElementById('ordersTodayAvg'); if (avgEl) avgEl.textContent = (todays.length ? (total / todays.length) : 0).toFixed(2) + ' ر.س';
+            const totalEl = document.getElementById('ordersTodayTotal'); if (totalEl) totalEl.textContent = total.toFixed(2) + ' ر.س';
+        }
+
+        // تقرير تجميع احتياج المنتجات عبر كل الطلبات المفتوحة (جديد + قيد التجهيز)، مقارنة بالمتاح
+        // بالمخزون، عشان تجهّز الكميات الأول وتتفادى تعارض الكميات بين طلبين على نفس الصنف
+        function showProductsNeededReport() {
+            const open = customerOrders.filter(o => o.status === 'pending' || o.status === 'preparing');
+            const needs = {};
+            open.forEach(o => {
+                (o.items || []).forEach(item => {
+                    const product = products.find(p => p.code === item.productCode);
+                    const isSecondary = product && product.secondaryUnit && item.unit === product.secondaryUnit.name;
+                    const deductQty = isSecondary ? (item.qty / product.secondaryUnit.factor) : item.qty;
+                    if (!needs[item.productCode]) needs[item.productCode] = { name: item.productName, qty: 0 };
+                    needs[item.productCode].qty += deductQty;
+                });
+            });
+            const rows = Object.keys(needs).map(code => {
+                const n = needs[code];
+                const available = inventory[code] ? (inventory[code].qty || 0) : 0;
+                const short = available < n.qty;
+                return { code, name: n.name, needed: n.qty, available, short };
+            }).sort((a, b) => (b.short - a.short) || (b.needed - a.needed));
+
+            const tbody = document.getElementById('productsNeededTable');
+            if (rows.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="empty-state"><i class="fas fa-boxes"></i><h3>لا توجد طلبات مفتوحة حاليًا</h3></td></tr>`;
+            } else {
+                tbody.innerHTML = rows.map(r => `
+                    <tr>
+                        <td>${r.name}</td>
+                        <td>${r.needed.toFixed(2)}</td>
+                        <td>${r.available.toFixed(2)}</td>
+                        <td><span class="badge ${r.short ? 'badge-danger' : 'badge-success'}">${r.short ? 'غير كافي' : 'كافي'}</span></td>
+                    </tr>`).join('');
+            }
+            openModal('productsNeededModal');
+        }
+
+
+        // فتح/قفل قايمة "الإجراء" السريعة لكل صف طلب (بتقفل أي قايمة تانية مفتوحة قبل ما تفتح دي)
+        function toggleRowActionsMenu(btn) {
+            const menu = btn.nextElementSibling;
+            const wasOpen = menu.classList.contains('show');
+            document.querySelectorAll('.row-actions-menu.show').forEach(m => m.classList.remove('show'));
+            if (!wasOpen) menu.classList.add('show');
+        }
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.row-actions-wrap')) {
+                document.querySelectorAll('.row-actions-menu.show').forEach(m => m.classList.remove('show'));
+            }
+        });
 
         function clearOrdersFilters() {
             const s = document.getElementById('ordersSearch'); if (s) s.value = '';
