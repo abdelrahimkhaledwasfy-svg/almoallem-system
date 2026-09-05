@@ -1277,11 +1277,12 @@
                         <button class="btn btn-secondary btn-sm" onclick="printDeliverySheet()"><i class="fas fa-print"></i> طباعة كشف التسليم</button>
                     </div>
                 </div>
-                <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));padding:0 20px;margin-top:16px;">
+                <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr));padding:0 20px;margin-top:16px;">
                     <div class="stat-card invoices" style="cursor:default;">
                         <div class="stat-icon"><i class="fas fa-shopping-basket"></i></div>
                         <div class="stat-value" id="ordersTodayCount">0</div>
                         <div class="stat-label">عدد طلبات اليوم</div>
+                        <div id="ordersTodayBreakdown" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"></div>
                     </div>
                     <div class="stat-card customers" style="cursor:default;">
                         <div class="stat-icon"><i class="fas fa-users"></i></div>
@@ -1299,6 +1300,12 @@
                         <div class="stat-label">إجمالي طلبات اليوم</div>
                     </div>
                 </div>
+                <style>
+                    #ordersTodayBreakdown span { font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px; }
+                    #ordersTodayBreakdown span.b-pending { background:rgba(243,156,18,0.15); color:var(--warning); }
+                    #ordersTodayBreakdown span.b-preparing { background:rgba(52,152,219,0.15); color:var(--info); }
+                    #ordersTodayBreakdown span.b-fulfilled { background:rgba(39,174,96,0.15); color:var(--accent); }
+                </style>
                 <div style="padding:0 20px;display:flex;gap:4px;border-bottom:2px solid var(--border);flex-wrap:wrap;">
                     <button class="tab-btn active" id="ordersTabBtn-pending" onclick="switchOrdersTab('pending')">🆕 جديد <span id="ordersTabCount-pending" class="badge badge-danger" style="margin-right:4px;"></span></button>
                     <button class="tab-btn" id="ordersTabBtn-preparing" onclick="switchOrdersTab('preparing')">⏳ قيد التجهيز <span id="ordersTabCount-preparing" class="badge badge-info" style="margin-right:4px;"></span></button>
@@ -3045,10 +3052,25 @@
             const todays = customerOrders.filter(o => (o.createdAt || 0) >= startOfDay.getTime());
             const total = todays.reduce((s, o) => s + (o.total || (o.items || []).reduce((s2, it) => s2 + (it.total || (it.price * it.qty) || 0), 0)), 0);
             const uniqueCustomers = new Set(todays.map(o => o.customerCode || o.phone || o.customerName)).size;
-            countEl.textContent = todays.length;
-            const custEl = document.getElementById('ordersTodayCustomers'); if (custEl) custEl.textContent = uniqueCustomers;
-            const avgEl = document.getElementById('ordersTodayAvg'); if (avgEl) avgEl.textContent = (todays.length ? (total / todays.length) : 0).toFixed(2) + ' ر.س';
-            const totalEl = document.getElementById('ordersTodayTotal'); if (totalEl) totalEl.textContent = total.toFixed(2) + ' ر.س';
+            const numFmt = n => Number(n || 0).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+            countEl.textContent = todays.length.toLocaleString('ar-EG');
+            const custEl = document.getElementById('ordersTodayCustomers'); if (custEl) custEl.textContent = uniqueCustomers.toLocaleString('ar-EG');
+            const avgEl = document.getElementById('ordersTodayAvg'); if (avgEl) avgEl.textContent = numFmt(todays.length ? (total / todays.length) : 0) + ' ر.س';
+            const totalEl = document.getElementById('ordersTodayTotal'); if (totalEl) totalEl.textContent = numFmt(total) + ' ر.س';
+
+            // تفصيل عدد طلبات اليوم حسب الحالة، عشان تعرف على طول كام لسه جديد وكام قيد التجهيز
+            const breakdownEl = document.getElementById('ordersTodayBreakdown');
+            if (breakdownEl) {
+                const pendingCount = todays.filter(o => o.status === 'pending').length;
+                const preparingCount = todays.filter(o => o.status === 'preparing').length;
+                const fulfilledCount = todays.filter(o => o.status === 'fulfilled').length;
+                let html = '';
+                if (pendingCount) html += `<span class="b-pending">🆕 ${pendingCount} جديد</span>`;
+                if (preparingCount) html += `<span class="b-preparing">⏳ ${preparingCount} قيد التجهيز</span>`;
+                if (fulfilledCount) html += `<span class="b-fulfilled">✅ ${fulfilledCount} تم تجهيزه</span>`;
+                breakdownEl.innerHTML = html;
+            }
         }
 
         // تقرير تجميع احتياج المنتجات عبر كل الطلبات المفتوحة (جديد + قيد التجهيز)، مقارنة بالمتاح
