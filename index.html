@@ -2106,6 +2106,22 @@
         </div>
     </div>
 
+    <!-- Supplier Debt Adjustment Modal (Admin only) -->
+    <div class="modal-overlay" id="supplierAdjustmentModal">
+        <div class="modal">
+            <div class="modal-header"><h3 class="modal-title"><i class="fas fa-balance-scale"></i> تعديل إجمالي مديونية المورد</h3><button class="modal-close" onclick="closeModal('supplierAdjustmentModal')">&times;</button></div>
+            <div class="modal-body">
+                <input type="hidden" id="supplierAdjustmentCode">
+                <p style="margin-bottom:12px;">المورد: <strong id="supplierAdjustmentName"></strong></p>
+                <div class="form-group"><label class="form-label">الرصيد الحالي المحسوب</label><input type="text" class="form-control" id="supplierAdjustmentCurrent" disabled></div>
+                <div class="form-group"><label class="form-label">الرصيد الصحيح (بعد التعديل)</label><input type="number" step="0.01" class="form-control" id="supplierAdjustmentNew"></div>
+                <div class="form-group"><label class="form-label">سبب التعديل (اختياري)</label><input type="text" class="form-control" id="supplierAdjustmentNotes" placeholder="مثال: تصحيح خطأ إدخال فاتورة"></div>
+                <p style="font-size:12px;color:var(--text-light);">هيتم تسجيل الفرق كحركة تسوية منفصلة في سجل الأحداث، من غير ما نلمس أي فاتورة أو سند قديم.</p>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('supplierAdjustmentModal')">إلغاء</button><button class="btn btn-success" onclick="saveSupplierAdjustment()">حفظ التعديل</button></div>
+        </div>
+    </div>
+
     <!-- Salesman Modal -->
     <div class="modal-overlay" id="salesmanModal">
         <div class="modal">
@@ -2248,6 +2264,9 @@
         let treasury = JSON.parse(localStorage.getItem('treasury')) || [];
         let salesReturns = JSON.parse(localStorage.getItem('salesReturns')) || [];
         let purchaseReturns = JSON.parse(localStorage.getItem('purchaseReturns')) || [];
+        // تسويات يدوية لمديونية المورد (متاحة للمدير بس) — بتتضاف كفرق فوق الرصيد المحسوب من الفواتير
+        // والسندات، بدل ما نمسح أو نلمس الفواتير القديمة نفسها، عشان يفضل عندنا تتبع كامل لأي تصحيح
+        let supplierAdjustments = JSON.parse(localStorage.getItem('supplierAdjustments')) || [];
         let users = JSON.parse(localStorage.getItem('users')) || [
             { id: 1, username: 'admin', password: 'admin123', fullName: 'مدير النظام', role: 'admin', active: true, lastLogin: null }
         ];
@@ -2304,7 +2323,7 @@
         const CLOUD_SYNCED_KEYS = new Set([
             'products', 'customers', 'suppliers', 'salesmen',
             'inventory', 'expenses', 'treasury', 'salesReturns',
-            'purchaseReturns', 'users', 'appCategories', 'appBrands', 'activationCodes', 'requireActivationCode', 'loyaltySettings', 'appBanners', 'appOffers', 'appCities', 'appRegions', 'appNeighborhoods', 'appNotifications'
+            'purchaseReturns', 'supplierAdjustments', 'users', 'appCategories', 'appBrands', 'activationCodes', 'requireActivationCode', 'loyaltySettings', 'appBanners', 'appOffers', 'appCities', 'appRegions', 'appNeighborhoods', 'appNotifications'
         ]);
 
         // ==================== الإشعارات الفورية (OneSignal) ====================
@@ -2426,7 +2445,7 @@
             if (!db) return Promise.reject(new Error('لا يوجد اتصال بالسحابة'));
             const payload = {
                 products, customers, suppliers, salesmen,
-                inventory, expenses, treasury, salesReturns, purchaseReturns,
+                inventory, expenses, treasury, salesReturns, purchaseReturns, supplierAdjustments,
                 users, appCategories, appBrands, activationCodes, requireActivationCode, loyaltySettings, appBanners, appOffers,
                 appCities, appRegions, appNeighborhoods, appNotifications,
                 updatedAt: Date.now(),
@@ -2561,6 +2580,7 @@
                 treasury = data.treasury || [];
                 salesReturns = data.salesReturns || [];
                 purchaseReturns = data.purchaseReturns || [];
+                supplierAdjustments = data.supplierAdjustments || [];
                 users = data.users || users;
                 appCategories = data.appCategories || [];
                 appBrands = data.appBrands || [];
@@ -2583,6 +2603,7 @@
                 localStorage.setItem('treasury', JSON.stringify(treasury));
                 localStorage.setItem('salesReturns', JSON.stringify(salesReturns));
                 localStorage.setItem('purchaseReturns', JSON.stringify(purchaseReturns));
+                localStorage.setItem('supplierAdjustments', JSON.stringify(supplierAdjustments));
                 localStorage.setItem('users', JSON.stringify(users));
                 localStorage.setItem('appCategories', JSON.stringify(appCategories));
                 localStorage.setItem('appBrands', JSON.stringify(appBrands));
@@ -3870,7 +3891,48 @@
             purchaseReturns.forEach(r => {
                 if (r.supplierCode === supplierCode && r.affectsBalance) balance -= r.grandTotal;
             });
+            supplierAdjustments.forEach(a => { if (a.supplierCode === supplierCode) balance += a.diff; });
             return balance;
+        }
+
+        function saveSupplierAdjustments() { localStorage.setItem('supplierAdjustments', JSON.stringify(supplierAdjustments)); }
+
+        // تسوية يدوية لرصيد مورد (متاحة للمدير بس): بتحسب الفرق بين الرصيد الحالي المحسوب والرصيد
+        // الصحيح اللي المدير كاتبه، وبتسجله كحركة تسوية منفصلة بدل ما تلمس أي فاتورة أو سند قديم
+        function openSupplierAdjustmentModal(supplierCode) {
+            if (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin') { showToast('تعديل إجمالي مديونية المورد متاح للمدير فقط', 'error'); return; }
+            const supplier = suppliers.find(s => s.code === supplierCode);
+            if (!supplier) return;
+            const current = getSupplierBalance(supplierCode);
+            document.getElementById('supplierAdjustmentCode').value = supplierCode;
+            document.getElementById('supplierAdjustmentName').textContent = supplier.name;
+            document.getElementById('supplierAdjustmentCurrent').textContent = current.toFixed(2) + ' ر.س';
+            document.getElementById('supplierAdjustmentNew').value = current.toFixed(2);
+            document.getElementById('supplierAdjustmentNotes').value = '';
+            openModal('supplierAdjustmentModal');
+        }
+
+        function saveSupplierAdjustment() {
+            if (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin') { showToast('تعديل إجمالي مديونية المورد متاح للمدير فقط', 'error'); return; }
+            const code = document.getElementById('supplierAdjustmentCode').value;
+            const newBalance = parseFloat(document.getElementById('supplierAdjustmentNew').value);
+            const notes = document.getElementById('supplierAdjustmentNotes').value.trim();
+            if (isNaN(newBalance)) { showToast('الرجاء إدخال رقم صحيح', 'error'); return; }
+            const current = getSupplierBalance(code);
+            const diff = newBalance - current;
+            if (Math.abs(diff) < 0.001) { showToast('لا يوجد فرق لتسجيله'); closeModal('supplierAdjustmentModal'); return; }
+            const supplier = suppliers.find(s => s.code === code);
+            supplierAdjustments.push({
+                id: Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+                supplierCode: code, date: new Date().toISOString(),
+                previousBalance: current, newBalance, diff, notes,
+                by: currentUser.fullName || currentUser.username
+            });
+            saveSupplierAdjustments();
+            logAction('تسوية مديونية مورد', `تم تعديل رصيد المورد "${supplier ? supplier.name : code}" من ${current.toFixed(2)} إلى ${newBalance.toFixed(2)} ر.س${notes ? ' — ' + notes : ''}`);
+            renderSuppliers(); renderSupplierStatement(); updateDashboardStats();
+            closeModal('supplierAdjustmentModal');
+            showToast('تم تعديل رصيد المورد بنجاح');
         }
 
         function getCustomerTotalCollected(customerCode) {
@@ -5340,6 +5402,7 @@
                 return `<tr><td><span class="badge badge-orange">${s.code}</span></td><td><strong>${s.name}</strong></td><td>${s.phone || '-'}</td><td>${s.address || '-'}</td>
                 <td><span class="customer-balance ${balanceClass}">${balanceText}</span></td>
                 <td><button class="btn btn-primary btn-icon btn-sm" onclick='openSupplierModal(${JSON.stringify(s).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
+                ${currentUser && String(currentUser.role || '').trim().toLowerCase() === 'admin' ? `<button class="btn btn-secondary btn-icon btn-sm" title="تعديل إجمالي المديونية" onclick="openSupplierAdjustmentModal('${s.code}')"><i class="fas fa-balance-scale"></i></button>` : ''}
                 <button class="btn btn-danger btn-icon btn-sm" onclick="deleteSupplier('${s.code}')"><i class="fas fa-trash"></i></button></td></tr>`;
             }).join('');
             updateSupplierStatementSelect();
@@ -5700,6 +5763,11 @@
         }
 
         function deleteTreasuryEntry(id) {
+            const entryCheck = treasury.find(t => t.id === id);
+            if (entryCheck && entryCheck.partyType === 'supplier' && (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin')) {
+                showToast('حذف سندات الصرف للموردين متاح للمدير فقط', 'error');
+                return;
+            }
             if (!confirm('هل أنت متأكد من حذف هذه الحركة؟')) return;
             treasury = treasury.filter(t => t.id !== id);
             // Recalculate balances
@@ -5715,6 +5783,10 @@
         function undoLastTreasuryEntry() {
             if (treasury.length === 0) { showToast('لا توجد حركات لإلغائها', 'error'); return; }
             const last = treasury.slice().sort((a, b) => b.id - a.id)[0];
+            if (last.partyType === 'supplier' && (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin')) {
+                showToast('التراجع عن سندات الصرف للموردين متاح للمدير فقط', 'error');
+                return;
+            }
             const partyName = last.partyType === 'customer' ? (customers.find(c => c.code === last.party)?.name || last.party) :
                                last.partyType === 'supplier' ? (suppliers.find(s => s.code === last.party)?.name || last.party) : last.party;
             if (!confirm(`تراجع عن آخر حركة؟\nالنوع: ${last.type === 'in' ? 'قبض' : 'صرف'}\nالمبلغ: ${last.amount.toFixed(2)} ر.س\nالجهة: ${partyName}`)) return;
@@ -6171,6 +6243,13 @@
         }
 
         function deleteAnyInvoice(id, type) {
+            if (type === 'purchase') {
+                const invCheck = purchaseInvoices.find(i => i.id === id);
+                if (invCheck && invCheck.paymentMethod === 'آجل' && (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin')) {
+                    showToast('حذف فواتير الشراء الآجلة متاح للمدير فقط', 'error');
+                    return;
+                }
+            }
             if (!confirm('هل أنت متأكد من حذف هذه الفاتورة؟')) return;
             if (type === 'sale') {
                 const inv = invoices.find(i => i.id === id);
@@ -6217,6 +6296,10 @@
         function openEditInvoiceModal(id, type) {
             const invoice = type === 'sale' ? invoices.find(i => i.id === id) : purchaseInvoices.find(i => i.id === id);
             if (!invoice) return;
+            if (type === 'purchase' && invoice.paymentMethod === 'آجل' && (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin')) {
+                showToast('تعديل فواتير الشراء الآجلة متاح للمدير فقط', 'error');
+                return;
+            }
             editingInvoiceId = id;
             editingInvoiceType = type;
             editInvoiceItems = JSON.parse(JSON.stringify(invoice.items));
