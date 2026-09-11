@@ -116,6 +116,16 @@
         .btn-success { background: var(--accent); color: white; } .btn-success:hover { background: #219a52; transform: translateY(-2px); }
         .btn-danger { background: var(--danger); color: white; } .btn-warning { background: var(--warning); color: white; }
         .btn-secondary { background: var(--secondary); color: white; } .btn-info { background: var(--info); color: white; }
+        /* قايمة إجراءات سريعة (Dropdown) لكل صف طلب، بدل ما الأزرار كلها تتكدس جنب بعض */
+        .row-actions-wrap { position: relative; display: inline-block; }
+        .row-actions-btn { background: var(--secondary); color: #fff; border: none; border-radius: 6px; padding: 7px 12px; cursor: pointer; font-size: 13px; font-family: inherit; }
+        .row-actions-menu { display: none; position: absolute; top: 100%; left: 0; background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow); z-index: 60; min-width: 180px; overflow: hidden; margin-top: 4px; }
+        .row-actions-menu.show { display: block; }
+        .row-actions-menu button { display: flex; align-items: center; gap: 8px; width: 100%; text-align: right; padding: 10px 14px; border: none; background: none; cursor: pointer; font-size: 13px; font-family: inherit; color: var(--text); }
+        .row-actions-menu button:hover { background: var(--bg); }
+        .row-actions-menu button.danger { color: #c0392b; }
+        .row-actions-menu button.success { color: #1e8449; }
+        .row-actions-menu button.info { color: #2471a3; }
         .btn-purple { background: var(--purple); color: white; } .btn-teal { background: var(--teal); color: white; }
         .btn-profit { background: var(--profit); color: white; } .btn-profit:hover { background: var(--profit-dark); transform: translateY(-2px); }
         .btn-dark { background: #2c3e50; color: white; } .btn-dark:hover { background: #1a252f; transform: translateY(-2px); }
@@ -1263,14 +1273,52 @@
                     <div class="card-title"><i class="fas fa-shopping-basket"></i> طلبات العملاء (من الأبليكشن)</div>
                     <div style="display:flex;align-items:center;gap:14px;">
                         <span id="ordersAvgRating" style="font-size:13px;font-weight:700;color:#d4a017;"></span>
+                        <button class="btn btn-secondary btn-sm" onclick="showProductsNeededReport()"><i class="fas fa-boxes"></i> تقرير المنتجات</button>
                         <button class="btn btn-secondary btn-sm" onclick="printDeliverySheet()"><i class="fas fa-print"></i> طباعة كشف التسليم</button>
                     </div>
                 </div>
+                <div id="ordersStatsScopeLabel" style="padding:0 20px;margin-top:14px;font-size:14px;font-weight:700;color:var(--text-light);"></div>
+                <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));padding:0 20px;margin-top:8px;">
+                    <div class="stat-card invoices" style="cursor:default;">
+                        <div class="stat-icon"><i class="fas fa-shopping-basket"></i></div>
+                        <div class="stat-value" id="ordersTodayCount">0</div>
+                        <div class="stat-label">عدد الطلبات</div>
+                        <div id="ordersTodayBreakdown" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"></div>
+                    </div>
+                    <div class="stat-card customers" style="cursor:default;">
+                        <div class="stat-icon"><i class="fas fa-users"></i></div>
+                        <div class="stat-value" id="ordersTodayCustomers">0</div>
+                        <div class="stat-label">عدد العملاء</div>
+                    </div>
+                    <div class="stat-card inventory" style="cursor:default;">
+                        <div class="stat-icon"><i class="fas fa-boxes"></i></div>
+                        <div class="stat-value" id="ordersTodayProducts">0</div>
+                        <div class="stat-label">عدد المنتجات (بدون تكرار)</div>
+                    </div>
+                    <div class="stat-card products" style="cursor:default;">
+                        <div class="stat-icon"><i class="fas fa-calculator"></i></div>
+                        <div class="stat-value" id="ordersTodayAvg">0</div>
+                        <div class="stat-label">متوسط قيمة الطلب</div>
+                    </div>
+                    <div class="stat-card sales" style="cursor:default;">
+                        <div class="stat-icon"><i class="fas fa-coins"></i></div>
+                        <div class="stat-value" id="ordersTodayTotal">0</div>
+                        <div class="stat-label">إجمالي البيع</div>
+                    </div>
+                </div>
+                <style>
+                    #ordersTodayBreakdown span { font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px; }
+                    #ordersTodayBreakdown span.b-pending { background:rgba(243,156,18,0.15); color:var(--warning); }
+                    #ordersTodayBreakdown span.b-preparing { background:rgba(52,152,219,0.15); color:var(--info); }
+                    #ordersTodayBreakdown span.b-fulfilled { background:rgba(39,174,96,0.15); color:var(--accent); }
+                </style>
                 <div style="padding:0 20px;display:flex;gap:4px;border-bottom:2px solid var(--border);flex-wrap:wrap;">
                     <button class="tab-btn active" id="ordersTabBtn-pending" onclick="switchOrdersTab('pending')">🆕 جديد <span id="ordersTabCount-pending" class="badge badge-danger" style="margin-right:4px;"></span></button>
+                    <button class="tab-btn" id="ordersTabBtn-preparing" onclick="switchOrdersTab('preparing')">⏳ قيد التجهيز <span id="ordersTabCount-preparing" class="badge badge-info" style="margin-right:4px;"></span></button>
                     <button class="tab-btn" id="ordersTabBtn-fulfilled" onclick="switchOrdersTab('fulfilled')">✅ تم التجهيز <span id="ordersTabCount-fulfilled" class="badge badge-success" style="margin-right:4px;"></span></button>
                     <button class="tab-btn" id="ordersTabBtn-rejected" onclick="switchOrdersTab('rejected')">❌ مرفوض <span id="ordersTabCount-rejected" class="badge badge-danger" style="margin-right:4px;"></span></button>
                     <button class="tab-btn" id="ordersTabBtn-all" onclick="switchOrdersTab('all')">الكل <span id="ordersTabCount-all" class="badge badge-primary" style="margin-right:4px;"></span></button>
+                    <button class="tab-btn" id="ordersTabBtn-byCustomer" onclick="switchOrdersTab('byCustomer')">👥 حسب العميل</button>
                 </div>
                 <div style="padding:16px 20px 0;">
                     <div class="search-box" style="margin-bottom:12px;"><i class="fas fa-search"></i><input type="text" id="ordersSearch" placeholder="بحث بالاسم أو رقم الهاتف أو رقم الطلب..." oninput="renderCustomerOrders()"></div>
@@ -1287,6 +1335,9 @@
                 </div>
                 <div class="table-container">
                     <table><thead><tr><th style="width:34px;"><input type="checkbox" id="ordersSelectAll" onchange="toggleSelectAllOrders(this)"></th><th>رقم الطلب</th><th>العميل</th><th>الأصناف</th><th>عنوان التوصيل</th><th>الإجمالي</th><th>وقت الطلب</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="customerOrdersTable"></tbody></table>
+                </div>
+                <div class="table-container" id="ordersByCustomerContainer" style="display:none;">
+                    <table><thead><tr><th>العميل</th><th>عدد الطلبات المفتوحة</th><th>الإجمالي</th><th>آخر طلب</th><th></th></tr></thead><tbody id="ordersByCustomerTable"></tbody></table>
                 </div>
             </div>
         </section>
@@ -1381,7 +1432,7 @@
             <div class="card" id="appMgmtTab-banners" style="display:none;">
                 <div class="card-header"><div class="card-title"><i class="fas fa-images"></i> بانرات الإعلانات في الرئيسية</div><button class="btn btn-success btn-sm" onclick="openAppBannerModal()"><i class="fas fa-plus"></i> إضافة بانر</button></div>
                 <div class="table-container">
-                    <table><thead><tr><th>الصورة</th><th>العنوان</th><th>يوديك لـ</th><th>المكان</th><th>الترتيب</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="appBannersTable"></tbody></table>
+                    <table><thead><tr><th>الصورة</th><th>العنوان</th><th>يوديك لـ</th><th>الترتيب</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="appBannersTable"></tbody></table>
                 </div>
             </div>
 
@@ -1885,12 +1936,6 @@
                     <div id="appBannerImageUploadStatus" style="font-size:12px;color:var(--text-light);margin-top:4px;"></div>
                     <input type="hidden" id="appBannerImageUrl">
                 </div>
-                <div class="form-group"><label class="form-label">مكان الظهور في الأبليكشن</label>
-                    <select class="form-control" id="appBannerPlacement">
-                        <option value="top">أعلى الصفحة الرئيسية (بانر كبير واحد بيتغير)</option>
-                        <option value="offers">قسم "آخر العروض" (صف بانرات قابل للتمرير)</option>
-                    </select>
-                </div>
                 <div class="form-group"><label class="form-label">عند الضغط على البانر يوديك لـ</label>
                     <select class="form-control" id="appBannerLinkType" onchange="toggleBannerLinkValueField()">
                         <option value="none">بدون رابط (عرض فقط)</option>
@@ -1965,6 +2010,20 @@
 
     <!-- View Invoice Modal (Professional Layout) -->
     <!-- عرض/تعديل طلب العميل بشكل فاتورة -->
+    <div class="modal-overlay" id="productsNeededModal">
+        <div class="modal" style="max-width:750px;">
+            <div class="modal-header"><h3 class="modal-title" id="productsNeededModalTitle"><i class="fas fa-boxes"></i> تقرير المنتجات</h3><button class="modal-close" onclick="closeModal('productsNeededModal')">&times;</button></div>
+            <div class="modal-body">
+                <p style="color:var(--text-light);font-size:13px;margin-bottom:12px;">إجمالي كميات وأصناف الطلبات في التبويب المفتوح دلوقتي، مقارنة بالمتاح في المخزون.</p>
+                <div class="table-container">
+                    <table>
+                        <thead><tr><th>الصنف</th><th>الكمية المطلوبة</th><th>المتاح بالمخزون</th><th>الحالة</th></tr></thead>
+                        <tbody id="productsNeededTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
     <div class="modal-overlay" id="orderInvoiceModal">
         <div class="modal" style="max-width:700px;">
             <div class="modal-header"><h3 class="modal-title">فاتورة طلب العميل</h3><button class="modal-close" onclick="closeModal('orderInvoiceModal')">&times;</button></div>
@@ -2044,6 +2103,22 @@
                 <div class="form-group"><label class="form-label">العنوان</label><input type="text" class="form-control" id="supplierAddress" placeholder="عنوان المورد"></div>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('supplierModal')">إلغاء</button><button class="btn btn-success" onclick="saveSupplier()">حفظ</button></div>
+        </div>
+    </div>
+
+    <!-- Supplier Debt Adjustment Modal (Admin only) -->
+    <div class="modal-overlay" id="supplierAdjustmentModal">
+        <div class="modal">
+            <div class="modal-header"><h3 class="modal-title"><i class="fas fa-balance-scale"></i> تعديل إجمالي مديونية المورد</h3><button class="modal-close" onclick="closeModal('supplierAdjustmentModal')">&times;</button></div>
+            <div class="modal-body">
+                <input type="hidden" id="supplierAdjustmentCode">
+                <p style="margin-bottom:12px;">المورد: <strong id="supplierAdjustmentName"></strong></p>
+                <div class="form-group"><label class="form-label">الرصيد الحالي المحسوب</label><input type="text" class="form-control" id="supplierAdjustmentCurrent" disabled></div>
+                <div class="form-group"><label class="form-label">الرصيد الصحيح (بعد التعديل)</label><input type="number" step="0.01" class="form-control" id="supplierAdjustmentNew"></div>
+                <div class="form-group"><label class="form-label">سبب التعديل (اختياري)</label><input type="text" class="form-control" id="supplierAdjustmentNotes" placeholder="مثال: تصحيح خطأ إدخال فاتورة"></div>
+                <p style="font-size:12px;color:var(--text-light);">هيتم تسجيل الفرق كحركة تسوية منفصلة في سجل الأحداث، من غير ما نلمس أي فاتورة أو سند قديم.</p>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('supplierAdjustmentModal')">إلغاء</button><button class="btn btn-success" onclick="saveSupplierAdjustment()">حفظ التعديل</button></div>
         </div>
     </div>
 
@@ -2189,6 +2264,9 @@
         let treasury = JSON.parse(localStorage.getItem('treasury')) || [];
         let salesReturns = JSON.parse(localStorage.getItem('salesReturns')) || [];
         let purchaseReturns = JSON.parse(localStorage.getItem('purchaseReturns')) || [];
+        // تسويات يدوية لمديونية المورد (متاحة للمدير بس) — بتتضاف كفرق فوق الرصيد المحسوب من الفواتير
+        // والسندات، بدل ما نمسح أو نلمس الفواتير القديمة نفسها، عشان يفضل عندنا تتبع كامل لأي تصحيح
+        let supplierAdjustments = JSON.parse(localStorage.getItem('supplierAdjustments')) || [];
         let users = JSON.parse(localStorage.getItem('users')) || [
             { id: 1, username: 'admin', password: 'admin123', fullName: 'مدير النظام', role: 'admin', active: true, lastLogin: null }
         ];
@@ -2221,15 +2299,12 @@
         let salesChartInstance = null;
         let profitChartInstance = null;
         let excelCustomersData = [];
-        const DEVICE_ID = localStorage.getItem('deviceId') || 'DEV-' + Math.random().toString(36).substr(2, 9).toUpperCase();
-        if (!localStorage.getItem('deviceId')) localStorage.setItem('deviceId', DEVICE_ID);
-        // معرّف خاص بكل تاب/فتحة صفحة لوحدها (مش بالجهاز)، بيتجدد تلقائيًا مع كل فتح جديد لأن sessionStorage
-        // بيتصفّر لما التاب يتقفل. بنستخدمه بس عشان نميّز "ده أنا اللي بعته الآن فعلاً" وقت مزامنة السحابة،
-        // عشان لو فيه تاب قديم منسي فاتح من كذا يوم على نفس الجهاز (وبالتالي نفس DEVICE_ID)، النظام
-        // ميغلطش ويفتكر إن تحديثات التاب التاني (الجديد) دي بتاعته هو، فيتجاهلها ويفضل واقف على بيانات قديمة
-        // وهو مقتنع إنه متزامن — وده اللي كان بيخلي أي حفظ منه يمسح بيانات الأيام اللي فاتت.
-        const SYNC_SESSION_ID = sessionStorage.getItem('syncSessionId') || DEVICE_ID + '-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6);
-        if (!sessionStorage.getItem('syncSessionId')) sessionStorage.setItem('syncSessionId', SYNC_SESSION_ID);
+        // مهم: بنستخدم sessionStorage مش localStorage عشان كل تاب مفتوح ياخد رقم تعريف (Device ID) خاص
+        // بيه لوحده، حتى لو التابات دي كلها في نفس المتصفح ونفس الجهاز (زي فتح النظام بأكتر من يوزر
+        // في نفس الوقت). لو استخدمنا localStorage هنا، كل التابات كانت هتاخد نفس الرقم وتفتكر إن
+        // تعديلات بعضها هي تعديلاتها هي، وتتجاهلها وتكتب فوقها من غير ما تكتشف التعارض.
+        const DEVICE_ID = sessionStorage.getItem('deviceId') || 'DEV-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+        if (!sessionStorage.getItem('deviceId')) sessionStorage.setItem('deviceId', DEVICE_ID);
 
         // ==================== CLOUD SYNC (Firebase Firestore) ====================
         const firebaseConfig = {
@@ -2242,10 +2317,13 @@
             measurementId: "G-C5HBP932YR"
         };
 
+        // ملحوظة: الفواتير، فواتير الشراء، حركات المخزون، وسجل الأحداث بقى ليهم مكانهم المستقل بتاعهم
+        // (Collections منفصلة في فايرستور) بدل ما يتكدسوا في نفس المستند الكبير ده، عشان تعديل واحد
+        // منهم ميضربش تعديل تاني حصل في نفس اللحظة تقريبًا. شوف startInvoiceRecordsListener وأخواتها.
         const CLOUD_SYNCED_KEYS = new Set([
-            'products', 'customers', 'suppliers', 'salesmen', 'invoices', 'purchaseInvoices',
-            'inventory', 'stockMovements', 'expenses', 'treasury', 'salesReturns',
-            'purchaseReturns', 'users', 'auditLog', 'appCategories', 'appBrands', 'activationCodes', 'requireActivationCode', 'loyaltySettings', 'appBanners', 'appOffers', 'appCities', 'appRegions', 'appNeighborhoods', 'appNotifications'
+            'products', 'customers', 'suppliers', 'salesmen',
+            'inventory', 'expenses', 'treasury', 'salesReturns',
+            'purchaseReturns', 'supplierAdjustments', 'users', 'appCategories', 'appBrands', 'activationCodes', 'requireActivationCode', 'loyaltySettings', 'appBanners', 'appOffers', 'appCities', 'appRegions', 'appNeighborhoods', 'appNotifications'
         ]);
 
         // ==================== الإشعارات الفورية (OneSignal) ====================
@@ -2313,37 +2391,23 @@
                 const app = firebase.initializeApp(firebaseConfig);
                 db = firebase.firestore();
                 hookLocalStorageForCloudSync();
-                // لو الصفحة اتعمل لها ريفريش (أو اتقفلت) وكان لسه فيه تعديل محلي معلّق ما اترفعش للسحابة
-                // (زي فاتورة اتحفظت على الجهاز للتو بس مهلة الـ 900ms قبل الرفع ما خلصتش قبل الريفريش)،
-                // بنعرف ده من علامة باقية في localStorage من الجلسة اللي فاتت (متخزنة، عكس pendingLocalSync
-                // اللي بيتصفر مع كل ريفريش). لو موجودة، بنحاول نرفع البيانات الحالية فورًا الأول، قبل ما نسمح
-                // لأي تحديث وارد من السحابة يكتب فوقها ويمسحها وهي لسه ما وصلتش للسحابة أصلاً
-                if (localStorage.getItem('_syncOutboxPending') === '1') {
-                    pendingLocalSync = true;
-                    updateSyncBadge('syncing');
-                    pushStateToCloud().catch(function() {});
-                }
                 startCloudListener();
                 startOrdersListener();
                 startActivationUsesListener();
+                // نستنى الترحيل يخلص الأول (لو محتاج يشتغل)، وبعدين نفتح الاستماع الحي على الفواتير/
+                // الحركات/السجل، عشان مايبقاش فيه لحظة يلاقي فيها المكان الجديد فاضي فيمسح الشاشة
+                migrateLegacyRecordsIfNeeded().finally(function() {
+                    startInvoiceRecordsListener();
+                    startPurchaseInvoiceRecordsListener();
+                    startStockMovementRecordsListener();
+                    startAuditLogRecordsListener();
+                });
                 setupStaleTabAutoRefresh();
             } catch (e) {
                 console.error('Firebase init error:', e);
                 updateSyncBadge('error');
             }
         }
-
-        // لو التاب هيتقفل أو هيتخبّى (ريفريش، تبديل تطبيق، قفل الصفحة) وفيه تعديل محلي لسه مستني
-        // مهلة الـ900ms قبل ما يترفع، بنحاول نرفعه فورًا دلوقتي من غير ما ننتظر، عشان نقلل الفترة
-        // اللي ممكن يضيع فيها التعديل لو حصل ريفريش قبل ما يوصل للسحابة
-        function flushPendingSyncNow() {
-            if (pendingLocalSync && cloudSyncTimer) {
-                clearTimeout(cloudSyncTimer);
-                pushStateToCloud().catch(function() {});
-            }
-        }
-        document.addEventListener('visibilitychange', function() { if (document.hidden) flushPendingSyncNow(); });
-        window.addEventListener('pagehide', flushPendingSyncNow);
 
         // لو الجهاز/التاب اتسايب مفتوح في الخلفية فترة طويلة، بنعمله تحديث تلقائي أول ما يرجع نشط
         // عشان نمنع إنه يشتغل ببيانات قديمة ويرفعها فوق تحديثات أجهزة تانية
@@ -2370,7 +2434,6 @@
         function scheduleCloudSync() {
             if (!db) return;
             pendingLocalSync = true;
-            _origLocalStorageSetItem('_syncOutboxPending', '1');
             updateSyncBadge('syncing');
             clearTimeout(cloudSyncTimer);
             cloudSyncTimer = setTimeout(pushStateToCloud, 900);
@@ -2381,12 +2444,12 @@
         function pushStateToCloud() {
             if (!db) return Promise.reject(new Error('لا يوجد اتصال بالسحابة'));
             const payload = {
-                products, customers, suppliers, salesmen, invoices, purchaseInvoices,
-                inventory, stockMovements, expenses, treasury, salesReturns, purchaseReturns,
-                users, auditLog, appCategories, appBrands, activationCodes, requireActivationCode, loyaltySettings, appBanners, appOffers,
+                products, customers, suppliers, salesmen,
+                inventory, expenses, treasury, salesReturns, purchaseReturns, supplierAdjustments,
+                users, appCategories, appBrands, activationCodes, requireActivationCode, loyaltySettings, appBanners, appOffers,
                 appCities, appRegions, appNeighborhoods, appNotifications,
                 updatedAt: Date.now(),
-                updatedBy: SYNC_SESSION_ID
+                updatedBy: DEVICE_ID
             };
             const cleanPayload = JSON.parse(JSON.stringify(payload));
             const docRef = db.collection('storeData').doc('main');
@@ -2403,7 +2466,6 @@
             }).then(() => {
                 staleSyncRetryCount = 0;
                 lastKnownServerUpdatedAt = cleanPayload.updatedAt;
-                _origLocalStorageSetItem('_syncOutboxPending', '0');
                 updateSyncBadge('synced');
                 // نجحنا في رفع تعديلنا المحلي؛ أي نسخة كانت وصلت من جهاز تاني وإحنا مستنيين هي أقدم
                 // من اللي إحنا رفعناه دلوقتي، فمفيش داعي نطبّقها فوق شغلنا الجديد
@@ -2474,7 +2536,7 @@
                     return;
                 }
                 const data = docSnap.data();
-                if (data.updatedBy === SYNC_SESSION_ID) { lastKnownServerUpdatedAt = data.updatedAt || Date.now(); updateSyncBadge('synced'); return; }
+                if (data.updatedBy === DEVICE_ID) { lastKnownServerUpdatedAt = data.updatedAt || Date.now(); updateSyncBadge('synced'); return; }
 
                 // فيه تعديل محلي لسه معلق (مثلاً طلب أبليكشن اتنفذ دلوقتي) ولسه ما اترفعش للسحابة:
                 // نأجل تطبيق تحديث الجهاز التاني، وميننساش نحدّث lastKnownServerUpdatedAt دلوقتي
@@ -2507,25 +2569,19 @@
         // من جهاز تاني وإحنا لسه شايلين تعديل محلي معلق زي فاتورة طلب أبليكشن)
         function applyRemoteSnapshot(data, opts) {
                 opts = opts || {};
-                const mergeInvoices = opts.mergeWithLocal ? mergeAppendOnlyById(data.invoices, invoices) : (data.invoices || []);
-                const mergeStockMovements = opts.mergeWithLocal ? mergeAppendOnlyById(data.stockMovements, stockMovements) : (data.stockMovements || []);
-                const mergeAuditLog = opts.mergeWithLocal ? mergeAppendOnlyById(data.auditLog, auditLog) : (data.auditLog || []);
 
                 applyingRemoteUpdate = true;
                 products = data.products || [];
                 customers = data.customers || [];
                 suppliers = data.suppliers || [];
                 salesmen = data.salesmen || [];
-                invoices = mergeInvoices;
-                purchaseInvoices = data.purchaseInvoices || [];
                 inventory = data.inventory || {};
-                stockMovements = mergeStockMovements;
                 expenses = data.expenses || [];
                 treasury = data.treasury || [];
                 salesReturns = data.salesReturns || [];
                 purchaseReturns = data.purchaseReturns || [];
+                supplierAdjustments = data.supplierAdjustments || [];
                 users = data.users || users;
-                auditLog = mergeAuditLog;
                 appCategories = data.appCategories || [];
                 appBrands = data.appBrands || [];
                 activationCodes = data.activationCodes || [];
@@ -2542,16 +2598,13 @@
                 localStorage.setItem('customers', JSON.stringify(customers));
                 localStorage.setItem('suppliers', JSON.stringify(suppliers));
                 localStorage.setItem('salesmen', JSON.stringify(salesmen));
-                localStorage.setItem('invoices', JSON.stringify(invoices));
-                localStorage.setItem('purchaseInvoices', JSON.stringify(purchaseInvoices));
                 localStorage.setItem('inventory', JSON.stringify(inventory));
-                localStorage.setItem('stockMovements', JSON.stringify(stockMovements));
                 localStorage.setItem('expenses', JSON.stringify(expenses));
                 localStorage.setItem('treasury', JSON.stringify(treasury));
                 localStorage.setItem('salesReturns', JSON.stringify(salesReturns));
                 localStorage.setItem('purchaseReturns', JSON.stringify(purchaseReturns));
+                localStorage.setItem('supplierAdjustments', JSON.stringify(supplierAdjustments));
                 localStorage.setItem('users', JSON.stringify(users));
-                localStorage.setItem('auditLog', JSON.stringify(auditLog));
                 localStorage.setItem('appCategories', JSON.stringify(appCategories));
                 localStorage.setItem('appBrands', JSON.stringify(appBrands));
                 localStorage.setItem('activationCodes', JSON.stringify(activationCodes));
@@ -2646,6 +2699,91 @@
             return true;
         }
 
+        // ==================== فواتير البيع/الشراء وحركات المخزون وسجل الأحداث (Collections مستقلة) ====================
+        // كل واحدة من دول بقى ليها "مكان" منفصل بذاته في فايرستور (Collection) بدل ما تتكدس كلها
+        // جوه مستند storeData الكبير. كده لو جهازين اشتغلوا في نفس اللحظة بالظبط، كل واحد بيكتب
+        // فاتورته في مكانها لوحدها من غير ما يمسح حاجة عملها التاني.
+        let invoiceRecordsListenerStarted = false, purchaseInvoiceRecordsListenerStarted = false,
+            stockMovementRecordsListenerStarted = false, auditLogRecordsListenerStarted = false;
+
+        function startInvoiceRecordsListener() {
+            if (!db || invoiceRecordsListenerStarted) return;
+            invoiceRecordsListenerStarted = true;
+            db.collection('invoiceRecords').onSnapshot(function(snap) {
+                invoices = snap.docs.map(function(d) { return d.data(); });
+                localStorage.setItem('invoices', JSON.stringify(invoices));
+                try { updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderTopProducts(); renderPaymentSummary(); updateSalesChart(); } catch (e) { console.error('refresh after invoice update failed:', e); }
+            }, function(err) { console.error('Invoice records listener error:', err); });
+        }
+
+        function startPurchaseInvoiceRecordsListener() {
+            if (!db || purchaseInvoiceRecordsListenerStarted) return;
+            purchaseInvoiceRecordsListenerStarted = true;
+            db.collection('purchaseInvoiceRecords').onSnapshot(function(snap) {
+                purchaseInvoices = snap.docs.map(function(d) { return d.data(); });
+                localStorage.setItem('purchaseInvoices', JSON.stringify(purchaseInvoices));
+                try { updateDashboardStats(); renderInvoices(); renderRecentInvoices(); } catch (e) { console.error('refresh after purchase invoice update failed:', e); }
+            }, function(err) { console.error('Purchase invoice records listener error:', err); });
+        }
+
+        function startStockMovementRecordsListener() {
+            if (!db || stockMovementRecordsListenerStarted) return;
+            stockMovementRecordsListenerStarted = true;
+            db.collection('stockMovementRecords').orderBy('date', 'desc').limit(2000).onSnapshot(function(snap) {
+                stockMovements = snap.docs.map(function(d) { return d.data(); });
+                localStorage.setItem('stockMovements', JSON.stringify(stockMovements));
+                try { renderMovements(); } catch (e) { console.error('refresh after stock movement update failed:', e); }
+            }, function(err) { console.error('Stock movement records listener error:', err); });
+        }
+
+        function startAuditLogRecordsListener() {
+            if (!db || auditLogRecordsListenerStarted) return;
+            auditLogRecordsListenerStarted = true;
+            db.collection('auditLogRecords').orderBy('date', 'desc').limit(2000).onSnapshot(function(snap) {
+                auditLog = snap.docs.map(function(d) { return d.data(); });
+                localStorage.setItem('auditLog', JSON.stringify(auditLog));
+                try { if (typeof renderAuditLog === 'function') renderAuditLog(); } catch (e) { console.error('refresh after audit log update failed:', e); }
+            }, function(err) { console.error('Audit log records listener error:', err); });
+        }
+
+        // ترحيل تلقائي لمرة واحدة بس: بينقل أي فواتير/حركات مخزون/سجل أحداث كانت متخزنة قبل التحديث
+        // ده جوه مستند storeData الكبير، لمكانها الجديد المستقل. بيشتغل مرة واحدة فقط من أول جهاز
+        // يفتح النسخة المحدّثة (باقي الأجهزة هتلاقي المكان الجديد مليان بالفعل وتتجاهل الترحيل).
+        function migrateLegacyRecordsIfNeeded() {
+            function migrateCollection(collectionName, localArray, doneFlagKey) {
+                if (localStorage.getItem(doneFlagKey)) return Promise.resolve();
+                return db.collection(collectionName).limit(1).get().then(function(snap) {
+                    if (!snap.empty || !localArray || localArray.length === 0) {
+                        localStorage.setItem(doneFlagKey, '1');
+                        return;
+                    }
+                    const batches = [];
+                    let batch = db.batch(), count = 0;
+                    localArray.forEach(function(item) {
+                        if (!item || item.id == null) return;
+                        batch.set(db.collection(collectionName).doc(String(item.id)), item);
+                        count++;
+                        if (count >= 400) { batches.push(batch); batch = db.batch(); count = 0; }
+                    });
+                    if (count > 0) batches.push(batch);
+                    let chain = Promise.resolve();
+                    batches.forEach(function(b) { chain = chain.then(function() { return b.commit(); }); });
+                    return chain.then(function() {
+                        localStorage.setItem(doneFlagKey, '1');
+                        console.log('تم ترحيل ' + collectionName + ' بنجاح (' + localArray.length + ' عنصر)');
+                    }).catch(function(e) { console.error('فشل ترحيل ' + collectionName + ':', e); });
+                }).catch(function(e) { console.error('تعذر التحقق من ' + collectionName + ' للترحيل:', e); });
+            }
+            // لازم نستنى الترحيل يخلص الأول قبل ما نفتح الاستماع الحي (Listener)، عشان الاستماع
+            // ميجيش يلاقي المكان الجديد لسه فاضي فيمسح البيانات المحلية الصحيحة ظنًا منه إنها فعلاً فاضية
+            return Promise.all([
+                migrateCollection('invoiceRecords', invoices, 'migratedInvoiceRecords_v1'),
+                migrateCollection('purchaseInvoiceRecords', purchaseInvoices, 'migratedPurchaseInvoiceRecords_v1'),
+                migrateCollection('stockMovementRecords', stockMovements, 'migratedStockMovementRecords_v1'),
+                migrateCollection('auditLogRecords', auditLog, 'migratedAuditLogRecords_v1')
+            ]);
+        }
+
         function startOrdersListener() {
             if (!db || ordersListenerStarted) return;
             ordersListenerStarted = true;
@@ -2732,15 +2870,16 @@
         });
 
         function updatePendingOrdersBadge() {
+            updateOrdersTodayStats();
             const badge = document.getElementById('pendingOrdersBadge');
             const count = customerOrders.filter(o => o.status === 'pending').length;
             if (badge) {
                 if (count > 0) { badge.textContent = count; badge.style.display = 'inline-block'; badge.classList.add('badge-pulse'); }
                 else { badge.style.display = 'none'; badge.classList.remove('badge-pulse'); }
             }
-            const counts = { pending: 0, fulfilled: 0, rejected: 0, all: customerOrders.length };
+            const counts = { pending: 0, preparing: 0, fulfilled: 0, rejected: 0, all: customerOrders.length };
             customerOrders.forEach(o => { if (counts[o.status] !== undefined) counts[o.status]++; });
-            ['pending', 'fulfilled', 'rejected', 'all'].forEach(t => {
+            ['pending', 'preparing', 'fulfilled', 'rejected', 'all'].forEach(t => {
                 const el = document.getElementById('ordersTabCount-' + t);
                 if (el) { el.textContent = counts[t]; el.style.display = counts[t] > 0 ? 'inline-block' : 'none'; }
             });
@@ -2757,6 +2896,20 @@
         }
 
         function renderCustomerOrders() {
+            updateOrdersTodayStats();
+            const normalTableWrap = document.getElementById('customerOrdersTable') ? document.getElementById('customerOrdersTable').closest('.table-container') : null;
+            const byCustomerWrap = document.getElementById('ordersByCustomerContainer');
+            if (ordersCurrentTab === 'byCustomer') {
+                if (normalTableWrap) normalTableWrap.style.display = 'none';
+                if (byCustomerWrap) byCustomerWrap.style.display = '';
+                const bulkBar = document.getElementById('ordersBulkBar');
+                if (bulkBar) bulkBar.classList.remove('show');
+                renderOrdersByCustomer();
+                return;
+            }
+            if (normalTableWrap) normalTableWrap.style.display = '';
+            if (byCustomerWrap) byCustomerWrap.style.display = 'none';
+
             const tbody = document.getElementById('customerOrdersTable');
             if (!tbody) return;
 
@@ -2786,6 +2939,7 @@
 
             const statusMap = {
                 pending: { label: 'جديد', cls: 'badge-warning' },
+                preparing: { label: 'قيد التجهيز', cls: 'badge-info' },
                 fulfilled: { label: 'تم التجهيز', cls: 'badge-success' },
                 rejected: { label: 'مرفوض', cls: 'badge-danger' }
             };
@@ -2796,20 +2950,38 @@
                 const time = o.createdAt ? new Date(o.createdAt).toLocaleString('ar-EG') : '-';
                 const deliveryLabel = o.deliveryTime === 'evening' ? 'مسائي' : (o.deliveryTime === 'morning' ? 'صباحي' : '-');
                 const addressInfo = [o.shopName, o.addressDetail].filter(Boolean).join(' - ') || '-';
-                const actions = o.status === 'pending'
-                    ? `<button class="btn btn-primary btn-sm" onclick="viewOrderAsInvoice('${o.id}')"><i class="fas fa-file-invoice"></i> فتح الفاتورة</button>
-                       <button class="btn btn-success btn-sm" onclick="fulfillOrder('${o.id}')"><i class="fas fa-check"></i> تجهيز الطلب</button>
-                       <button class="btn btn-danger btn-sm" onclick="rejectOrder('${o.id}')"><i class="fas fa-times"></i> رفض</button>`
-                    : `<button class="btn btn-primary btn-sm" onclick="viewOrderAsInvoice('${o.id}')"><i class="fas fa-file-invoice"></i> عرض الفاتورة</button>`;
+                let actions;
+                if (o.status === 'pending') {
+                    actions = `<button class="btn btn-primary btn-sm" onclick="viewOrderAsInvoice('${o.id}')"><i class="fas fa-file-invoice"></i> فتح الفاتورة</button>
+                       <div class="row-actions-wrap">
+                         <button class="row-actions-btn" onclick="toggleRowActionsMenu(this)">الإجراء <i class="fas fa-caret-down"></i></button>
+                         <div class="row-actions-menu">
+                           <button class="info" onclick="startPreparingOrder('${o.id}')"><i class="fas fa-box-open"></i> بدء التجهيز</button>
+                           <button class="danger" onclick="rejectOrder('${o.id}')"><i class="fas fa-times"></i> رفض الطلب</button>
+                         </div>
+                       </div>`;
+                } else if (o.status === 'preparing') {
+                    actions = `<button class="btn btn-primary btn-sm" onclick="viewOrderAsInvoice('${o.id}')"><i class="fas fa-file-invoice"></i> فتح الفاتورة</button>
+                       <div class="row-actions-wrap">
+                         <button class="row-actions-btn" onclick="toggleRowActionsMenu(this)">الإجراء <i class="fas fa-caret-down"></i></button>
+                         <div class="row-actions-menu">
+                           <button class="success" onclick="fulfillOrder('${o.id}')"><i class="fas fa-check"></i> تم التجهيز</button>
+                           <button onclick="cancelPreparingOrder('${o.id}')"><i class="fas fa-undo"></i> إلغاء التجهيز</button>
+                           <button class="danger" onclick="rejectOrder('${o.id}')"><i class="fas fa-times"></i> رفض الطلب</button>
+                         </div>
+                       </div>`;
+                } else {
+                    actions = `<button class="btn btn-primary btn-sm" onclick="viewOrderAsInvoice('${o.id}')"><i class="fas fa-file-invoice"></i> عرض الفاتورة</button>`;
+                }
 
-                // تلوين الطلب لو لسه معلّق من فترة طويلة عشان محدش ينساه
+                // تلوين الطلب لو لسه معلّق أو قيد التجهيز من فترة طويلة عشان محدش ينساه
                 let rowClass = '';
-                if (o.status === 'pending' && o.createdAt) {
+                if ((o.status === 'pending' || o.status === 'preparing') && o.createdAt) {
                     const minutesAgo = (Date.now() - o.createdAt) / 60000;
                     if (minutesAgo >= 20) rowClass = 'order-row-danger';
                     else if (minutesAgo >= 8) rowClass = 'order-row-warn';
                 }
-                const cb = o.status === 'pending'
+                const cb = (o.status === 'pending' || o.status === 'preparing')
                     ? `<input type="checkbox" class="order-select-cb" data-id="${o.id}" onchange="toggleOrderSelect('${o.id}', this.checked)" ${selectedBulkOrderIds.has(o.id) ? 'checked' : ''}>`
                     : '';
                 let ratingHtml = '';
@@ -2852,13 +3024,158 @@
 
         function switchOrdersTab(tab) {
             ordersCurrentTab = tab;
-            ['pending', 'fulfilled', 'rejected', 'all'].forEach(t => {
+            ['pending', 'preparing', 'fulfilled', 'rejected', 'all', 'byCustomer'].forEach(t => {
                 const btn = document.getElementById('ordersTabBtn-' + t);
                 if (btn) btn.classList.toggle('active', t === tab);
             });
             selectedBulkOrderIds.clear();
             renderCustomerOrders();
         }
+
+        // تجميع الطلبات المفتوحة (جديد + قيد التجهيز) حسب العميل، عشان تشوف مين أكتر عميل نشط
+        // دلوقتي من غير ما تتصفح كل طلب لوحده
+        function renderOrdersByCustomer() {
+            const tbody = document.getElementById('ordersByCustomerTable');
+            if (!tbody) return;
+            const searchEl = document.getElementById('ordersSearch');
+            const q = searchEl ? searchEl.value.trim().toLowerCase() : '';
+            const open = customerOrders.filter(o => (o.status === 'pending' || o.status === 'preparing') && (!q || [o.customerName, o.shopName, o.phone, o.customerCode].filter(Boolean).join(' ').toLowerCase().indexOf(q) !== -1));
+            if (open.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="empty-state"><i class="fas fa-shopping-basket"></i><h3>لا توجد طلبات مفتوحة حاليًا</h3></td></tr>`;
+                return;
+            }
+            const groups = {};
+            open.forEach(o => {
+                const key = o.customerCode || o.phone || o.customerName || 'غير معروف';
+                if (!groups[key]) groups[key] = { customerName: o.customerName || o.customerCode || 'غير معروف', customerCode: o.customerCode || '', phone: o.phone || '', count: 0, total: 0, lastOrderAt: 0 };
+                groups[key].count++;
+                groups[key].total += (o.total || (o.items || []).reduce((s, it) => s + (it.total || (it.price * it.qty) || 0), 0));
+                if ((o.createdAt || 0) > groups[key].lastOrderAt) groups[key].lastOrderAt = o.createdAt || 0;
+            });
+            const rows = Object.values(groups).sort((a, b) => b.total - a.total).map(g => `
+                <tr>
+                    <td>${g.customerName}<br><span style="font-size:11px;color:var(--text-light);">${g.phone || g.customerCode || ''}</span></td>
+                    <td><span class="badge badge-warning">${g.count}</span></td>
+                    <td><strong style="color:var(--accent);">${g.total.toFixed(2)} ر.س</strong></td>
+                    <td>${g.lastOrderAt ? new Date(g.lastOrderAt).toLocaleString('ar-EG') : '-'}</td>
+                    <td><button class="btn btn-primary btn-sm" onclick="viewCustomerOpenOrders('${(g.customerCode || '').replace(/'/g, "\\'")}', '${(g.customerName || '').replace(/'/g, "\\'")}')"><i class="fas fa-eye"></i> عرض طلباته</button></td>
+                </tr>`).join('');
+            tbody.innerHTML = rows;
+        }
+
+        // من عرض "حسب العميل"، تدوس على عميل تشوف كل طلباته المفتوحة لوحدها في العرض العادي
+        function viewCustomerOpenOrders(customerCode, customerName) {
+            const searchEl = document.getElementById('ordersSearch');
+            if (searchEl) searchEl.value = customerCode || customerName || '';
+            switchOrdersTab('all');
+        }
+
+        // كارت الملخص السريع اليومي فوق تبويبات طلبات الأبليكشن (عدد الطلبات، عدد العملاء، متوسط
+        // ومجموع القيمة) — بيغطي كل طلبات اليوم بأي حالة، عشان تاخد نبضة سريعة من أول ما تفتح الصفحة
+        // بيرجع الطلبات اللي تخص "نطاق" التبويب المفتوح دلوقتي، بغض النظر عن التاريخ (كل الطلبات
+        // اللي بالحالة دي من الأول لحد دلوقتي) — نفس المنطق اللي بيتحسب بيه الكارت والتقرير مع بعض
+        function getOrdersStatusScopeForTab(tab) {
+            if (tab === 'all') return null;
+            if (tab === 'byCustomer') return ['pending', 'preparing'];
+            return [tab];
+        }
+        function getScopedOrders(tab) {
+            const statuses = getOrdersStatusScopeForTab(tab);
+            return statuses ? customerOrders.filter(o => statuses.includes(o.status)) : customerOrders.slice();
+        }
+        const ORDERS_TAB_LABELS = { pending: 'جديد', preparing: 'قيد التجهيز', fulfilled: 'تم التجهيز', rejected: 'مرفوض', all: 'كل الطلبات', byCustomer: 'الطلبات المفتوحة' };
+
+        // كارت الملخص فوق تبويبات طلبات الأبليكشن، بيحسب على أساس التبويب المفتوح دلوقتي بالظبط
+        // (كل الطلبات في التاريخ اللي بالحالة دي، مش بس اليوم)
+        function updateOrdersTodayStats() {
+            const countEl = document.getElementById('ordersTodayCount');
+            if (!countEl) return;
+            const scoped = getScopedOrders(ordersCurrentTab);
+            const total = scoped.reduce((s, o) => s + (o.total || (o.items || []).reduce((s2, it) => s2 + (it.total || (it.price * it.qty) || 0), 0)), 0);
+            const uniqueCustomers = new Set(scoped.map(o => o.customerCode || o.phone || o.customerName)).size;
+            const uniqueProducts = new Set();
+            scoped.forEach(o => (o.items || []).forEach(it => uniqueProducts.add(it.productCode || it.productName)));
+            const numFmt = n => Number(n || 0).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+            countEl.textContent = scoped.length.toLocaleString('ar-EG');
+            const custEl = document.getElementById('ordersTodayCustomers'); if (custEl) custEl.textContent = uniqueCustomers.toLocaleString('ar-EG');
+            const prodEl = document.getElementById('ordersTodayProducts'); if (prodEl) prodEl.textContent = uniqueProducts.size.toLocaleString('ar-EG');
+            const avgEl = document.getElementById('ordersTodayAvg'); if (avgEl) avgEl.textContent = numFmt(scoped.length ? (total / scoped.length) : 0) + ' ر.س';
+            const totalEl = document.getElementById('ordersTodayTotal'); if (totalEl) totalEl.textContent = numFmt(total) + ' ر.س';
+
+            const scopeLabelEl = document.getElementById('ordersStatsScopeLabel');
+            if (scopeLabelEl) scopeLabelEl.textContent = '📊 ملخص: ' + (ORDERS_TAB_LABELS[ordersCurrentTab] || 'الطلبات');
+
+            // التفصيل حسب الحالة يظهر بس لما التبويب بيجمع أكتر من حالة (الكل / الطلبات المفتوحة)
+            const breakdownEl = document.getElementById('ordersTodayBreakdown');
+            if (breakdownEl) {
+                if (ordersCurrentTab === 'all' || ordersCurrentTab === 'byCustomer') {
+                    const pendingCount = scoped.filter(o => o.status === 'pending').length;
+                    const preparingCount = scoped.filter(o => o.status === 'preparing').length;
+                    const fulfilledCount = scoped.filter(o => o.status === 'fulfilled').length;
+                    let html = '';
+                    if (pendingCount) html += `<span class="b-pending">🆕 ${pendingCount} جديد</span>`;
+                    if (preparingCount) html += `<span class="b-preparing">⏳ ${preparingCount} قيد التجهيز</span>`;
+                    if (ordersCurrentTab === 'all' && fulfilledCount) html += `<span class="b-fulfilled">✅ ${fulfilledCount} تم تجهيزه</span>`;
+                    breakdownEl.innerHTML = html;
+                } else {
+                    breakdownEl.innerHTML = '';
+                }
+            }
+        }
+
+        // تقرير تجميع احتياج المنتجات عبر كل الطلبات المفتوحة (جديد + قيد التجهيز)، مقارنة بالمتاح
+        // بالمخزون، عشان تجهّز الكميات الأول وتتفادى تعارض الكميات بين طلبين على نفس الصنف
+        function showProductsNeededReport() {
+            const scoped = getScopedOrders(ordersCurrentTab);
+            const needs = {};
+            scoped.forEach(o => {
+                (o.items || []).forEach(item => {
+                    const product = products.find(p => p.code === item.productCode);
+                    const isSecondary = product && product.secondaryUnit && item.unit === product.secondaryUnit.name;
+                    const deductQty = isSecondary ? (item.qty / product.secondaryUnit.factor) : item.qty;
+                    if (!needs[item.productCode]) needs[item.productCode] = { name: item.productName, qty: 0 };
+                    needs[item.productCode].qty += deductQty;
+                });
+            });
+            const rows = Object.keys(needs).map(code => {
+                const n = needs[code];
+                const available = inventory[code] ? (inventory[code].qty || 0) : 0;
+                const short = available < n.qty;
+                return { code, name: n.name, needed: n.qty, available, short };
+            }).sort((a, b) => (b.short - a.short) || (b.needed - a.needed));
+
+            const titleEl = document.getElementById('productsNeededModalTitle');
+            if (titleEl) titleEl.textContent = 'تقرير المنتجات — ' + (ORDERS_TAB_LABELS[ordersCurrentTab] || 'الطلبات');
+
+            const tbody = document.getElementById('productsNeededTable');
+            if (rows.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="empty-state"><i class="fas fa-boxes"></i><h3>لا توجد طلبات في هذا التبويب حاليًا</h3></td></tr>`;
+            } else {
+                tbody.innerHTML = rows.map(r => `
+                    <tr>
+                        <td>${r.name}</td>
+                        <td>${r.needed.toFixed(2)}</td>
+                        <td>${r.available.toFixed(2)}</td>
+                        <td><span class="badge ${r.short ? 'badge-danger' : 'badge-success'}">${r.short ? 'غير كافي' : 'كافي'}</span></td>
+                    </tr>`).join('');
+            }
+            openModal('productsNeededModal');
+        }
+
+
+        // فتح/قفل قايمة "الإجراء" السريعة لكل صف طلب (بتقفل أي قايمة تانية مفتوحة قبل ما تفتح دي)
+        function toggleRowActionsMenu(btn) {
+            const menu = btn.nextElementSibling;
+            const wasOpen = menu.classList.contains('show');
+            document.querySelectorAll('.row-actions-menu.show').forEach(m => m.classList.remove('show'));
+            if (!wasOpen) menu.classList.add('show');
+        }
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.row-actions-wrap')) {
+                document.querySelectorAll('.row-actions-menu.show').forEach(m => m.classList.remove('show'));
+            }
+        });
 
         function clearOrdersFilters() {
             const s = document.getElementById('ordersSearch'); if (s) s.value = '';
@@ -3029,6 +3346,7 @@
                 };
                 invoices.push(invoice);
                 localStorage.setItem('invoices', JSON.stringify(invoices));
+                if (db) db.collection('invoiceRecords').doc(String(invoice.id)).set(invoice).catch(function(e) { console.error('app-order invoice sync failed:', e); });
                 logAction('تجهيز طلب أبليكشن', `تم تجهيز الطلب #${order.id.slice(-6)} للعميل ${invoice.customerName} وتحويله لفاتورة بيع #${invoice.number}`);
 
                 // العميل اللي طلب من الأبليكشن قد يكون أول مرة يتعامل معانا (سجّل برقمه بس، مش مضاف يدويًا في نظام المعلم).
@@ -3144,6 +3462,41 @@
                     if (ord && ord.customerCode) sendPushNotification(ord.customerCode, 'تم رفض طلبك', updateData.rejectionReason ? ('السبب: ' + updateData.rejectionReason) : 'للاستفسار كلم المعلم');
                 })
                 .catch(err => { console.error(err); showToast('تعذر رفض الطلب', 'error'); });
+        }
+
+        // بدء تجهيز الطلب: مرحلة وسيطة بين "جديد" و"تم التجهيز"، عشان تعرف إن حد فعليًا شايل الطلب
+        // ده دلوقتي، ومنع أكتر من حد يجهزوا نفس الطلب في نفس الوقت من غير ما يعرفوا
+        function startPreparingOrder(orderId) {
+            if (!db) { showToast('لا يوجد اتصال بالسحابة', 'error'); return; }
+            const order = customerOrders.find(o => o.id === orderId);
+            if (!order) return;
+            db.collection('customerOrders').doc(orderId).update({ status: 'preparing', preparingAt: Date.now(), preparingBy: DEVICE_ID })
+                .then(function() {
+                    order.status = 'preparing';
+                    localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
+                    renderCustomerOrders();
+                    updatePendingOrdersBadge();
+                    showToast('بدأ تجهيز الطلب');
+                    if (order.customerCode) sendPushNotification(order.customerCode, 'جاري تجهيز طلبك ⏳', 'طلبك #' + order.id.slice(-6) + ' دلوقتي قيد التجهيز');
+                })
+                .catch(err => { console.error(err); showToast('تعذر تحديث حالة الطلب', 'error'); });
+        }
+
+        // لو حد بدأ تجهيز طلب بالغلط، يقدر يرجّعه لـ"جديد" تاني
+        function cancelPreparingOrder(orderId) {
+            if (!db) return;
+            if (!confirm('تأكيد إلغاء التجهيز والرجوع بالطلب لحالة "جديد"؟')) return;
+            const order = customerOrders.find(o => o.id === orderId);
+            if (!order) return;
+            db.collection('customerOrders').doc(orderId).update({ status: 'pending', preparingAt: firebase.firestore.FieldValue.delete(), preparingBy: firebase.firestore.FieldValue.delete() })
+                .then(function() {
+                    order.status = 'pending';
+                    localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
+                    renderCustomerOrders();
+                    updatePendingOrdersBadge();
+                    showToast('تم إلغاء التجهيز، الطلب رجع لحالة "جديد"');
+                })
+                .catch(err => { console.error(err); showToast('تعذر تحديث حالة الطلب', 'error'); });
         }
 
         // ==================== INITIALIZATION ====================
@@ -3290,15 +3643,17 @@
         }
 
         function logAction(type, details) {
-            auditLog.push({
-                id: Date.now() + Math.random(),
+            const entry = {
+                id: Date.now() + '-' + Math.random().toString(36).slice(2, 8),
                 date: new Date().toISOString(),
                 username: currentUser ? currentUser.username : 'غير معروف',
                 fullName: currentUser ? currentUser.fullName : 'غير معروف',
                 role: currentUser && ROLES[currentUser.role] ? ROLES[currentUser.role].label : '-',
                 type, details
-            });
+            };
+            auditLog.push(entry);
             saveAuditLog();
+            if (db) db.collection('auditLogRecords').doc(String(entry.id)).set(entry).catch(function(e) { console.error('audit log sync failed:', e); });
         }
 
         // ==================== USERS MANAGEMENT ====================
@@ -3477,9 +3832,15 @@
             return max + 1;
         }
 
+        // عداد بسيط بيتزود مع كل استدعاء عشان نضمن إن كل حركة مخزون تاخد رقم فريد تمامًا حتى لو
+        // اتسجلت أكتر من حركة في نفس الجزء من الألف من الثانية (بيحصل كتير جوه حلقة items.forEach)
+        let _stockMovementSeq = 0;
         function addStockMovement(productCode, productName, type, qty, balanceAfter, reference, notes) {
-            stockMovements.unshift({ id: Date.now(), date: new Date().toISOString(), productCode, productName, type, qty, balanceAfter, reference, notes: notes || '' });
+            _stockMovementSeq++;
+            const movement = { id: Date.now() + '-' + _stockMovementSeq + '-' + Math.random().toString(36).slice(2, 6), date: new Date().toISOString(), productCode, productName, type, qty, balanceAfter, reference, notes: notes || '' };
+            stockMovements.unshift(movement);
             saveStockMovements();
+            if (db) db.collection('stockMovementRecords').doc(String(movement.id)).set(movement).catch(function(e) { console.error('stock movement sync failed:', e); });
         }
 
         function addTreasuryEntry(type, amount, party, partyType, notes, reference, isDebtRelated = true) {
@@ -3530,7 +3891,48 @@
             purchaseReturns.forEach(r => {
                 if (r.supplierCode === supplierCode && r.affectsBalance) balance -= r.grandTotal;
             });
+            supplierAdjustments.forEach(a => { if (a.supplierCode === supplierCode) balance += a.diff; });
             return balance;
+        }
+
+        function saveSupplierAdjustments() { localStorage.setItem('supplierAdjustments', JSON.stringify(supplierAdjustments)); }
+
+        // تسوية يدوية لرصيد مورد (متاحة للمدير بس): بتحسب الفرق بين الرصيد الحالي المحسوب والرصيد
+        // الصحيح اللي المدير كاتبه، وبتسجله كحركة تسوية منفصلة بدل ما تلمس أي فاتورة أو سند قديم
+        function openSupplierAdjustmentModal(supplierCode) {
+            if (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin') { showToast('تعديل إجمالي مديونية المورد متاح للمدير فقط', 'error'); return; }
+            const supplier = suppliers.find(s => s.code === supplierCode);
+            if (!supplier) return;
+            const current = getSupplierBalance(supplierCode);
+            document.getElementById('supplierAdjustmentCode').value = supplierCode;
+            document.getElementById('supplierAdjustmentName').textContent = supplier.name;
+            document.getElementById('supplierAdjustmentCurrent').textContent = current.toFixed(2) + ' ر.س';
+            document.getElementById('supplierAdjustmentNew').value = current.toFixed(2);
+            document.getElementById('supplierAdjustmentNotes').value = '';
+            openModal('supplierAdjustmentModal');
+        }
+
+        function saveSupplierAdjustment() {
+            if (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin') { showToast('تعديل إجمالي مديونية المورد متاح للمدير فقط', 'error'); return; }
+            const code = document.getElementById('supplierAdjustmentCode').value;
+            const newBalance = parseFloat(document.getElementById('supplierAdjustmentNew').value);
+            const notes = document.getElementById('supplierAdjustmentNotes').value.trim();
+            if (isNaN(newBalance)) { showToast('الرجاء إدخال رقم صحيح', 'error'); return; }
+            const current = getSupplierBalance(code);
+            const diff = newBalance - current;
+            if (Math.abs(diff) < 0.001) { showToast('لا يوجد فرق لتسجيله'); closeModal('supplierAdjustmentModal'); return; }
+            const supplier = suppliers.find(s => s.code === code);
+            supplierAdjustments.push({
+                id: Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+                supplierCode: code, date: new Date().toISOString(),
+                previousBalance: current, newBalance, diff, notes,
+                by: currentUser.fullName || currentUser.username
+            });
+            saveSupplierAdjustments();
+            logAction('تسوية مديونية مورد', `تم تعديل رصيد المورد "${supplier ? supplier.name : code}" من ${current.toFixed(2)} إلى ${newBalance.toFixed(2)} ر.س${notes ? ' — ' + notes : ''}`);
+            renderSuppliers(); renderSupplierStatement(); updateDashboardStats();
+            closeModal('supplierAdjustmentModal');
+            showToast('تم تعديل رصيد المورد بنجاح');
         }
 
         function getCustomerTotalCollected(customerCode) {
@@ -4174,7 +4576,6 @@
             const preview = document.getElementById('appBannerImagePreview');
             if (banner && banner.imageUrl) { preview.src = banner.imageUrl; preview.style.display = 'inline-block'; } else { preview.style.display = 'none'; preview.src = ''; }
             document.getElementById('appBannerImageUploadStatus').textContent = '';
-            document.getElementById('appBannerPlacement').value = banner ? (banner.placement || 'top') : 'top';
             document.getElementById('appBannerLinkType').value = banner ? banner.linkType : 'none';
             toggleBannerLinkValueField();
             if (banner && banner.linkValue) document.getElementById('appBannerLinkValue').value = banner.linkValue;
@@ -4185,7 +4586,6 @@
             const title = document.getElementById('appBannerTitle').value.trim();
             if (!title) { showToast('الرجاء إدخال عنوان البانر', 'error'); return; }
             const subtitle = document.getElementById('appBannerSubtitle').value.trim();
-            const placement = document.getElementById('appBannerPlacement').value;
             const order = parseInt(document.getElementById('appBannerOrder').value) || 0;
             const active = document.getElementById('appBannerActive').checked;
             const linkType = document.getElementById('appBannerLinkType').value;
@@ -4195,9 +4595,9 @@
                 const imageUrl = url || document.getElementById('appBannerImageUrl').value || null;
                 if (editingAppBanner) {
                     const idx = appBanners.findIndex(b => b.id === editingAppBanner.id);
-                    if (idx !== -1) appBanners[idx] = { ...appBanners[idx], title, subtitle, placement, order, active, linkType, linkValue, imageUrl };
+                    if (idx !== -1) appBanners[idx] = { ...appBanners[idx], title, subtitle, order, active, linkType, linkValue, imageUrl };
                 } else {
-                    appBanners.push({ id: 'banner_' + Date.now(), title, subtitle, placement, order, active, linkType, linkValue, imageUrl });
+                    appBanners.push({ id: 'banner_' + Date.now(), title, subtitle, order, active, linkType, linkValue, imageUrl });
                 }
                 localStorage.setItem('appBanners', JSON.stringify(appBanners));
                 logAction(editingAppBanner ? 'تعديل بانر' : 'إضافة بانر', `البانر: ${title}`);
@@ -4227,11 +4627,10 @@
             const tbody = document.getElementById('appBannersTable');
             if (!tbody) return;
             if (appBanners.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" class="empty-state"><i class="fas fa-images"></i><h3>لا توجد بانرات مضافة بعد</h3></td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="6" class="empty-state"><i class="fas fa-images"></i><h3>لا توجد بانرات مضافة بعد</h3></td></tr>`;
                 return;
             }
             const linkLabels = { none: 'بدون رابط', category: 'قسم: ', product: 'صنف: ' };
-            const placementLabels = { top: 'أعلى الرئيسية', offers: 'آخر العروض' };
             const sorted = [...appBanners].sort((a, b) => a.order - b.order);
             tbody.innerHTML = sorted.map(b => {
                 let linkText = linkLabels[b.linkType] || '-';
@@ -4241,7 +4640,6 @@
                     <td>${b.imageUrl ? `<img src="${b.imageUrl}" style="width:60px;height:36px;object-fit:cover;border-radius:6px;">` : '-'}</td>
                     <td><strong>${b.title}</strong>${b.subtitle ? `<br><span style="font-size:11px;color:var(--text-light);">${b.subtitle}</span>` : ''}</td>
                     <td>${linkText}</td>
-                    <td><span class="badge badge-info">${placementLabels[b.placement || 'top']}</span></td>
                     <td>${b.order}</td>
                     <td><span class="badge ${b.active !== false ? 'badge-success' : 'badge-danger'}" style="cursor:pointer;" onclick="toggleAppBannerActive('${b.id}')">${b.active !== false ? 'مفعّل' : 'موقوف'}</span></td>
                     <td><button class="btn btn-primary btn-icon btn-sm" onclick='openAppBannerModal(${JSON.stringify(b).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
@@ -5004,6 +5402,7 @@
                 return `<tr><td><span class="badge badge-orange">${s.code}</span></td><td><strong>${s.name}</strong></td><td>${s.phone || '-'}</td><td>${s.address || '-'}</td>
                 <td><span class="customer-balance ${balanceClass}">${balanceText}</span></td>
                 <td><button class="btn btn-primary btn-icon btn-sm" onclick='openSupplierModal(${JSON.stringify(s).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
+                ${currentUser && String(currentUser.role || '').trim().toLowerCase() === 'admin' ? `<button class="btn btn-secondary btn-icon btn-sm" title="تعديل إجمالي المديونية" onclick="openSupplierAdjustmentModal('${s.code}')"><i class="fas fa-balance-scale"></i></button>` : ''}
                 <button class="btn btn-danger btn-icon btn-sm" onclick="deleteSupplier('${s.code}')"><i class="fas fa-trash"></i></button></td></tr>`;
             }).join('');
             updateSupplierStatementSelect();
@@ -5364,6 +5763,11 @@
         }
 
         function deleteTreasuryEntry(id) {
+            const entryCheck = treasury.find(t => t.id === id);
+            if (entryCheck && entryCheck.partyType === 'supplier' && (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin')) {
+                showToast('حذف سندات الصرف للموردين متاح للمدير فقط', 'error');
+                return;
+            }
             if (!confirm('هل أنت متأكد من حذف هذه الحركة؟')) return;
             treasury = treasury.filter(t => t.id !== id);
             // Recalculate balances
@@ -5379,6 +5783,10 @@
         function undoLastTreasuryEntry() {
             if (treasury.length === 0) { showToast('لا توجد حركات لإلغائها', 'error'); return; }
             const last = treasury.slice().sort((a, b) => b.id - a.id)[0];
+            if (last.partyType === 'supplier' && (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin')) {
+                showToast('التراجع عن سندات الصرف للموردين متاح للمدير فقط', 'error');
+                return;
+            }
             const partyName = last.partyType === 'customer' ? (customers.find(c => c.code === last.party)?.name || last.party) :
                                last.partyType === 'supplier' ? (suppliers.find(s => s.code === last.party)?.name || last.party) : last.party;
             if (!confirm(`تراجع عن آخر حركة؟\nالنوع: ${last.type === 'in' ? 'قبض' : 'صرف'}\nالمبلغ: ${last.amount.toFixed(2)} ر.س\nالجهة: ${partyName}`)) return;
@@ -5489,8 +5897,7 @@
             const rowNum = tbody.children.length + 1;
             const options = products.map(p => {
                 const inv = inventory[p.code] || { qty: 0 };
-                const unitCost = (inv.cost != null ? inv.cost : (p.cost || 0));
-                return `<option value="${p.code}" data-price="${p.price}" data-unit="${p.unit}" data-stock="${inv.qty}" data-cost="${unitCost}"
+                return `<option value="${p.code}" data-price="${p.price}" data-unit="${p.unit}" data-stock="${inv.qty}"
                     data-sec-unit="${p.secondaryUnit ? p.secondaryUnit.name : ''}" data-sec-price="${p.secondaryUnit ? p.secondaryUnit.price : ''}"
                     data-sec-factor="${p.secondaryUnit ? p.secondaryUnit.factor : ''}">${p.name} (مخزون: ${inv.qty} ${p.unit})</option>`;
             }).join('');
@@ -5501,7 +5908,7 @@
                 <td><select class="form-control unit-field" onchange="onInvoiceUnitChange(this)" style="min-width:90px;"><option value="">-</option></select></td>
                 <td><input type="number" class="form-control stock-field" readonly style="background:#f8f9fa;color:var(--primary);font-weight:700;"></td>
                 <td><input type="number" class="form-control qty-field" value="1" min="1" onchange="calculateInvoiceRow(this)"></td>
-                <td><input type="number" class="form-control price-field" min="0" step="0.01" onchange="calculateInvoiceRow(this)" title="السعر قابل للتعديل — مثلاً لبيع بسعر الجملة"></td>
+                <td><input type="number" class="form-control price-field" readonly style="background:#f8f9fa"></td>
                 <td><input type="number" class="form-control total-field" readonly style="background:#f8f9fa;font-weight:700;color:var(--primary)"></td>
                 <td><button class="btn btn-danger btn-icon btn-sm btn-delete-row" onclick="removeInvoiceRow(this)"><i class="fas fa-times"></i></button></td>`;
             tbody.appendChild(row);
@@ -5520,7 +5927,6 @@
             }
             unitSelect.innerHTML = unitOptions;
             unitSelect.dataset.baseStock = option.dataset.stock;
-            row.dataset.unitCost = option.dataset.cost || 0;
             onInvoiceUnitChange(unitSelect);
         }
 
@@ -5539,23 +5945,11 @@
         function calculateInvoiceRow(input) {
             const row = input.closest('tr');
             const qty = parseFloat(row.querySelector('.qty-field').value) || 0;
-            const priceField = row.querySelector('.price-field');
-            const price = parseFloat(priceField.value) || 0;
+            const price = parseFloat(row.querySelector('.price-field').value) || 0;
             const stock = parseFloat(row.querySelector('.stock-field').value) || 0;
             const qtyInput = row.querySelector('.qty-field');
             if (qty > stock) { qtyInput.style.borderColor = 'var(--danger)'; qtyInput.style.background = 'rgba(231,76,60,0.05)'; }
             else { qtyInput.style.borderColor = ''; qtyInput.style.background = ''; }
-            // تنبيه بصري بس (مش مانع) لو السعر اللي كتبته أقل من تكلفة الصنف، عشان تنتبه لو غلطت في الرقم
-            // بالخطأ وتبيع بخسارة من غير قصد. القرار النهائي يفضل ليك، الفاتورة بتتحفظ عادي حتى لو السعر أقل من التكلفة.
-            const factor = parseFloat(row.dataset.unitFactor) || 1;
-            const unitCost = (parseFloat(row.dataset.unitCost) || 0) / factor;
-            if (price > 0 && unitCost > 0 && price < unitCost) {
-                priceField.style.borderColor = 'var(--warning)'; priceField.style.background = 'rgba(243,156,18,0.08)';
-                priceField.title = `تنبيه: السعر ده أقل من تكلفة الصنف (${unitCost.toFixed(2)} ر.س) — هتبيع بخسارة`;
-            } else {
-                priceField.style.borderColor = ''; priceField.style.background = '';
-                priceField.title = 'السعر قابل للتعديل — مثلاً لبيع بسعر الجملة';
-            }
             row.querySelector('.total-field').value = (qty * price).toFixed(2);
             calculateGrandTotal();
         }
@@ -5651,6 +6045,7 @@
             };
             invoices.push(invoice);
             localStorage.setItem('invoices', JSON.stringify(invoices));
+            if (db) db.collection('invoiceRecords').doc(String(invoice.id)).set(invoice).catch(function(e) { console.error('invoice sync failed:', e); showToast('تعذر رفع الفاتورة للسحابة (' + (e && e.code ? e.code : e) + ')', 'error', 8000); });
             logAction('فاتورة بيع', `تم إنشاء فاتورة بيع #${invoice.number} للعميل ${invoice.customerName} بقيمة ${grandTotal.toFixed(2)} ر.س`);
             showToast('تم حفظ الفاتورة وخصم المخزون بنجاح');
             resetInvoice(); updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderTopProducts(); renderPaymentSummary(); updateSalesChart(); renderInventory(); renderMovements(); renderLowStock(); renderTreasury();
@@ -5775,6 +6170,7 @@
             };
             purchaseInvoices.push(invoice);
             localStorage.setItem('purchaseInvoices', JSON.stringify(purchaseInvoices));
+            if (db) db.collection('purchaseInvoiceRecords').doc(String(invoice.id)).set(invoice).catch(function(e) { console.error('purchase invoice sync failed:', e); showToast('تعذر رفع فاتورة الشراء للسحابة (' + (e && e.code ? e.code : e) + ')', 'error', 8000); });
             logAction('فاتورة شراء', `تم إنشاء فاتورة شراء #${invoice.number} من المورد ${invoice.supplier} بقيمة ${grandTotal.toFixed(2)} ر.س`);
             showToast('تم حفظ فاتورة الشراء وإضافة المخزون بنجاح');
             resetPurchaseInvoice(); updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderInventory(); renderMovements(); renderLowStock(); renderTreasury();
@@ -5847,6 +6243,13 @@
         }
 
         function deleteAnyInvoice(id, type) {
+            if (type === 'purchase') {
+                const invCheck = purchaseInvoices.find(i => i.id === id);
+                if (invCheck && invCheck.paymentMethod === 'آجل' && (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin')) {
+                    showToast('حذف فواتير الشراء الآجلة متاح للمدير فقط', 'error');
+                    return;
+                }
+            }
             if (!confirm('هل أنت متأكد من حذف هذه الفاتورة؟')) return;
             if (type === 'sale') {
                 const inv = invoices.find(i => i.id === id);
@@ -5864,6 +6267,7 @@
                 }
                 invoices = invoices.filter(i => i.id !== id);
                 localStorage.setItem('invoices', JSON.stringify(invoices));
+                if (db) db.collection('invoiceRecords').doc(String(id)).delete().catch(function(e) { console.error('invoice delete sync failed:', e); });
             } else {
                 const inv = purchaseInvoices.find(i => i.id === id);
                 if (inv) {
@@ -5880,6 +6284,7 @@
                 }
                 purchaseInvoices = purchaseInvoices.filter(i => i.id !== id);
                 localStorage.setItem('purchaseInvoices', JSON.stringify(purchaseInvoices));
+                if (db) db.collection('purchaseInvoiceRecords').doc(String(id)).delete().catch(function(e) { console.error('purchase invoice delete sync failed:', e); });
             }
             renderInvoices(); renderRecentInvoices(); updateDashboardStats(); renderTopProducts(); renderPaymentSummary(); updateSalesChart(); renderInventory(); renderMovements(); renderLowStock(); renderTreasury();
             showToast('تم حذف الفاتورة');
@@ -5891,6 +6296,10 @@
         function openEditInvoiceModal(id, type) {
             const invoice = type === 'sale' ? invoices.find(i => i.id === id) : purchaseInvoices.find(i => i.id === id);
             if (!invoice) return;
+            if (type === 'purchase' && invoice.paymentMethod === 'آجل' && (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin')) {
+                showToast('تعديل فواتير الشراء الآجلة متاح للمدير فقط', 'error');
+                return;
+            }
             editingInvoiceId = id;
             editingInvoiceType = type;
             editInvoiceItems = JSON.parse(JSON.stringify(invoice.items));
@@ -5969,6 +6378,7 @@
                 inv.totalCost = editInvoiceItems.reduce((s, i) => s + ((i.cost || 0) * (i.stockDeductQty != null ? i.stockDeductQty : i.qty)), 0);
                 inv.totalProfit = editInvoiceItems.reduce((s, i) => s + (i.profit || 0), 0);
                 localStorage.setItem('invoices', JSON.stringify(invoices));
+                if (db) db.collection('invoiceRecords').doc(String(inv.id)).set(inv).catch(function(e) { console.error('invoice edit sync failed:', e); });
                 saveInventory();
                 logAction('تعديل فاتورة بيع', `تم تعديل الفاتورة #${inv.number} وتصحيح المخزون تلقائيًا`);
             } else {
@@ -5996,6 +6406,7 @@
                 inv.items = editInvoiceItems;
                 inv.grandTotal = newGrandTotal;
                 localStorage.setItem('purchaseInvoices', JSON.stringify(purchaseInvoices));
+                if (db) db.collection('purchaseInvoiceRecords').doc(String(inv.id)).set(inv).catch(function(e) { console.error('purchase invoice edit sync failed:', e); });
                 saveInventory();
                 logAction('تعديل فاتورة شراء', `تم تعديل الفاتورة #${inv.number} وتصحيح المخزون تلقائيًا`);
             }
@@ -6012,7 +6423,7 @@
 
         function buildOrderInvoiceHtml(order) {
             const dateStr = order.createdAt ? new Date(order.createdAt).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' }) : '-';
-            const statusMap = { pending: 'جديد - قيد الانتظار', fulfilled: 'تم التجهيز', rejected: 'مرفوض' };
+            const statusMap = { pending: 'جديد - قيد الانتظار', preparing: 'قيد التجهيز', fulfilled: 'تم التجهيز', rejected: 'مرفوض' };
             const itemsRows = (order.items || []).map((item, idx) => `
                 <tr>
                     <td style="text-align:center;">${idx + 1}</td>
@@ -6067,7 +6478,7 @@
             document.getElementById('orderInvoiceSaveBtn').style.display = 'none';
             const editBtn = document.getElementById('orderInvoiceEditBtn');
             editBtn.innerHTML = '<i class="fas fa-edit"></i> تعديل الطلب';
-            editBtn.style.display = order.status === 'pending' ? 'inline-flex' : 'none';
+            editBtn.style.display = (order.status === 'pending' || order.status === 'preparing') ? 'inline-flex' : 'none';
             openModal('orderInvoiceModal');
         }
 
