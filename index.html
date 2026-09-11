@@ -2332,37 +2332,24 @@
             'purchaseReturns', 'supplierAdjustments', 'users', 'appCategories', 'appBrands', 'activationCodes', 'requireActivationCode', 'loyaltySettings', 'appBanners', 'appOffers', 'appCities', 'appRegions', 'appNeighborhoods', 'appNotifications'
         ]);
 
-        // ==================== الإشعارات الفورية (OneSignal) ====================
-        // ⚠️ حط هنا القيمتين بتاعتك من لوحة تحكم OneSignal (Settings > Keys & IDs)
-        const ONESIGNAL_APP_ID = "bd9f1359-0a6b-4dba-8a72-7401da5b809a";
-        const ONESIGNAL_REST_API_KEY = "os_v2_app_xwprgwiknng3vctsoqa5uw4atlrwmyshbv3eo25mck6vd5rsf3tqbvjiugzse5yymqkdegxfzh6b7uffp7d5xxxpj5n527tfrivg4ei";
+        // ==================== الإشعارات الفورية (OneSignal عبر وسيط Cloudflare Worker) ====================
+        // المتصفح ممنوع يتصل بـ OneSignal مباشرة (سياسة CORS)، فبنبعت الطلب لوسيط صغير مجاني
+        // (Cloudflare Worker) وهو اللي يتصل بـ OneSignal بدل المتصفح ويرجعلنا الرد.
+        const NOTIFICATION_PROXY_URL = "https://noisy-glitter-c1b3.abdelrahimkhaledwasfy.workers.dev";
 
         // بيرسل إشعار فوري لعميل واحد بعينه (targetPhone) أو لكل العملاء المشتركين (targetPhone = 'all')
         // ده بيتنفذ من متصفح الأدمن مباشرة وقت الحدث (تجهيز/رفض طلب، أو إرسال يدوي)، من غير أي سيرفر وسيط.
         function sendPushNotification(targetPhone, title, message) {
-            if (!ONESIGNAL_APP_ID || ONESIGNAL_APP_ID.indexOf('ضع-') === 0) {
-                console.warn('OneSignal لسه مش متظبط (App ID/REST API Key فاضيين) — الإشعار متبعتش.');
-                return Promise.resolve(false);
-            }
-            const body = {
-                app_id: ONESIGNAL_APP_ID,
-                target_channel: 'push',
-                headings: { ar: title, en: title },
-                contents: { ar: message, en: message }
-            };
-            if (targetPhone === 'all') { body.included_segments = ['Subscribed Users']; }
-            else { body.include_aliases = { external_id: [targetPhone] }; body.target_channel = 'push'; }
-
-            return fetch('https://api.onesignal.com/notifications', {
+            return fetch(NOTIFICATION_PROXY_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Key ' + ONESIGNAL_REST_API_KEY },
-                body: JSON.stringify(body)
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetPhone: targetPhone, title: title, message: message })
             }).then(function(res) { return res.json(); })
               .then(function(data) {
                   if (data.errors) { console.error('OneSignal send error:', data.errors); return false; }
                   return true;
               })
-              .catch(function(err) { console.error('OneSignal request failed:', err); return false; });
+              .catch(function(err) { console.error('Notification proxy request failed:', err); return false; });
         }
 
         let db = null;
