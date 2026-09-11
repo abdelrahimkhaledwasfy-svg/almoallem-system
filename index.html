@@ -3316,22 +3316,56 @@
             });
 
             const refs = (order.items || []).map(item => db.collection('stockLevels').doc(item.productCode));
+            const custLoyaltyRef = order.customerCode ? db.collection('customerLoyaltyPoints').doc(order.customerCode) : null;
+            const pv = loyaltySettings.pointValue || 1;
+            const itemsTotal = order.items.reduce((sum, it) => sum + (it.total || (it.price * it.qty) || 0), 0);
+
             return db.runTransaction(function(t) {
-                return Promise.all(refs.map(r => t.get(r))).then(function(snaps) {
-                    for (let i = 0; i < snaps.length; i++) {
+                const allRefs = custLoyaltyRef ? refs.concat([custLoyaltyRef]) : refs;
+                return Promise.all(allRefs.map(r => t.get(r))).then(function(snaps) {
+                    const stockSnaps = snaps.slice(0, refs.length);
+                    const loyaltySnap = custLoyaltyRef ? snaps[snaps.length - 1] : null;
+
+                    for (let i = 0; i < stockSnaps.length; i++) {
                         const item = order.items[i];
-                        const currentQty = snaps[i].exists ? (snaps[i].data().qty || 0) : 0;
+                        const currentQty = stockSnaps[i].exists ? (stockSnaps[i].data().qty || 0) : 0;
                         if (currentQty < item.stockDeductQty) {
                             throw new Error('الكمية غير متوفرة حاليًا للصنف: ' + item.productName + ' (المتاح: ' + currentQty + ')');
                         }
                     }
-                    for (let i = 0; i < snaps.length; i++) {
+
+                    // رصيد النقاط الفعلي بيتقرا هنا *داخل نفس المعاملة الذرية*. لو فيه طلب تاني لنفس
+                    // العميل بيتنفذ في نفس اللحظة (حتى من جهاز مختلف)، فايرستور بيعيد محاولة المعاملة
+                    // دي تلقائيًا لحد ما يقرا الرصيد الصحيح بعد خصم الطلب الأول، فمستحيل يتخصم نفس
+                    // الرصيد مرتين على طلبين مختلفين.
+                    const currentPoints = loyaltySnap && loyaltySnap.exists
+                        ? (loyaltySnap.data().points || 0)
+                        : (cust ? (cust.loyaltyPoints || 0) : 0);
+
+                    let pointsToDeduct = 0, appliedDiscount = 0;
+                    if (order.pointsRedeemed > 0) {
+                        pointsToDeduct = Math.min(order.pointsRedeemed, currentPoints);
+                        appliedDiscount = Math.min(pointsToDeduct * pv, itemsTotal, order.discountFromPoints || Infinity);
+                    }
+                    const grandTotal = Math.max(0, itemsTotal - appliedDiscount);
+                    const earnedPoints = Math.floor(grandTotal / (loyaltySettings.pointsPerAmount || 10));
+                    const newPoints = Math.max(0, currentPoints - pointsToDeduct) + earnedPoints;
+
+                    for (let i = 0; i < stockSnaps.length; i++) {
                         const item = order.items[i];
-                        const newQty = (snaps[i].data().qty || 0) - item.stockDeductQty;
+                        const newQty = (stockSnaps[i].data().qty || 0) - item.stockDeductQty;
                         t.set(refs[i], { code: item.productCode, qty: newQty, updatedAt: Date.now() });
                     }
+                    if (custLoyaltyRef) {
+                        t.set(custLoyaltyRef, { points: newPoints, updatedAt: Date.now() }, { merge: true });
+                    }
+
+                    return { pointsToDeduct, appliedDiscount, grandTotal, earnedPoints, newPoints };
                 });
-            }).then(function() {
+            }).then(function(txResult) {
+                const pointsToDeduct = txResult.pointsToDeduct, appliedDiscount = txResult.appliedDiscount,
+                      grandTotal = txResult.grandTotal, earnedPoints = txResult.earnedPoints, newPoints = txResult.newPoints;
+
                 // نجحت المعاملة على السحابة: دلوقتي نعكس نفس الخصم محليًا وننشئ الفاتورة
                 order.items.forEach(item => {
                     if (inventory[item.productCode]) {
@@ -3345,19 +3379,6 @@
                     }
                 });
                 localStorage.setItem('inventory', JSON.stringify(inventory));
-
-                const itemsTotal = order.items.reduce((sum, it) => sum + (it.total || (it.price * it.qty) || 0), 0);
-
-                // نطبّق خصم النقاط (لو العميل اختار يستخدم نقاطه وقت الطلب)، لكن بأمان: بنحسب أقصى نقاط
-                // مسموح خصمها بناءً على رصيده الفعلي *دلوقتي* (مش وقت إرسال الطلب)، عشان محدش يقدر
-                // يستخدم نفس النقاط مرتين في طلبين مختلفين لسه معلقين.
-                const pv = loyaltySettings.pointValue || 1;
-                let pointsToDeduct = 0, appliedDiscount = 0;
-                if (order.pointsRedeemed > 0 && cust) {
-                    pointsToDeduct = Math.min(order.pointsRedeemed, cust.loyaltyPoints || 0);
-                    appliedDiscount = Math.min(pointsToDeduct * pv, itemsTotal, order.discountFromPoints || Infinity);
-                }
-                const grandTotal = Math.max(0, itemsTotal - appliedDiscount);
 
                 const invoice = {
                     id: Date.now(), number: getNextDocNumber(invoices.filter(i => i.type === 'sale')).toString().padStart(4, '0'),
@@ -3387,22 +3408,22 @@
                         phone: order.phone || order.customerCode,
                         address: [order.shopName, order.addressDetail].filter(Boolean).join(' - '),
                         creditLimit: null,
-                        loyaltyPoints: 0
+                        loyaltyPoints: newPoints
                     };
                     customers.push(finalCust);
                     logAction('إنشاء عميل تلقائي من الأبليكشن', `تم إنشاء ملف للعميل ${finalCust.name} (${finalCust.code}) عند أول طلب له`);
                 }
 
-                // خصم النقاط المستخدمة (لو اختار العميل استخدامها)، ثم منح نقاط جديدة بناءً على المبلغ الفعلي المدفوع
+                // رصيد النقاط النهائي اتحسب فعليًا جوه المعاملة الذرية (txResult.newPoints) عشان
+                // يبقى محمي من التعارض؛ هنا بس بنعكسه على نسخة العميل المحلية للعرض في الشاشة
                 if (finalCust) {
+                    finalCust.loyaltyPoints = newPoints;
                     if (pointsToDeduct > 0) {
-                        finalCust.loyaltyPoints = Math.max(0, (finalCust.loyaltyPoints || 0) - pointsToDeduct);
-                        logAction('استخدام نقاط ولاء', `العميل ${finalCust.name}: -${pointsToDeduct} نقطة مقابل خصم ${appliedDiscount.toFixed(2)} ر.س (رصيده الآن ${finalCust.loyaltyPoints})`);
+                        logAction('استخدام نقاط ولاء', `العميل ${finalCust.name}: -${pointsToDeduct} نقطة مقابل خصم ${appliedDiscount.toFixed(2)} ر.س (رصيده الآن ${newPoints})`);
                     }
-                    const earnedPoints = Math.floor(grandTotal / (loyaltySettings.pointsPerAmount || 10));
+                    const earnedPoints = txResult.earnedPoints;
                     if (earnedPoints > 0) {
-                        finalCust.loyaltyPoints = (finalCust.loyaltyPoints || 0) + earnedPoints;
-                        logAction('منح نقاط ولاء', `العميل ${finalCust.name}: +${earnedPoints} نقطة (رصيده الآن ${finalCust.loyaltyPoints})`);
+                        logAction('منح نقاط ولاء', `العميل ${finalCust.name}: +${earnedPoints} نقطة (رصيده الآن ${newPoints})`);
                     }
                     localStorage.setItem('customers', JSON.stringify(customers));
                 }
@@ -4571,6 +4592,10 @@
             if (isNaN(newPoints) || newPoints < 0) { showToast('قيمة غير صحيحة', 'error'); return; }
             cust.loyaltyPoints = newPoints;
             localStorage.setItem('customers', JSON.stringify(customers));
+            if (db) {
+                db.collection('customerLoyaltyPoints').doc(cust.code).set({ points: newPoints, updatedAt: Date.now() }, { merge: true })
+                    .catch(function(e) { console.error('manual points sync failed:', e); });
+            }
             logAction('تعديل نقاط ولاء يدوي', `العميل ${cust.name}: الرصيد الجديد ${newPoints} نقطة`);
             renderLoyaltyCustomers();
             showToast('تم تحديث رصيد النقاط');
