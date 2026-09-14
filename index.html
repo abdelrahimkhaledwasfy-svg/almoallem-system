@@ -433,7 +433,6 @@
             <li class="nav-item" data-section="profit-target"><a class="nav-link" href="javascript:void(0)" onclick="showSection('profit-target')"><i class="fas fa-bullseye"></i><span class="menu-text">تحديد الربحية</span></a></li>
             <li class="nav-item" data-section="products"><a class="nav-link" href="javascript:void(0)" onclick="showSection('products')"><i class="fas fa-boxes"></i><span class="menu-text">قاعدة الأصناف</span></a></li>
             <li class="nav-item" data-section="customers"><a class="nav-link" href="javascript:void(0)" onclick="showSection('customers')"><i class="fas fa-users"></i><span class="menu-text">قاعدة العملاء</span></a></li>
-            <li class="nav-item" data-section="delivery"><a class="nav-link" href="javascript:void(0)" onclick="showSection('delivery')"><i class="fas fa-truck"></i><span class="menu-text">التسليم</span> <span id="deliveryPendingBadge" class="badge badge-danger" style="display:none;margin-right:6px;"></span></a></li>
             <li class="nav-item" data-section="suppliers"><a class="nav-link" href="javascript:void(0)" onclick="showSection('suppliers')"><i class="fas fa-truck"></i><span class="menu-text">قاعدة الموردين</span></a></li>
             <li class="nav-item" data-section="salesmen"><a class="nav-link" href="javascript:void(0)" onclick="showSection('salesmen')"><i class="fas fa-user-tie"></i><span class="menu-text">قاعدة المناديب</span></a></li>
             <li class="nav-item" data-section="reports"><a class="nav-link" href="javascript:void(0)" onclick="showSection('reports')"><i class="fas fa-chart-pie"></i><span class="menu-text">التقارير والتجميع</span></a></li>
@@ -1267,45 +1266,6 @@
             </div>
         </section>
 
-        <!-- Delivery Section -->
-        <section id="delivery-section" class="section">
-            <div class="card">
-                <div class="card-header"><div class="card-title"><i class="fas fa-truck"></i> فواتير جاهزة للتسليم</div></div>
-                <div class="table-container">
-                    <table>
-                        <thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>العنوان</th><th>الإجمالي</th><th>الحالة</th><th>إجراء</th></tr></thead>
-                        <tbody id="deliveryTable"></tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-
-        <!-- Delivery Reject Reason Modal -->
-        <div class="modal-overlay" id="deliveryRejectModal">
-            <div class="modal" style="max-width:420px;">
-                <div class="modal-header">
-                    <h3>سبب عدم التسليم</h3>
-                    <button class="modal-close" onclick="closeModal('deliveryRejectModal')"><i class="fas fa-times"></i></button>
-                </div>
-                <div class="modal-body">
-                    <input type="hidden" id="deliveryRejectInvoiceId">
-                    <div class="form-group">
-                        <label class="form-label">السبب</label>
-                        <select class="form-control" id="deliveryRejectReasonSelect">
-                            <option value="العميل غير موجود">العميل غير موجود</option>
-                            <option value="رفض الاستلام">رفض الاستلام</option>
-                            <option value="سبب آخر">سبب آخر</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">تفاصيل إضافية</label>
-                        <textarea class="form-control" id="deliveryRejectReasonDetail" rows="2"></textarea>
-                    </div>
-                    <button class="btn btn-danger" style="width:100%;" onclick="confirmDeliveryReject()"><i class="fas fa-times-circle"></i> تأكيد عدم التسليم</button>
-                </div>
-            </div>
-        </div>
-
         <!-- Customer Orders Section -->
         <section id="customer-orders-section" class="section">
             <div class="card">
@@ -1612,7 +1572,7 @@
                 <div class="card-header"><div class="card-title"><i class="fas fa-user-tie"></i> قاعدة بيانات المناديب</div><button class="btn btn-success btn-sm" onclick="openSalesmanModal()"><i class="fas fa-plus"></i> إضافة مندوب</button></div>
                 <div class="search-box"><i class="fas fa-search"></i><input type="text" id="salesmanSearch" placeholder="بحث في المناديب..." oninput="filterSalesmen()"></div>
                 <div class="table-container">
-                    <table><thead><tr><th>الكود</th><th>اسم المندوب</th><th>رقم الهاتف</th><th>المنطقة</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="salesmenTable"></tbody></table>
+                    <table><thead><tr><th>الكود</th><th>اسم المندوب</th><th>النوع</th><th>رقم الهاتف</th><th>المنطقة</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="salesmenTable"></tbody></table>
                 </div>
             </div>
         </section>
@@ -2180,6 +2140,12 @@
                 <div class="form-group"><label class="form-label">الحالة</label><select class="form-control" id="salesmanStatus"><option value="نشط">نشط</option><option value="غير نشط">غير نشط</option></select></div>
                 <hr style="margin:15px 0;border:none;border-top:1px solid var(--border);">
                 <p style="font-size:13px;font-weight:700;color:var(--primary);margin-bottom:8px;"><i class="fas fa-mobile-alt"></i> بيانات دخول المندوب على برنامج الأبليكشن (وضع مندوب)</p>
+                <div class="form-group"><label class="form-label">نوع المندوب</label>
+                    <select class="form-control" id="salesmanRepType">
+                        <option value="sales">مندوب مبيعات (زيارات + طلب للتاجر)</option>
+                        <option value="delivery">مندوب تسليم (تسليم الفواتير الجاهزة)</option>
+                    </select>
+                </div>
                 <div class="form-group"><label class="form-label">يوزر الدخول</label><input type="text" class="form-control" id="salesmanRepUsername" placeholder="مثال: rep_ahmed" dir="ltr" style="text-align:left;"></div>
                 <div class="form-group"><label class="form-label">كلمة السر (اتركها فاضية لو مش عايز تغيرها)</label><input type="password" class="form-control" id="salesmanRepPassword" placeholder="كلمة سر جديدة..." dir="ltr" style="text-align:left;"></div>
             </div>
@@ -2232,7 +2198,6 @@
                         <option value="accountant">محاسب</option>
                         <option value="warehouse_keeper">أمين مخزن</option>
                         <option value="salesman">مندوب</option>
-                        <option value="delivery_rep">مندوب تسليم</option>
                     </select>
                 </div>
                 <div class="form-group"><label class="form-label">الحالة</label>
@@ -2340,8 +2305,7 @@
             sales_manager: { label: 'مدير مبيعات', sections: ['dashboard', 'customer-orders', 'app-management', 'invoice', 'invoices', 'sales-returns', 'collections', 'sales-tracking', 'smart-analytics', 'profit', 'profit-target', 'customers', 'salesmen', 'reports'] },
             accountant: { label: 'محاسب', sections: ['dashboard', 'invoices', 'purchase-invoice', 'purchase-returns', 'collections', 'treasury', 'expenses', 'profit', 'profit-target', 'products', 'customers', 'suppliers', 'reports'] },
             warehouse_keeper: { label: 'أمين مخزن', sections: ['dashboard', 'customer-orders', 'purchase-invoice', 'purchase-returns', 'inventory', 'products', 'suppliers'] },
-            salesman: { label: 'مندوب', sections: ['dashboard', 'invoice', 'invoices', 'sales-returns', 'customers'] },
-            delivery_rep: { label: 'مندوب تسليم', sections: ['dashboard', 'delivery'] }
+            salesman: { label: 'مندوب', sections: ['dashboard', 'invoice', 'invoices', 'sales-returns', 'customers'] }
         };
         let editingProduct = null;
         let editingCustomer = null;
@@ -2837,86 +2801,8 @@
 
 
 
-        // ==================== واجهة التسليم (مندوب التسليم) ====================
-        function renderDeliveryList() {
-            const tbody = document.getElementById('deliveryTable');
-            if (!tbody) return;
-            const list = invoices.filter(i => i.type === 'sale' && i.deliveryStatus && i.deliveryStatus !== 'تم التسليم');
-            const badge = document.getElementById('deliveryPendingBadge');
-            const pendingCount = list.filter(i => i.deliveryStatus === 'بانتظار التسليم').length;
-            if (badge) { badge.style.display = pendingCount > 0 ? 'inline-block' : 'none'; badge.textContent = pendingCount; }
-            tbody.innerHTML = list.map(inv => {
-                const cust = customers.find(c => String(c.code) === String(inv.customerCode));
-                const address = cust ? (cust.address || '-') : '-';
-                let statusBadge = inv.deliveryStatus === 'بانتظار التسليم' ? '<span class="badge badge-info">بانتظار التسليم</span>' : `<span class="badge badge-danger">لم يتم: ${inv.deliveryRejectReason || ''}</span>`;
-                return `<tr>
-                    <td>#${inv.number}</td>
-                    <td>${inv.customerName}</td>
-                    <td>${address}</td>
-                    <td>${(inv.grandTotal || 0).toFixed(2)} ج.م</td>
-                    <td>${statusBadge}</td>
-                    <td>
-                        <button class="btn btn-success btn-sm" onclick="markDelivered('${inv.id}')"><i class="fas fa-check"></i> تم التسليم والتحصيل</button>
-                        <button class="btn btn-danger btn-sm" onclick="openDeliveryReject('${inv.id}')"><i class="fas fa-times"></i> لم يتم</button>
-                    </td>
-                </tr>`;
-            }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-light);">لا توجد فواتير جاهزة للتسليم حاليًا</td></tr>';
-        }
-
-        function updateInvoiceDeliveryStatus(invoiceId, patch) {
-            const inv = invoices.find(i => String(i.id) === String(invoiceId));
-            if (!inv) return;
-            Object.assign(inv, patch);
-            localStorage.setItem('invoices', JSON.stringify(invoices));
-            if (db) db.collection('invoiceRecords').doc(String(inv.id)).set(inv).catch(function(e) { console.error('invoice delivery update sync failed:', e); });
-            return inv;
-        }
-
-        function markDelivered(invoiceId) {
-            const inv = updateInvoiceDeliveryStatus(invoiceId, {
-                deliveryStatus: 'تم التسليم', deliveredAt: Date.now(),
-                deliveredBy: currentUser ? currentUser.username : ''
-            });
-            if (!inv) return;
-            // الفلوس بتتسجل في "عهدة" خاصة بمندوب التسليم ده لوحده، منفصلة عن الخزينة العامة، لحد ما تتراجع
-            const record = {
-                id: Date.now() + '-' + Math.random().toString(36).slice(2, 8),
-                date: new Date().toISOString(),
-                repUsername: currentUser ? currentUser.username : '',
-                repFullName: currentUser ? currentUser.fullName : '',
-                invoiceId: inv.id, invoiceNumber: inv.number,
-                customerName: inv.customerName, amount: inv.grandTotal || 0
-            };
-            deliveryCollections.unshift(record);
-            localStorage.setItem('deliveryCollections', JSON.stringify(deliveryCollections));
-            if (db) db.collection('deliveryCollectionRecords').doc(String(record.id)).set(record).catch(function(e) { console.error('delivery collection sync failed:', e); });
-            logAction('تسليم فاتورة', `تم تسليم وتحصيل الفاتورة #${inv.number} للعميل ${inv.customerName}`);
-            renderDeliveryList();
-            showToast('تم تسجيل التسليم والتحصيل', 'success');
-        }
-
-        function openDeliveryReject(invoiceId) {
-            document.getElementById('deliveryRejectInvoiceId').value = invoiceId;
-            document.getElementById('deliveryRejectReasonSelect').value = 'العميل غير موجود';
-            document.getElementById('deliveryRejectReasonDetail').value = '';
-            openModal('deliveryRejectModal');
-        }
-
-        function confirmDeliveryReject() {
-            const invoiceId = document.getElementById('deliveryRejectInvoiceId').value;
-            const reason = document.getElementById('deliveryRejectReasonSelect').value;
-            const detail = document.getElementById('deliveryRejectReasonDetail').value.trim();
-            const inv = updateInvoiceDeliveryStatus(invoiceId, {
-                deliveryStatus: 'لم يتم التسليم',
-                deliveryRejectReason: reason + (detail ? (' - ' + detail) : ''),
-                deliveryRejectAt: Date.now(),
-                deliveryRejectBy: currentUser ? currentUser.username : ''
-            });
-            if (inv) logAction('عدم تسليم فاتورة', `لم يتم تسليم الفاتورة #${inv.number} للعميل ${inv.customerName} - السبب: ${reason}`);
-            closeModal('deliveryRejectModal');
-            renderDeliveryList();
-            showToast('تم تسجيل عدم التسليم', 'warning');
-        }
+        // ==================== (زيارات المناديب والتسليم اتنقلوا بالكامل لبرنامج الأبليكشن كـ"وضع مندوب") ====================
+        // نظام المعلم لسه بيتابع كل التحديثات اللي بتحصل من الأبليكشن على invoiceRecords و deliveryCollectionRecords تلقائيًا عن طريق الـ listeners فوق.
 
         // ترحيل تلقائي لمرة واحدة بس: بينقل أي فواتير/حركات مخزون/سجل أحداث كانت متخزنة قبل التحديث
         // ده جوه مستند storeData الكبير، لمكانها الجديد المستقل. بيشتغل مرة واحدة فقط من أول جهاز
@@ -4254,8 +4140,7 @@
                 'reports': 'التقارير والتجميع', 'backup': 'النسخ الاحتياطي',
                 'sales-returns': 'مرتجعات البيع', 'purchase-returns': 'مرتجعات الشراء',
                 'collections': 'متابعة التحصيلات', 'sales-tracking': 'لوحة متابعة المبيعات', 'smart-analytics': 'التحليلات الذكية',
-                'users': 'المستخدمون والصلاحيات', 'audit-log': 'سجل العمليات',
-                'delivery': 'التسليم'
+                'users': 'المستخدمون والصلاحيات', 'audit-log': 'سجل العمليات'
             };
             document.getElementById('pageTitle').textContent = titles[sectionName] || sectionName;
             if (sectionName === 'reports') { renderSalesSummary(); renderAdvancedReports(); renderDailyShipmentReport(); }
@@ -4277,7 +4162,6 @@
             if (sectionName === 'smart-analytics') { renderSmartAnalytics(); }
             if (sectionName === 'users') { renderUsers(); }
             if (sectionName === 'audit-log') { renderAuditLog(); }
-            if (sectionName === 'delivery') { renderDeliveryList(); }
             document.getElementById('sidebar').classList.remove('open');
         }
 
@@ -5675,6 +5559,7 @@
             document.getElementById('salesmanPhone').value = salesman ? salesman.phone : '';
             document.getElementById('salesmanArea').value = salesman ? salesman.area : '';
             document.getElementById('salesmanStatus').value = salesman ? salesman.status : 'نشط';
+            document.getElementById('salesmanRepType').value = salesman ? (salesman.repType || 'sales') : 'sales';
             document.getElementById('salesmanRepUsername').value = salesman ? (salesman.repUsername || '') : '';
             document.getElementById('salesmanRepPassword').value = '';
             openModal('salesmanModal');
@@ -5686,6 +5571,7 @@
             const phone = document.getElementById('salesmanPhone').value.trim();
             const area = document.getElementById('salesmanArea').value.trim();
             const status = document.getElementById('salesmanStatus').value;
+            const repType = document.getElementById('salesmanRepType').value;
             const repUsername = document.getElementById('salesmanRepUsername').value.trim();
             const repPasswordInput = document.getElementById('salesmanRepPassword').value;
             if (!code || !name) { showToast('الرجاء ملء الحقول الإلزامية', 'error'); return; }
@@ -5694,7 +5580,7 @@
             }
             let repPasswordHash = editingSalesman ? editingSalesman.repPasswordHash : undefined;
             if (repPasswordInput) repPasswordHash = await hashRepPassword(repPasswordInput);
-            const record = { code, name, phone, area, status, repUsername: repUsername || '', repPasswordHash: repPasswordHash || '' };
+            const record = { code, name, phone, area, status, repType, repUsername: repUsername || '', repPasswordHash: repPasswordHash || '' };
             if (editingSalesman) {
                 const idx = salesmen.findIndex(s => s.code === editingSalesman.code);
                 if (idx !== -1) salesmen[idx] = record;
@@ -5718,11 +5604,13 @@
         function renderSalesmen() {
             const tbody = document.getElementById('salesmenTable');
             if (salesmen.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;"><div style="color:var(--text-light);"><i class="fas fa-user-tie" style="font-size:48px;margin-bottom:15px;display:block;opacity:0.4;"></i><h3 style="color:var(--text);margin-bottom:8px;">قاعدة المناديب فارغة</h3><p style="margin-bottom:15px;">لم يتم إضافة أي مناديب بعد</p><button class="btn btn-success btn-sm" onclick="openSalesmanModal()"><i class="fas fa-plus"></i> إضافة مندوب جديد</button></div></td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;"><div style="color:var(--text-light);"><i class="fas fa-user-tie" style="font-size:48px;margin-bottom:15px;display:block;opacity:0.4;"></i><h3 style="color:var(--text);margin-bottom:8px;">قاعدة المناديب فارغة</h3><p style="margin-bottom:15px;">لم يتم إضافة أي مناديب بعد</p><button class="btn btn-success btn-sm" onclick="openSalesmanModal()"><i class="fas fa-plus"></i> إضافة مندوب جديد</button></div></td></tr>`;
                 return;
             }
             tbody.innerHTML = salesmen.map(s => `
-                <tr><td><span class="badge badge-primary">${s.code}</span></td><td><strong>${s.name}</strong></td><td>${s.phone || '-'}</td><td>${s.area || '-'}</td>
+                <tr><td><span class="badge badge-primary">${s.code}</span></td><td><strong>${s.name}</strong></td>
+                <td><span class="badge ${s.repType === 'delivery' ? 'badge-info' : 'badge-primary'}">${s.repType === 'delivery' ? 'تسليم' : 'مبيعات'}</span></td>
+                <td>${s.phone || '-'}</td><td>${s.area || '-'}</td>
                 <td><span class="badge ${s.status === 'نشط' ? 'badge-success' : 'badge-danger'}">${s.status}</span></td>
                 <td><button class="btn btn-primary btn-icon btn-sm" onclick='openSalesmanModal(${JSON.stringify(s).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
                 <button class="btn btn-danger btn-icon btn-sm" onclick="deleteSalesman('${s.code}')"><i class="fas fa-trash"></i></button></td></tr>
