@@ -433,7 +433,6 @@
             <li class="nav-item" data-section="profit-target"><a class="nav-link" href="javascript:void(0)" onclick="showSection('profit-target')"><i class="fas fa-bullseye"></i><span class="menu-text">تحديد الربحية</span></a></li>
             <li class="nav-item" data-section="products"><a class="nav-link" href="javascript:void(0)" onclick="showSection('products')"><i class="fas fa-boxes"></i><span class="menu-text">قاعدة الأصناف</span></a></li>
             <li class="nav-item" data-section="customers"><a class="nav-link" href="javascript:void(0)" onclick="showSection('customers')"><i class="fas fa-users"></i><span class="menu-text">قاعدة العملاء</span></a></li>
-            <li class="nav-item" data-section="rep-visits"><a class="nav-link" href="javascript:void(0)" onclick="showSection('rep-visits')"><i class="fas fa-route"></i><span class="menu-text">زياراتي</span></a></li>
             <li class="nav-item" data-section="delivery"><a class="nav-link" href="javascript:void(0)" onclick="showSection('delivery')"><i class="fas fa-truck"></i><span class="menu-text">التسليم</span> <span id="deliveryPendingBadge" class="badge badge-danger" style="display:none;margin-right:6px;"></span></a></li>
             <li class="nav-item" data-section="suppliers"><a class="nav-link" href="javascript:void(0)" onclick="showSection('suppliers')"><i class="fas fa-truck"></i><span class="menu-text">قاعدة الموردين</span></a></li>
             <li class="nav-item" data-section="salesmen"><a class="nav-link" href="javascript:void(0)" onclick="showSection('salesmen')"><i class="fas fa-user-tie"></i><span class="menu-text">قاعدة المناديب</span></a></li>
@@ -1267,74 +1266,6 @@
                 <p id="profitTargetBasisNote" style="color:var(--text-light);font-size:12px;margin-top:15px;"></p>
             </div>
         </section>
-
-        <!-- Rep Visits Section -->
-        <section id="rep-visits-section" class="section">
-            <div class="card">
-                <div class="card-header" style="flex-wrap:wrap;gap:10px;">
-                    <div class="card-title"><i class="fas fa-route"></i> زياراتي</div>
-                </div>
-                <div class="card-body">
-                    <div class="form-group" style="max-width:420px;">
-                        <label class="form-label">اختر العميل</label>
-                        <input type="text" class="form-control" id="repVisitCustomerSearch" placeholder="اكتب اسم العميل للبحث..." autocomplete="off"
-                            oninput="clearSearchSelection('repVisitCustomerSearch','repVisitCustomer','repVisitCustomerResults', customers, null)"
-                            onfocus="openSearchDropdown('repVisitCustomerSearch','repVisitCustomer','repVisitCustomerResults', customers, null)"
-                            onblur="hideSearchDropdownDelayed('repVisitCustomerResults')">
-                        <input type="hidden" id="repVisitCustomer">
-                        <div id="repVisitCustomerResults" class="searchable-dropdown"></div>
-                    </div>
-                    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
-                        <button class="btn btn-primary" onclick="openNewVisitModal()"><i class="fas fa-plus"></i> زيارة جديدة</button>
-                        <button class="btn btn-success" onclick="goToInvoiceForSelectedRepCustomer()"><i class="fas fa-file-invoice"></i> إنشاء طلب للتاجر</button>
-                    </div>
-                </div>
-            </div>
-            <div class="card" style="margin-top:15px;">
-                <div class="card-header"><div class="card-title"><i class="fas fa-list"></i> سجل الزيارات</div></div>
-                <div class="table-container">
-                    <table>
-                        <thead><tr><th>التاريخ والوقت</th><th>العميل</th><th>الحالة</th><th>السبب</th><th>ملاحظات</th><th>الموقع</th></tr></thead>
-                        <tbody id="repVisitsTable"></tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-
-        <!-- New Visit Modal -->
-        <div class="modal-overlay" id="newVisitModal">
-            <div class="modal" style="max-width:480px;">
-                <div class="modal-header">
-                    <h3>زيارة جديدة</h3>
-                    <button class="modal-close" onclick="closeModal('newVisitModal')"><i class="fas fa-times"></i></button>
-                </div>
-                <div class="modal-body">
-                    <p id="newVisitCustomerLabel" style="font-weight:700;margin-bottom:12px;"></p>
-                    <div class="form-group">
-                        <label class="form-label">حالة الزيارة</label>
-                        <div style="display:flex;gap:10px;">
-                            <button type="button" class="btn btn-success" id="visitStatusSuccessBtn" onclick="setVisitStatus('ناجحة')" style="flex:1;">✅ ناجحة</button>
-                            <button type="button" class="btn btn-danger" id="visitStatusFailBtn" onclick="setVisitStatus('غير ناجحة')" style="flex:1;">❌ غير ناجحة</button>
-                        </div>
-                        <input type="hidden" id="visitStatusValue">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">سبب الزيارة</label>
-                        <input type="text" class="form-control" id="visitPurpose" placeholder="مثال: متابعة طلب، تحصيل، عرض منتج جديد...">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">ملاحظات</label>
-                        <textarea class="form-control" id="visitNotes" rows="3" placeholder="أي ملاحظات إضافية..."></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">الموقع</label>
-                        <button type="button" class="btn btn-secondary" style="width:100%;" onclick="captureVisitLocation()"><i class="fas fa-map-marker-alt"></i> تسجيل موقعي الحالي</button>
-                        <p id="visitLocationStatus" style="font-size:12px;color:var(--text-light);margin-top:6px;"></p>
-                    </div>
-                    <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="saveVisit()"><i class="fas fa-save"></i> حفظ الزيارة</button>
-                </div>
-            </div>
-        </div>
 
         <!-- Delivery Section -->
         <section id="delivery-section" class="section">
@@ -2247,6 +2178,10 @@
                 <div class="form-group"><label class="form-label">رقم الهاتف</label><input type="text" class="form-control" id="salesmanPhone" placeholder="05xxxxxxxx"></div>
                 <div class="form-group"><label class="form-label">المنطقة</label><input type="text" class="form-control" id="salesmanArea" placeholder="منطقة العمل"></div>
                 <div class="form-group"><label class="form-label">الحالة</label><select class="form-control" id="salesmanStatus"><option value="نشط">نشط</option><option value="غير نشط">غير نشط</option></select></div>
+                <hr style="margin:15px 0;border:none;border-top:1px solid var(--border);">
+                <p style="font-size:13px;font-weight:700;color:var(--primary);margin-bottom:8px;"><i class="fas fa-mobile-alt"></i> بيانات دخول المندوب على برنامج الأبليكشن (وضع مندوب)</p>
+                <div class="form-group"><label class="form-label">يوزر الدخول</label><input type="text" class="form-control" id="salesmanRepUsername" placeholder="مثال: rep_ahmed" dir="ltr" style="text-align:left;"></div>
+                <div class="form-group"><label class="form-label">كلمة السر (اتركها فاضية لو مش عايز تغيرها)</label><input type="password" class="form-control" id="salesmanRepPassword" placeholder="كلمة سر جديدة..." dir="ltr" style="text-align:left;"></div>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('salesmanModal')">إلغاء</button><button class="btn btn-success" onclick="saveSalesman()">حفظ</button></div>
         </div>
@@ -2405,7 +2340,7 @@
             sales_manager: { label: 'مدير مبيعات', sections: ['dashboard', 'customer-orders', 'app-management', 'invoice', 'invoices', 'sales-returns', 'collections', 'sales-tracking', 'smart-analytics', 'profit', 'profit-target', 'customers', 'salesmen', 'reports'] },
             accountant: { label: 'محاسب', sections: ['dashboard', 'invoices', 'purchase-invoice', 'purchase-returns', 'collections', 'treasury', 'expenses', 'profit', 'profit-target', 'products', 'customers', 'suppliers', 'reports'] },
             warehouse_keeper: { label: 'أمين مخزن', sections: ['dashboard', 'customer-orders', 'purchase-invoice', 'purchase-returns', 'inventory', 'products', 'suppliers'] },
-            salesman: { label: 'مندوب', sections: ['dashboard', 'invoice', 'invoices', 'sales-returns', 'customers', 'rep-visits'] },
+            salesman: { label: 'مندوب', sections: ['dashboard', 'invoice', 'invoices', 'sales-returns', 'customers'] },
             delivery_rep: { label: 'مندوب تسليم', sections: ['dashboard', 'delivery'] }
         };
         let editingProduct = null;
@@ -2898,100 +2833,9 @@
             }, function(err) { console.error('Delivery collection records listener error:', err); });
         }
 
-        // ==================== واجهة زيارات المناديب ====================
-        let pendingVisitLocation = null;
+        // ==================== (زيارات المناديب اتنقلت بالكامل لتبقى داخل برنامج الأبليكشن كـ"وضع مندوب") ====================
 
-        function openNewVisitModal() {
-            const code = document.getElementById('repVisitCustomer').value;
-            if (!code) { showToast('اختر العميل الأول', 'warning'); return; }
-            const cust = customers.find(c => String(c.code) === String(code));
-            document.getElementById('newVisitCustomerLabel').textContent = 'العميل: ' + (cust ? cust.name : code);
-            document.getElementById('visitStatusValue').value = '';
-            document.getElementById('visitPurpose').value = '';
-            document.getElementById('visitNotes').value = '';
-            document.getElementById('visitLocationStatus').textContent = '';
-            pendingVisitLocation = null;
-            document.getElementById('visitStatusSuccessBtn').style.opacity = '1';
-            document.getElementById('visitStatusFailBtn').style.opacity = '1';
-            openModal('newVisitModal');
-        }
 
-        function setVisitStatus(status) {
-            document.getElementById('visitStatusValue').value = status;
-            document.getElementById('visitStatusSuccessBtn').style.opacity = status === 'ناجحة' ? '1' : '0.5';
-            document.getElementById('visitStatusFailBtn').style.opacity = status === 'غير ناجحة' ? '1' : '0.5';
-        }
-
-        function captureVisitLocation() {
-            if (!navigator.geolocation) { showToast('الجهاز لا يدعم تحديد الموقع', 'error'); return; }
-            document.getElementById('visitLocationStatus').textContent = 'جاري تحديد الموقع...';
-            navigator.geolocation.getCurrentPosition(function(pos) {
-                pendingVisitLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-                document.getElementById('visitLocationStatus').textContent = 'تم تسجيل الموقع ✅ (' + pendingVisitLocation.lat.toFixed(5) + ', ' + pendingVisitLocation.lng.toFixed(5) + ')';
-            }, function(err) {
-                document.getElementById('visitLocationStatus').textContent = 'تعذر تحديد الموقع: ' + err.message;
-            }, { enableHighAccuracy: true, timeout: 10000 });
-        }
-
-        function saveVisit() {
-            const code = document.getElementById('repVisitCustomer').value;
-            const cust = customers.find(c => String(c.code) === String(code));
-            const status = document.getElementById('visitStatusValue').value;
-            if (!status) { showToast('اختر حالة الزيارة (ناجحة / غير ناجحة)', 'warning'); return; }
-            const purpose = document.getElementById('visitPurpose').value.trim();
-            const notes = document.getElementById('visitNotes').value.trim();
-
-            // لو العميل مالوش موقع محفوظ قبل كده، ونحن عندنا موقع اتسجل دلوقتي، نحفظه كموقع ثابت للمحل
-            if (cust && !cust.location && pendingVisitLocation) {
-                cust.location = pendingVisitLocation;
-                localStorage.setItem('customers', JSON.stringify(customers)); // الـ hook التلقائي هيرفعها للسحابة
-            }
-
-            const visit = {
-                id: Date.now() + '-' + Math.random().toString(36).slice(2, 8),
-                date: new Date().toISOString(),
-                customerCode: code, customerName: cust ? cust.name : code,
-                repUsername: currentUser ? currentUser.username : '',
-                repFullName: currentUser ? currentUser.fullName : '',
-                status, purpose, notes,
-                repLocation: pendingVisitLocation || null,
-                customerLocation: cust && cust.location ? cust.location : null
-            };
-            customerVisits.unshift(visit);
-            localStorage.setItem('customerVisits', JSON.stringify(customerVisits));
-            if (db) db.collection('customerVisitRecords').doc(String(visit.id)).set(visit).catch(function(e) { console.error('visit sync failed:', e); showToast('تعذر رفع الزيارة للسحابة', 'error'); });
-            logAction('تسجيل زيارة', `زيارة ${status} للعميل ${visit.customerName}` + (purpose ? ` - ${purpose}` : ''));
-            closeModal('newVisitModal');
-            renderRepVisitsList();
-            showToast('تم حفظ الزيارة', 'success');
-        }
-
-        function renderRepVisitsList() {
-            const tbody = document.getElementById('repVisitsTable');
-            if (!tbody) return;
-            let list = customerVisits;
-            if (currentUser && currentUser.role === 'salesman') {
-                list = list.filter(v => v.repUsername === currentUser.username);
-            }
-            tbody.innerHTML = list.slice(0, 300).map(v => `<tr>
-                <td>${new Date(v.date).toLocaleString('ar-EG')}</td>
-                <td>${v.customerName}</td>
-                <td><span class="badge ${v.status === 'ناجحة' ? 'badge-success' : 'badge-danger'}">${v.status}</span></td>
-                <td>${v.purpose || '-'}</td>
-                <td>${v.notes || '-'}</td>
-                <td>${v.repLocation ? `<a href="https://maps.google.com/?q=${v.repLocation.lat},${v.repLocation.lng}" target="_blank">📍 عرض</a>` : '-'}</td>
-            </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-light);">لا توجد زيارات مسجلة</td></tr>';
-        }
-
-        function goToInvoiceForSelectedRepCustomer() {
-            const code = document.getElementById('repVisitCustomer').value;
-            if (!code) { showToast('اختر العميل الأول', 'warning'); return; }
-            const cust = customers.find(c => String(c.code) === String(code));
-            showSection('invoice');
-            document.getElementById('invoiceCustomer').value = code;
-            document.getElementById('invoiceCustomerSearch').value = cust ? cust.name : code;
-            updateCustomerInfo();
-        }
 
         // ==================== واجهة التسليم (مندوب التسليم) ====================
         function renderDeliveryList() {
@@ -4411,7 +4255,7 @@
                 'sales-returns': 'مرتجعات البيع', 'purchase-returns': 'مرتجعات الشراء',
                 'collections': 'متابعة التحصيلات', 'sales-tracking': 'لوحة متابعة المبيعات', 'smart-analytics': 'التحليلات الذكية',
                 'users': 'المستخدمون والصلاحيات', 'audit-log': 'سجل العمليات',
-                'rep-visits': 'زياراتي', 'delivery': 'التسليم'
+                'delivery': 'التسليم'
             };
             document.getElementById('pageTitle').textContent = titles[sectionName] || sectionName;
             if (sectionName === 'reports') { renderSalesSummary(); renderAdvancedReports(); renderDailyShipmentReport(); }
@@ -4433,7 +4277,6 @@
             if (sectionName === 'smart-analytics') { renderSmartAnalytics(); }
             if (sectionName === 'users') { renderUsers(); }
             if (sectionName === 'audit-log') { renderAuditLog(); }
-            if (sectionName === 'rep-visits') { renderRepVisitsList(); }
             if (sectionName === 'delivery') { renderDeliveryList(); }
             document.getElementById('sidebar').classList.remove('open');
         }
@@ -5819,6 +5662,12 @@
         }
 
         // ==================== SALESMEN ====================
+        async function hashRepPassword(pw) {
+            const enc = new TextEncoder().encode(pw);
+            const buf = await crypto.subtle.digest('SHA-256', enc);
+            return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
         function openSalesmanModal(salesman = null) {
             editingSalesman = salesman;
             document.getElementById('salesmanCode').value = salesman ? salesman.code : '';
@@ -5826,22 +5675,32 @@
             document.getElementById('salesmanPhone').value = salesman ? salesman.phone : '';
             document.getElementById('salesmanArea').value = salesman ? salesman.area : '';
             document.getElementById('salesmanStatus').value = salesman ? salesman.status : 'نشط';
+            document.getElementById('salesmanRepUsername').value = salesman ? (salesman.repUsername || '') : '';
+            document.getElementById('salesmanRepPassword').value = '';
             openModal('salesmanModal');
         }
 
-        function saveSalesman() {
+        async function saveSalesman() {
             const code = document.getElementById('salesmanCode').value.trim();
             const name = document.getElementById('salesmanName').value.trim();
             const phone = document.getElementById('salesmanPhone').value.trim();
             const area = document.getElementById('salesmanArea').value.trim();
             const status = document.getElementById('salesmanStatus').value;
+            const repUsername = document.getElementById('salesmanRepUsername').value.trim();
+            const repPasswordInput = document.getElementById('salesmanRepPassword').value;
             if (!code || !name) { showToast('الرجاء ملء الحقول الإلزامية', 'error'); return; }
+            if (repUsername && salesmen.find(s => s.repUsername === repUsername && (!editingSalesman || s.code !== editingSalesman.code))) {
+                showToast('يوزر الدخول ده مستخدم بالفعل لمندوب تاني', 'error'); return;
+            }
+            let repPasswordHash = editingSalesman ? editingSalesman.repPasswordHash : undefined;
+            if (repPasswordInput) repPasswordHash = await hashRepPassword(repPasswordInput);
+            const record = { code, name, phone, area, status, repUsername: repUsername || '', repPasswordHash: repPasswordHash || '' };
             if (editingSalesman) {
                 const idx = salesmen.findIndex(s => s.code === editingSalesman.code);
-                if (idx !== -1) salesmen[idx] = { code, name, phone, area, status };
+                if (idx !== -1) salesmen[idx] = record;
             } else {
                 if (salesmen.find(s => s.code === code)) { showToast('كود المندوب موجود مسبقاً', 'error'); return; }
-                salesmen.push({ code, name, phone, area, status });
+                salesmen.push(record);
             }
             localStorage.setItem('salesmen', JSON.stringify(salesmen));
             renderSalesmen(); updateInvoiceDropdowns(); updateDashboardStats(); closeModal('salesmanModal');
