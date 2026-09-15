@@ -2662,6 +2662,70 @@
         let selectedBulkOrderIds = new Set();
         let knownOrderIds = null; // null = أول تحميل، متعملش تنبيه صوتي عليه
         let ordersAgingTimerStarted = false;
+        // بيتابع كل طلب متحجوز مخزونه من الأبليكشن (stockReserved) وبيحدث المخزون المحلي هنا بنفس
+        // القيم اللي الأبليكشن خصمها فعليًا في Firestore، عشان مايحصلش تعارض لما نظام المعلم يرفع
+        // نسخته المحلية فوق (pushStockLevelsToCloud) ويمسح الحجز من غير ما يعرف إنه موجود.
+        let reservedStockLedger = JSON.parse(localStorage.getItem('reservedStockLedger') || '{}');
+
+        function computeOrderStockVector(order) {
+            const vec = {};
+            (order.items || []).forEach(item => {
+                const product = products.find(p => p.code === item.productCode);
+                const isSecondary = product && product.secondaryUnit && item.unit === product.secondaryUnit.name;
+                const deductQty = isSecondary ? (item.qty / product.secondaryUnit.factor) : item.qty;
+                vec[item.productCode] = (vec[item.productCode] || 0) + deductQty;
+            });
+            return vec;
+        }
+
+        function syncReservedOrdersIntoLocalInventory(orders) {
+            let changed = false;
+            orders.forEach(function(order) {
+                if (!order.stockReserved) return;
+                const prevVec = reservedStockLedger[order.id] || null;
+                if (order.status === 'rejected') {
+                    if (prevVec) {
+                        Object.keys(prevVec).forEach(function(code) {
+                            if (inventory[code]) {
+                                inventory[code].qty += prevVec[code];
+                                addStockMovement(code, (products.find(p => p.code === code) || {}).name || code, 'in', prevVec[code], inventory[code].qty, 'إلغاء طلب أبليكشن #' + order.id.slice(-6), 'إرجاع مخزون كان محجوز لطلب اتلغى/اترفض');
+                            }
+                        });
+                        delete reservedStockLedger[order.id];
+                        changed = true;
+                    }
+                    return;
+                }
+                if (order.status === 'fulfilled') {
+                    if (prevVec) { delete reservedStockLedger[order.id]; changed = true; }
+                    return;
+                }
+                // الطلب لسه "جديد" أو "قيد التجهيز" - نتابع أي فرق حصل من الأبليكشن (طلب جديد/إضافة/حذف/تعديل كمية)
+                const currVec = computeOrderStockVector(order);
+                const codes = new Set(Object.keys(currVec).concat(prevVec ? Object.keys(prevVec) : []));
+                codes.forEach(function(code) {
+                    const prevQty = prevVec ? (prevVec[code] || 0) : 0;
+                    const currQty = currVec[code] || 0;
+                    const delta = currQty - prevQty;
+                    if (delta !== 0 && inventory[code]) {
+                        inventory[code].qty -= delta;
+                        const ref = 'طلب أبليكشن #' + order.id.slice(-6);
+                        if (delta > 0) addStockMovement(code, (products.find(p => p.code === code) || {}).name || code, 'out', -delta, inventory[code].qty, ref, 'حجز تلقائي وقت الطلب من الأبليكشن');
+                        else addStockMovement(code, (products.find(p => p.code === code) || {}).name || code, 'in', -delta, inventory[code].qty, ref, 'تقليل/حذف صنف من طلب أبليكشن قبل التجهيز');
+                        changed = true;
+                    }
+                });
+                reservedStockLedger[order.id] = currVec;
+            });
+            localStorage.setItem('reservedStockLedger', JSON.stringify(reservedStockLedger));
+            if (changed) {
+                localStorage.setItem('inventory', JSON.stringify(inventory));
+                scheduleStockLevelsSync();
+                if (document.getElementById('inventory-section') && document.getElementById('inventory-section').classList.contains('active')) renderInventory();
+                if (document.getElementById('reports-section') && document.getElementById('reports-section').classList.contains('active')) { try { renderLowStock(); } catch (e) {} }
+            }
+        }
+
 
         // "stockLevels" هي نسخة حية من كميات المخزون، كل صنف Document لوحده، وده اللي الأبليكشن
         // هيقرا منه المتاح فعليًا وهيستخدمها في معاملة آمنة (transaction) وقت تنفيذ الطلب، عشان
@@ -2851,6 +2915,7 @@
             db.collection('customerOrders').orderBy('createdAt', 'desc').limit(300).onSnapshot(function(snap) {
                 customerOrders = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
                 localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
+                syncReservedOrdersIntoLocalInventory(customerOrders);
                 let addedAny = false;
                 customerOrders.forEach(function(o) { if (syncCustomerFromOrder(o)) addedAny = true; });
                 if (addedAny) {
@@ -3345,7 +3410,10 @@
                 item.stockDeductQty = isSecondary ? (item.qty / product.secondaryUnit.factor) : item.qty;
             });
 
-            const refs = (order.items || []).map(item => db.collection('stockLevels').doc(item.productCode));
+            // لو المخزون كان اتحجز فعليًا وقت إنشاء الطلب من الأبليكشن (order.stockReserved)، يبقى الخصم اتعمل
+            // بالفعل ومفيش داعي نكرره هنا - بس نسيب مصفوفة الفواتير فاضية عشان نتخطى فحص/خصم المخزون بالكامل
+            const alreadyReserved = !!order.stockReserved;
+            const refs = alreadyReserved ? [] : (order.items || []).map(item => db.collection('stockLevels').doc(item.productCode));
             const custLoyaltyRef = order.customerCode ? db.collection('customerLoyaltyPoints').doc(order.customerCode) : null;
             const pv = loyaltySettings.pointValue || 1;
             const itemsTotal = order.items.reduce((sum, it) => sum + (it.total || (it.price * it.qty) || 0), 0);
@@ -3397,15 +3465,19 @@
                       grandTotal = txResult.grandTotal, earnedPoints = txResult.earnedPoints, newPoints = txResult.newPoints;
 
                 // نجحت المعاملة على السحابة: دلوقتي نعكس نفس الخصم محليًا وننشئ الفاتورة
+                // (لو المخزون كان اتحجز فعليًا وقت الطلب، يبقى المخزون المحلي اتخصم بالفعل أول
+                // بأول عن طريق syncReservedOrdersIntoLocalInventory - مانلمسهوش تاني هنا)
                 order.items.forEach(item => {
                     if (inventory[item.productCode]) {
                         const unitCost = inventory[item.productCode].cost || (products.find(p => p.code === item.productCode) || {}).cost || 0;
-                        inventory[item.productCode].qty -= item.stockDeductQty;
+                        if (!alreadyReserved) {
+                            inventory[item.productCode].qty -= item.stockDeductQty;
+                            addStockMovement(item.productCode, item.productName, 'out', -item.stockDeductQty, inventory[item.productCode].qty, 'طلب أبليكشن #' + order.id.slice(-6), 'خصم تلقائي من طلب عميل عبر الأبليكشن');
+                        }
                         item.cost = unitCost;
                         // التكلفة بتتحسب على أساس الكمية الفعلية المخصومة من المخزون (بوحدة الكرتونة)
                         // مش على أساس كمية البيع، عشان لو البيع كان بالقطاعي (علبة) يبقى الحساب صح
                         item.profit = (item.price * item.qty) - (unitCost * item.stockDeductQty);
-                        addStockMovement(item.productCode, item.productName, 'out', -item.stockDeductQty, inventory[item.productCode].qty, 'طلب أبليكشن #' + order.id.slice(-6), 'خصم تلقائي من طلب عميل عبر الأبليكشن');
                     }
                 });
                 localStorage.setItem('inventory', JSON.stringify(inventory));
