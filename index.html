@@ -1483,7 +1483,15 @@
         <!-- Products Section -->
         <section id="products-section" class="section">
             <div class="card">
-                <div class="card-header"><div class="card-title"><i class="fas fa-boxes"></i> قاعدة بيانات الأصناف</div><button class="btn btn-success btn-sm" onclick="openProductModal()"><i class="fas fa-plus"></i> إضافة صنف</button></div>
+                <div class="card-header" style="flex-wrap:wrap;gap:10px;">
+                    <div class="card-title"><i class="fas fa-boxes"></i> قاعدة بيانات الأصناف</div>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                        <button class="btn btn-success btn-sm" onclick="openProductModal()"><i class="fas fa-plus"></i> إضافة صنف</button>
+                        <button class="btn btn-primary btn-sm" onclick="document.getElementById('productExcelFileInput').click()"><i class="fas fa-file-excel"></i> رفع ملف Excel</button>
+                        <button class="btn btn-secondary btn-sm" onclick="downloadProductTemplate()"><i class="fas fa-download"></i> تحميل نموذج</button>
+                        <input type="file" id="productExcelFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleProductExcelUpload(event)">
+                    </div>
+                </div>
                 <div class="search-box"><i class="fas fa-search"></i><input type="text" id="productSearch" placeholder="بحث في الأصناف..." oninput="filterProducts()"></div>
                 <div class="table-container">
                     <table><thead><tr><th>كود الصنف</th><th>اسم الصنف</th><th>الوحدة</th><th>القسم</th><th>سعر البيع</th><th>سعر التكلفة</th><th>الربح المتوقع</th><th>الإجراءات</th></tr></thead><tbody id="productsTable"></tbody></table>
@@ -2315,6 +2323,7 @@
         let salesChartInstance = null;
         let profitChartInstance = null;
         let excelCustomersData = [];
+        let excelProductsData = [];
         // مهم: بنستخدم sessionStorage مش localStorage عشان كل تاب مفتوح ياخد رقم تعريف (Device ID) خاص
         // بيه لوحده، حتى لو التابات دي كلها في نفس المتصفح ونفس الجهاز (زي فتح النظام بأكتر من يوزر
         // في نفس الوقت). لو استخدمنا localStorage هنا، كل التابات كانت هتاخد نفس الرقم وتفتكر إن
@@ -2337,10 +2346,87 @@
         // (Collections منفصلة في فايرستور) بدل ما يتكدسوا في نفس المستند الكبير ده، عشان تعديل واحد
         // منهم ميضربش تعديل تاني حصل في نفس اللحظة تقريبًا. شوف startInvoiceRecordsListener وأخواتها.
         const CLOUD_SYNCED_KEYS = new Set([
-            'products', 'customers', 'suppliers', 'salesmen',
-            'inventory', 'expenses', 'treasury', 'salesReturns',
+            'salesmen', 'expenses', 'treasury', 'salesReturns',
             'purchaseReturns', 'supplierAdjustments', 'users', 'appCategories', 'appBrands', 'activationCodes', 'requireActivationCode', 'loyaltySettings', 'appBanners', 'appOffers', 'appCities', 'appRegions', 'appNeighborhoods', 'appNotifications'
         ]);
+        // المنتجات والعملاء والموردين والمخزون اتنقلوا لمزامنة "فرق" (diff) لكل عنصر لوحده -
+        // بدل ما ينضموا لملف storeData/main الضخم زي باقي المفاتيح فوق. شوف SPLIT_COLLECTION_KEYS تحت.
+        const SPLIT_COLLECTION_KEYS = {
+            products: { collection: 'productRecords', idField: 'code' },
+            customers: { collection: 'customerRecords', idField: 'code' },
+            suppliers: { collection: 'supplierRecords', idField: 'code' }
+        };
+        let lastSyncedSplit = {
+            products: JSON.parse(localStorage.getItem('_lastSyncedProducts') || '[]'),
+            customers: JSON.parse(localStorage.getItem('_lastSyncedCustomers') || '[]'),
+            suppliers: JSON.parse(localStorage.getItem('_lastSyncedSuppliers') || '[]'),
+            inventory: JSON.parse(localStorage.getItem('_lastSyncedInventory') || '{}')
+        };
+        let splitSyncTimers = {};
+
+        function scheduleSplitSync(key) {
+            if (!db) return;
+            clearTimeout(splitSyncTimers[key]);
+            splitSyncTimers[key] = setTimeout(function() { pushSplitDiff(key); }, 900);
+        }
+
+        // بيقارن النسخة الحالية بآخر نسخة اترفعت، وبيبعت للسحابة بس العناصر اللي اتغيرت/اتضافت/اتشالت -
+        // مش الملف كله زي الطريقة القديمة. كده لو موظفين مختلفين عدلوا أصناف مختلفة في نفس اللحظة،
+        // تعديل كل واحد فيهم بيتحفظ لوحده من غير ما يمسح تعديل التاني.
+        function pushSplitDiff(key) {
+            if (!db) return;
+            let current, conf;
+            if (key === 'products') { current = products; conf = SPLIT_COLLECTION_KEYS.products; }
+            else if (key === 'customers') { current = customers; conf = SPLIT_COLLECTION_KEYS.customers; }
+            else if (key === 'suppliers') { current = suppliers; conf = SPLIT_COLLECTION_KEYS.suppliers; }
+            else if (key === 'inventory') { pushInventoryDiff(); return; }
+            else return;
+
+            const currentMap = {}, prevMap = {};
+            (current || []).forEach(function(item) { if (item && item[conf.idField] != null) currentMap[item[conf.idField]] = item; });
+            (lastSyncedSplit[key] || []).forEach(function(item) { if (item && item[conf.idField] != null) prevMap[item[conf.idField]] = item; });
+
+            const batch = db.batch();
+            let opCount = 0;
+            Object.keys(currentMap).forEach(function(id) {
+                const cur = currentMap[id], prev = prevMap[id];
+                if (!prev || JSON.stringify(prev) !== JSON.stringify(cur)) {
+                    batch.set(db.collection(conf.collection).doc(String(id)), cur);
+                    opCount++;
+                }
+            });
+            Object.keys(prevMap).forEach(function(id) {
+                if (!currentMap[id]) { batch.delete(db.collection(conf.collection).doc(String(id))); opCount++; }
+            });
+            if (opCount === 0) return;
+            batch.commit().then(function() {
+                lastSyncedSplit[key] = JSON.parse(JSON.stringify(current || []));
+                _origLocalStorageSetItem('_lastSynced' + key.charAt(0).toUpperCase() + key.slice(1), JSON.stringify(lastSyncedSplit[key]));
+            }).catch(function(err) { console.error('Split sync failed for ' + key + ':', err); });
+        }
+
+        function pushInventoryDiff() {
+            if (!db) return;
+            const currentMap = inventory || {};
+            const prevMap = lastSyncedSplit.inventory || {};
+            const batch = db.batch();
+            let opCount = 0;
+            Object.keys(currentMap).forEach(function(code) {
+                const cur = currentMap[code], prev = prevMap[code];
+                if (!prev || JSON.stringify(prev) !== JSON.stringify(cur)) {
+                    batch.set(db.collection('inventoryRecords').doc(String(code)), Object.assign({ code: code }, cur));
+                    opCount++;
+                }
+            });
+            Object.keys(prevMap).forEach(function(code) {
+                if (!currentMap[code]) { batch.delete(db.collection('inventoryRecords').doc(String(code))); opCount++; }
+            });
+            if (opCount === 0) return;
+            batch.commit().then(function() {
+                lastSyncedSplit.inventory = JSON.parse(JSON.stringify(inventory || {}));
+                _origLocalStorageSetItem('_lastSyncedInventory', JSON.stringify(lastSyncedSplit.inventory));
+            }).catch(function(err) { console.error('Inventory split sync failed:', err); });
+        }
 
         // ==================== الإشعارات الفورية (OneSignal عبر وسيط Cloudflare Worker) ====================
         // المتصفح ممنوع يتصل بـ OneSignal مباشرة (سياسة CORS)، فبنبعت الطلب لوسيط صغير مجاني
@@ -2414,6 +2500,10 @@
                     startAuditLogRecordsListener();
                     startCustomerVisitRecordsListener();
                     startDeliveryCollectionRecordsListener();
+                    startProductRecordsListener();
+                    startCustomerRecordsListener();
+                    startSupplierRecordsListener();
+                    startInventoryRecordsListener();
                 });
                 setupStaleTabAutoRefresh();
             } catch (e) {
@@ -2440,7 +2530,9 @@
         function hookLocalStorageForCloudSync() {
             localStorage.setItem = function(key, value) {
                 _origLocalStorageSetItem(key, value);
-                if (!applyingRemoteUpdate && CLOUD_SYNCED_KEYS.has(key)) scheduleCloudSync();
+                if (applyingRemoteUpdate) return;
+                if (SPLIT_COLLECTION_KEYS[key] || key === 'inventory') { scheduleSplitSync(key); return; }
+                if (CLOUD_SYNCED_KEYS.has(key)) scheduleCloudSync();
             };
         }
 
@@ -2470,8 +2562,8 @@
         function pushStateToCloud() {
             if (!db) return Promise.reject(new Error('لا يوجد اتصال بالسحابة'));
             const payload = {
-                products, customers, suppliers, salesmen,
-                inventory, expenses, treasury, salesReturns, purchaseReturns, supplierAdjustments,
+                salesmen,
+                expenses, treasury, salesReturns, purchaseReturns, supplierAdjustments,
                 users, appCategories, appBrands, activationCodes, requireActivationCode, loyaltySettings, appBanners, appOffers,
                 appCities, appRegions, appNeighborhoods, appNotifications,
                 updatedAt: Date.now(),
@@ -2598,11 +2690,7 @@
                 opts = opts || {};
 
                 applyingRemoteUpdate = true;
-                products = data.products || [];
-                customers = data.customers || [];
-                suppliers = data.suppliers || [];
                 salesmen = data.salesmen || [];
-                inventory = data.inventory || {};
                 expenses = data.expenses || [];
                 treasury = data.treasury || [];
                 salesReturns = data.salesReturns || [];
@@ -2621,11 +2709,7 @@
                 appNeighborhoods = data.appNeighborhoods || [];
                 appNotifications = data.appNotifications || [];
 
-                localStorage.setItem('products', JSON.stringify(products));
-                localStorage.setItem('customers', JSON.stringify(customers));
-                localStorage.setItem('suppliers', JSON.stringify(suppliers));
                 localStorage.setItem('salesmen', JSON.stringify(salesmen));
-                localStorage.setItem('inventory', JSON.stringify(inventory));
                 localStorage.setItem('expenses', JSON.stringify(expenses));
                 localStorage.setItem('treasury', JSON.stringify(treasury));
                 localStorage.setItem('salesReturns', JSON.stringify(salesReturns));
@@ -2848,7 +2932,6 @@
             db.collection('customerVisitRecords').orderBy('date', 'desc').limit(2000).onSnapshot(function(snap) {
                 customerVisits = snap.docs.map(function(d) { return d.data(); });
                 localStorage.setItem('customerVisits', JSON.stringify(customerVisits));
-                try { renderRepVisitsList(); } catch (e) {}
             }, function(err) { console.error('Customer visit records listener error:', err); });
         }
 
@@ -2859,6 +2942,65 @@
                 deliveryCollections = snap.docs.map(function(d) { return d.data(); });
                 localStorage.setItem('deliveryCollections', JSON.stringify(deliveryCollections));
             }, function(err) { console.error('Delivery collection records listener error:', err); });
+        }
+
+        // ==================== المنتجات/العملاء/الموردين/المخزون (Collections منفصلة لكل عنصر) ====================
+        let productRecordsListenerStarted = false, customerRecordsListenerStarted = false,
+            supplierRecordsListenerStarted = false, inventoryRecordsListenerStarted = false;
+
+        function startProductRecordsListener() {
+            if (!db || productRecordsListenerStarted) return;
+            productRecordsListenerStarted = true;
+            db.collection('productRecords').onSnapshot(function(snap) {
+                products = snap.docs.map(function(d) { return d.data(); });
+                lastSyncedSplit.products = JSON.parse(JSON.stringify(products));
+                _origLocalStorageSetItem('products', JSON.stringify(products));
+                _origLocalStorageSetItem('_lastSyncedProducts', JSON.stringify(lastSyncedSplit.products));
+                try { if (document.getElementById('products-section') && document.getElementById('products-section').classList.contains('active')) renderProducts(); } catch (e) {}
+                try { updateInvoiceDropdowns(); } catch (e) {}
+                try { updateDashboardStats(); } catch (e) {}
+            }, function(err) { console.error('Product records listener error:', err); });
+        }
+
+        function startCustomerRecordsListener() {
+            if (!db || customerRecordsListenerStarted) return;
+            customerRecordsListenerStarted = true;
+            db.collection('customerRecords').onSnapshot(function(snap) {
+                customers = snap.docs.map(function(d) { return d.data(); });
+                lastSyncedSplit.customers = JSON.parse(JSON.stringify(customers));
+                _origLocalStorageSetItem('customers', JSON.stringify(customers));
+                _origLocalStorageSetItem('_lastSyncedCustomers', JSON.stringify(lastSyncedSplit.customers));
+                try { if (document.getElementById('customers-section') && document.getElementById('customers-section').classList.contains('active')) renderCustomers(); } catch (e) {}
+                try { updateInvoiceDropdowns(); } catch (e) {}
+            }, function(err) { console.error('Customer records listener error:', err); });
+        }
+
+        function startSupplierRecordsListener() {
+            if (!db || supplierRecordsListenerStarted) return;
+            supplierRecordsListenerStarted = true;
+            db.collection('supplierRecords').onSnapshot(function(snap) {
+                suppliers = snap.docs.map(function(d) { return d.data(); });
+                lastSyncedSplit.suppliers = JSON.parse(JSON.stringify(suppliers));
+                _origLocalStorageSetItem('suppliers', JSON.stringify(suppliers));
+                _origLocalStorageSetItem('_lastSyncedSuppliers', JSON.stringify(lastSyncedSplit.suppliers));
+                try { if (document.getElementById('suppliers-section') && document.getElementById('suppliers-section').classList.contains('active')) renderSuppliers(); } catch (e) {}
+                try { updateInvoiceDropdowns(); } catch (e) {}
+            }, function(err) { console.error('Supplier records listener error:', err); });
+        }
+
+        function startInventoryRecordsListener() {
+            if (!db || inventoryRecordsListenerStarted) return;
+            inventoryRecordsListenerStarted = true;
+            db.collection('inventoryRecords').onSnapshot(function(snap) {
+                const inv = {};
+                snap.docs.forEach(function(d) { const data = d.data(); inv[d.id] = data; });
+                inventory = inv;
+                lastSyncedSplit.inventory = JSON.parse(JSON.stringify(inventory));
+                _origLocalStorageSetItem('inventory', JSON.stringify(inventory));
+                _origLocalStorageSetItem('_lastSyncedInventory', JSON.stringify(lastSyncedSplit.inventory));
+                try { if (document.getElementById('inventory-section') && document.getElementById('inventory-section').classList.contains('active')) renderInventory(); } catch (e) {}
+                try { updateDashboardStats(); } catch (e) {}
+            }, function(err) { console.error('Inventory records listener error:', err); });
         }
 
         // ==================== (زيارات المناديب اتنقلت بالكامل لتبقى داخل برنامج الأبليكشن كـ"وضع مندوب") ====================
@@ -2896,13 +3038,69 @@
                     }).catch(function(e) { console.error('فشل ترحيل ' + collectionName + ':', e); });
                 }).catch(function(e) { console.error('تعذر التحقق من ' + collectionName + ' للترحيل:', e); });
             }
+            // زي migrateCollection بالظبط، بس بتستخدم "code" كمعرّف بدل "id" (للمنتجات/العملاء/الموردين)
+            function migrateCollectionByField(collectionName, localArray, idField, doneFlagKey) {
+                if (localStorage.getItem(doneFlagKey)) return Promise.resolve();
+                return db.collection(collectionName).limit(1).get().then(function(snap) {
+                    if (!snap.empty || !localArray || localArray.length === 0) {
+                        localStorage.setItem(doneFlagKey, '1');
+                        return;
+                    }
+                    const batches = [];
+                    let batch = db.batch(), count = 0;
+                    localArray.forEach(function(item) {
+                        if (!item || item[idField] == null) return;
+                        batch.set(db.collection(collectionName).doc(String(item[idField])), item);
+                        count++;
+                        if (count >= 400) { batches.push(batch); batch = db.batch(); count = 0; }
+                    });
+                    if (count > 0) batches.push(batch);
+                    let chain = Promise.resolve();
+                    batches.forEach(function(b) { chain = chain.then(function() { return b.commit(); }); });
+                    return chain.then(function() {
+                        localStorage.setItem(doneFlagKey, '1');
+                        lastSyncedSplit[collectionName === 'productRecords' ? 'products' : (collectionName === 'customerRecords' ? 'customers' : 'suppliers')] = JSON.parse(JSON.stringify(localArray));
+                        console.log('تم ترحيل ' + collectionName + ' بنجاح (' + localArray.length + ' عنصر)');
+                    }).catch(function(e) { console.error('فشل ترحيل ' + collectionName + ':', e); });
+                }).catch(function(e) { console.error('تعذر التحقق من ' + collectionName + ' للترحيل:', e); });
+            }
+            // المخزون object مش array، فمحتاج دالة ترحيل خاصة بيه
+            function migrateInventory(doneFlagKey) {
+                if (localStorage.getItem(doneFlagKey)) return Promise.resolve();
+                return db.collection('inventoryRecords').limit(1).get().then(function(snap) {
+                    const codes = Object.keys(inventory || {});
+                    if (!snap.empty || codes.length === 0) {
+                        localStorage.setItem(doneFlagKey, '1');
+                        return;
+                    }
+                    const batches = [];
+                    let batch = db.batch(), count = 0;
+                    codes.forEach(function(code) {
+                        batch.set(db.collection('inventoryRecords').doc(String(code)), Object.assign({ code: code }, inventory[code]));
+                        count++;
+                        if (count >= 400) { batches.push(batch); batch = db.batch(); count = 0; }
+                    });
+                    if (count > 0) batches.push(batch);
+                    let chain = Promise.resolve();
+                    batches.forEach(function(b) { chain = chain.then(function() { return b.commit(); }); });
+                    return chain.then(function() {
+                        localStorage.setItem(doneFlagKey, '1');
+                        lastSyncedSplit.inventory = JSON.parse(JSON.stringify(inventory));
+                        console.log('تم ترحيل المخزون بنجاح (' + codes.length + ' صنف)');
+                    }).catch(function(e) { console.error('فشل ترحيل المخزون:', e); });
+                }).catch(function(e) { console.error('تعذر التحقق من المخزون للترحيل:', e); });
+            }
             // لازم نستنى الترحيل يخلص الأول قبل ما نفتح الاستماع الحي (Listener)، عشان الاستماع
             // ميجيش يلاقي المكان الجديد لسه فاضي فيمسح البيانات المحلية الصحيحة ظنًا منه إنها فعلاً فاضية
             return Promise.all([
                 migrateCollection('invoiceRecords', invoices, 'migratedInvoiceRecords_v1'),
                 migrateCollection('purchaseInvoiceRecords', purchaseInvoices, 'migratedPurchaseInvoiceRecords_v1'),
                 migrateCollection('stockMovementRecords', stockMovements, 'migratedStockMovementRecords_v1'),
-                migrateCollection('auditLogRecords', auditLog, 'migratedAuditLogRecords_v1')
+                migrateCollection('auditLogRecords', auditLog, 'migratedAuditLogRecords_v1'),
+                migrateCollectionByField('productRecords', products, 'code', 'migratedProductRecords_v1'),
+                migrateCollectionByField('customerRecords', customers, 'code', 'migratedCustomerRecords_v1'),
+                migrateCollectionByField('supplierRecords', suppliers, 'code', 'migratedSupplierRecords_v1'),
+                migrateInventory('migratedInventoryRecords_v1')
             ]);
         }
 
@@ -8893,6 +9091,160 @@
             showToast('تم تحميل نموذج Excel');
         }
 
+        // ==================== استيراد جماعي للأصناف من Excel ====================
+        function detectProductHeaders(headers) {
+            if (!headers || headers.length === 0) return null;
+            const possibleHeaders = {
+                code: ['كود الصنف', 'الكود', 'code', 'id', 'معرف', 'كود المنتج', 'product code'],
+                name: ['اسم الصنف', 'الاسم', 'name', 'اسم المنتج', 'product name'],
+                unit: ['الوحدة', 'unit', 'وحدة البيع'],
+                category: ['القسم', 'الفئة', 'category', 'section'],
+                price: ['سعر البيع', 'السعر', 'price', 'sell price', 'selling price'],
+                cost: ['سعر التكلفة', 'التكلفة', 'cost', 'cost price'],
+                qty: ['الكمية الأولية', 'الكمية', 'qty', 'quantity', 'stock']
+            };
+            const map = {};
+            for (const [key, possible] of Object.entries(possibleHeaders)) {
+                for (let i = 0; i < headers.length; i++) {
+                    const h = String(headers[i] || '').toLowerCase().trim();
+                    if (h === '') continue;
+                    if (possible.some(p => h === p.toLowerCase().trim())) { map[key] = i; break; }
+                }
+            }
+            if (map.code !== undefined && map.name !== undefined && map.price !== undefined) {
+                if (map.unit === undefined) map.unit = -1;
+                if (map.category === undefined) map.category = -1;
+                if (map.cost === undefined) map.cost = -1;
+                if (map.qty === undefined) map.qty = -1;
+                return map;
+            }
+            if (headers.length >= 5) {
+                return { code: 0, name: 1, unit: 2, category: 3, price: 4, cost: headers.length > 5 ? 5 : -1, qty: headers.length > 6 ? 6 : -1 };
+            }
+            return null;
+        }
+
+        function handleProductExcelUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+                    if (jsonData.length < 2) { showToast('ملف Excel فارغ أو غير صالح', 'error'); return; }
+
+                    let headerRowIndex = 0; let headerMap = null;
+                    for (let i = 0; i < Math.min(jsonData.length, 5); i++) {
+                        const row = jsonData[i];
+                        if (!row || row.length === 0) continue;
+                        const detected = detectProductHeaders(row.map(h => String(h || '').trim()));
+                        if (detected) { headerRowIndex = i; headerMap = detected; break; }
+                    }
+                    if (!headerMap) { showToast('تنسيق الأعمدة غير صحيح. تأكد من وجود: كود الصنف، اسم الصنف، سعر البيع', 'error'); return; }
+
+                    excelProductsData = []; let skippedRows = 0;
+                    for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
+                        const row = jsonData[i];
+                        if (!row || row.length === 0) { skippedRows++; continue; }
+                        const codeVal = row[headerMap.code]; const nameVal = row[headerMap.name]; const priceVal = row[headerMap.price];
+                        if (codeVal === undefined || codeVal === null || codeVal === '') { skippedRows++; continue; }
+                        if (nameVal === undefined || nameVal === null || nameVal === '') { skippedRows++; continue; }
+                        const price = parseFloat(priceVal);
+                        if (isNaN(price) || price <= 0) { skippedRows++; continue; }
+                        const product = {
+                            code: String(codeVal).trim(), name: String(nameVal).trim(),
+                            unit: headerMap.unit >= 0 ? String(row[headerMap.unit] || 'كرتونة').trim() : 'كرتونة',
+                            category: headerMap.category >= 0 ? String(row[headerMap.category] || '').trim() : '',
+                            price: price,
+                            cost: headerMap.cost >= 0 ? (parseFloat(row[headerMap.cost]) || 0) : 0,
+                            qty: headerMap.qty >= 0 ? (parseFloat(row[headerMap.qty]) || 0) : 0
+                        };
+                        excelProductsData.push(product);
+                    }
+                    if (excelProductsData.length === 0) { showToast('لم يتم العثور على بيانات صالحة في الملف', 'error'); return; }
+                    showProductExcelPreview(skippedRows);
+                } catch (err) { console.error('Product excel parsing error:', err); showToast('حدث خطأ أثناء قراءة الملف: ' + err.message, 'error'); }
+            };
+            reader.onerror = function() { showToast('حدث خطأ أثناء قراءة الملف', 'error'); };
+            reader.readAsArrayBuffer(file);
+            event.target.value = '';
+        }
+
+        function showProductExcelPreview(skippedCount) {
+            const tbody = document.getElementById('productExcelPreviewTable');
+            let validCount = 0, duplicateCount = 0;
+            tbody.innerHTML = excelProductsData.map(p => {
+                const exists = products.some(existing => existing.code === p.code);
+                if (exists) duplicateCount++; else validCount++;
+                const issueBadge = exists
+                    ? '<span class="badge badge-danger"><i class="fas fa-exclamation-circle"></i> موجود (هيتحدث لو فعلت الخيار فوق)</span>'
+                    : '<span class="badge badge-success"><i class="fas fa-check-circle"></i> جديد</span>';
+                return `<tr style="${exists ? 'background:rgba(231,76,60,0.05);' : ''}"><td><code style="background:#f0f2f5;padding:2px 6px;border-radius:4px;font-size:12px;">${escapeHtml(p.code)}</code></td>
+                <td><strong>${escapeHtml(p.name)}</strong></td><td>${escapeHtml(p.unit)}</td><td>${p.category ? escapeHtml(p.category) : '<span style="color:#ccc;">-</span>'}</td>
+                <td>${p.price.toFixed(2)}</td><td>${p.cost.toFixed(2)}</td><td>${p.qty}</td><td>${issueBadge}</td></tr>`;
+            }).join('');
+            document.getElementById('productExcelPreviewCount').innerHTML = `${excelProductsData.length} صنف`;
+            document.getElementById('productExcelPreviewValid').innerHTML = `<span style="color:var(--accent);"><i class="fas fa-check"></i> ${validCount} جديد</span>${duplicateCount > 0 ? ` | <span style="color:var(--danger);"><i class="fas fa-times"></i> ${duplicateCount} موجود</span>` : ''}${skippedCount > 0 ? ` | <span style="color:var(--warning);"><i class="fas fa-filter"></i> ${skippedCount} صف تخطى</span>` : ''}`;
+            document.getElementById('productExcelUpdateExisting').checked = false;
+            openModal('productExcelPreviewModal');
+        }
+
+        function importExcelProducts() {
+            const updateExisting = document.getElementById('productExcelUpdateExisting').checked;
+            let added = 0, updated = 0, skipped = 0;
+            excelProductsData.forEach(p => {
+                const idx = products.findIndex(existing => existing.code === p.code);
+                if (idx !== -1) {
+                    if (!updateExisting) { skipped++; return; }
+                    products[idx].name = p.name;
+                    products[idx].unit = p.unit;
+                    if (p.category) products[idx].category = p.category;
+                    products[idx].price = p.price;
+                    products[idx].cost = p.cost;
+                    if (!inventory[p.code]) inventory[p.code] = { code: p.code, qty: p.qty, cost: p.cost, minStock: 0 };
+                    else inventory[p.code].cost = p.cost;
+                    updated++;
+                } else {
+                    products.push({ code: p.code, name: p.name, unit: p.unit, category: p.category, price: p.price, cost: p.cost, minStock: 0, maxOrderQty: null, secondaryUnit: null, imageUrl: null, brand: null, showInApp: true, bestSeller: false, bestSellerOrder: 0 });
+                    inventory[p.code] = { code: p.code, qty: p.qty, cost: p.cost, minStock: 0 };
+                    if (p.qty > 0) addStockMovement(p.code, p.name, 'initial', p.qty, p.qty, 'استيراد Excel', 'رصيد أولي من ملف استيراد جماعي');
+                    added++;
+                }
+            });
+            localStorage.setItem('products', JSON.stringify(products));
+            saveInventory();
+            logAction('استيراد أصناف من Excel', `تم إضافة ${added} صنف جديد` + (updated > 0 ? ` وتحديث ${updated} صنف` : ''));
+            renderProducts(); updateInvoiceDropdowns(); renderInventory(); renderLowStock(); updateDashboardStats();
+            closeModal('productExcelPreviewModal'); excelProductsData = [];
+            if (added > 0 || updated > 0) {
+                let msg = '';
+                if (added > 0) msg += `تم إضافة ${added} صنف جديد`;
+                if (updated > 0) msg += (msg ? ' و' : 'تم ') + `تحديث ${updated} صنف`;
+                if (skipped > 0) msg += ` (تم تخطي ${skipped} موجود)`;
+                showToast(msg);
+            } else {
+                showToast('لم يتم استيراد أي صنف جديد. فعّل خيار "تحديث الأصناف الموجودة" لو عايز تحدثهم.', 'warning');
+            }
+        }
+
+        function downloadProductTemplate() {
+            const templateData = [
+                ['كود الصنف', 'اسم الصنف', 'الوحدة', 'القسم', 'سعر البيع', 'سعر التكلفة', 'الكمية الأولية'],
+                ['P001', 'هابي مكس كولا 235 مل', 'كرتونة', 'مياه غازية وعصائر', '85', '65', '50'],
+                ['P002', 'بسكويت شاي', 'كرتونة', 'بسكويت وحلويات', '120', '95', '30']
+            ];
+            const ws = XLSX.utils.aoa_to_sheet(templateData);
+            ws['!cols'] = [{ wch: 12 }, { wch: 32 }, { wch: 12 }, { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 15 }];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'الأصناف');
+            XLSX.writeFile(wb, 'نموذج_أصناف.xlsx');
+            showToast('تم تحميل نموذج Excel');
+        }
+
+
         function openDeleteAllCustomersModal() {
             if (customers.length === 0) { showToast('لا يوجد عملاء لمسحهم', 'warning'); return; }
             document.getElementById('deleteAllCount').textContent = customers.length;
@@ -8938,6 +9290,43 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('excelPreviewModal')">إلغاء</button>
                 <button class="btn btn-success" onclick="importExcelCustomers()"><i class="fas fa-save"></i> استيراد العملاء</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Product Excel Preview Modal -->
+    <div class="modal-overlay" id="productExcelPreviewModal">
+        <div class="modal" style="max-width:900px;">
+            <div class="modal-header">
+                <h3 class="modal-title"><i class="fas fa-file-excel" style="color:var(--accent);"></i> معاينة بيانات الأصناف من Excel</h3>
+                <button class="modal-close" onclick="closeModal('productExcelPreviewModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom:15px;padding:15px;background:rgba(39,174,96,0.08);border-radius:10px;border-right:4px solid var(--accent);">
+                    <p style="margin:0;font-size:14px;color:var(--text);">
+                        <i class="fas fa-info-circle" style="color:var(--accent);"></i>
+                        <strong>تعليمات:</strong> أعمدة الملف: <strong>كود الصنف</strong> | <strong>اسم الصنف</strong> | <strong>الوحدة</strong> | <strong>القسم</strong> | <strong>سعر البيع</strong> | <strong>سعر التكلفة</strong> | <strong>الكمية الأولية</strong> (اختياري)
+                    </p>
+                </div>
+                <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
+                    <span id="productExcelPreviewCount" style="font-weight:700;color:var(--primary);">0 صنف</span>
+                    <span id="productExcelPreviewValid" style="font-size:13px;color:var(--text-light);"></span>
+                </div>
+                <div style="margin:0 0 10px;">
+                    <label style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;">
+                        <input type="checkbox" id="productExcelUpdateExisting"> تحديث الأصناف الموجودة بالفعل (السعر والتكلفة) بدل تخطيها
+                    </label>
+                </div>
+                <div class="table-container" style="max-height:350px;overflow-y:auto;">
+                    <table>
+                        <thead><tr><th>كود الصنف</th><th>اسم الصنف</th><th>الوحدة</th><th>القسم</th><th>سعر البيع</th><th>سعر التكلفة</th><th>الكمية</th><th>الحالة</th></tr></thead>
+                        <tbody id="productExcelPreviewTable"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('productExcelPreviewModal')">إلغاء</button>
+                <button class="btn btn-success" onclick="importExcelProducts()"><i class="fas fa-save"></i> استيراد الأصناف</button>
             </div>
         </div>
     </div>
