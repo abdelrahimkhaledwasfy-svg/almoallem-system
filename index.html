@@ -1786,6 +1786,12 @@
                     <input type="file" id="backupFileInput" accept=".json" style="display:none;" onchange="importBackup(event)">
                     <button class="btn btn-info" onclick="document.getElementById('backupFileInput').click()" style="margin-top:10px;"><i class="fas fa-upload"></i> استيراد النسخة</button>
                 </div>
+                <div class="backup-card">
+                    <i class="fas fa-wrench" style="color:var(--danger);"></i>
+                    <h3>تصحيح خصم المخزون المزدوج (17 سبتمبر 2026)</h3>
+                    <p>تصحيح لمرة واحدة لـ28 صنف تأثروا بمشكلة تكرار خصم طلبات الأبليكشن. آمن يتضغط أكتر من مرة/من أكتر من جهاز - هيتنفذ فعليًا مرة واحدة بس.</p>
+                    <button class="btn btn-danger" onclick="runSept17DuplicationFix()" style="margin-top:10px;"><i class="fas fa-wrench"></i> تنفيذ التصحيح</button>
+                </div>
             </div>
 
             <div class="card" style="margin-top:25px;">
@@ -4218,6 +4224,48 @@
         }
 
         function saveInventory() { localStorage.setItem('inventory', JSON.stringify(inventory)); scheduleStockLevelsSync(); }
+
+        // *** تصحيح لمرة واحدة (17 سبتمبر 2026) ***
+        // الأرقام دي طلعت من مراجعة كاملة لكل حركات المخزون وكل الفواتير المرتبطة بطلبات الأبليكشن،
+        // عشان نحدد بالظبط قد إيه كل صنف اتخصم زيادة بسبب مشكلة الخصم المزدوج، ونرجعه لوضعه الصحيح.
+        // الحماية من التكرار بتتم عن طريق مستند مشترك على السحابة (systemFlags/stockFix20260917) جوه
+        // transaction ذرية - يعني حتى لو اتضغط الزرار من كذا جهاز أو أكتر من مرة، التصحيح هيتطبق
+        // فعليًا مرة واحدة بس، والمحاولات اللي بعد كده هتتجاهل من غير ما تكرر أي خصم.
+        function runSept17DuplicationFix() {
+            if (!db) { showToast('لا يوجد اتصال بالسحابة، لا يمكن تنفيذ التصحيح الآن', 'error'); return; }
+            const corrections = { P078:10, P031:6, P018:6, P038:5, P035:5, P059:5, P079:5, P070:4, P001:4, P057:3, P032:3, P080:3, P051:3, P050:3, P071:3, P056:2, P048:2, P046:2, P075:2, P016:2, P052:2, P003:1, P077:1, P034:1, P053:1, P063:1, P058:1, P002:1 };
+            const codes = Object.keys(corrections);
+            const summary = codes.map(function(code) {
+                const p = products.find(function(pp) { return pp.code === code; });
+                return '- ' + (p ? p.name : code) + ': +' + corrections[code];
+            }).join('\n');
+            if (!confirm('هيتم تصحيح ' + codes.length + ' صنف تأثروا بمشكلة الخصم المزدوج لطلبات الأبليكشن (تمت المراجعة بمقارنة كل الفواتير والحركات). الكميات دي هتتضاف للمخزون الحالي:\n\n' + summary + '\n\nمتابعة؟')) return;
+
+            const flagRef = db.collection('systemFlags').doc('stockFix20260917');
+            db.runTransaction(function(t) {
+                return t.get(flagRef).then(function(snap) {
+                    if (snap.exists) return false;
+                    t.set(flagRef, { appliedAt: Date.now(), appliedBy: DEVICE_ID });
+                    return true;
+                });
+            }).then(function(applied) {
+                if (!applied) { showToast('التصحيح ده كان اتطبق بالفعل قبل كده (من نفس الجهاز أو جهاز تاني) - مفيش داعي نكرره', 'warning', 7000); return; }
+                codes.forEach(function(code) {
+                    const corr = corrections[code];
+                    if (!inventory[code]) return;
+                    inventory[code].qty += corr;
+                    const p = products.find(function(pp) { return pp.code === code; });
+                    addStockMovement(code, p ? p.name : code, 'in', corr, inventory[code].qty, 'تصحيح جماعي', 'تصحيح خصم مزدوج - مراجعة 17 سبتمبر 2026');
+                });
+                saveInventory();
+                try { renderInventory(); renderMovements(); renderLowStock(); updateDashboardStats(); } catch (e) {}
+                logAction('تصحيح مخزون جماعي', 'تم تصحيح ' + codes.length + ' صنف بعد مراجعة مشكلة الخصم المزدوج لطلبات الأبليكشن (17 سبتمبر 2026)');
+                showToast('تم تصحيح المخزون بنجاح ✓ (' + codes.length + ' صنف)', 'success', 7000);
+            }).catch(function(err) {
+                console.error('Sept17 fix failed:', err);
+                showToast('حصل خطأ أثناء التصحيح: ' + (err.message || err), 'error', 7000);
+            });
+        }
         function saveStockMovements() { localStorage.setItem('stockMovements', JSON.stringify(stockMovements)); }
         function saveExpenses() { localStorage.setItem('expenses', JSON.stringify(expenses)); }
         function saveTreasury() { localStorage.setItem('treasury', JSON.stringify(treasury)); }
