@@ -2489,6 +2489,7 @@
                     pushStateToCloud().catch(function() {});
                 }
                 startCloudListener();
+                startReservationLedgerListener();
                 startOrdersListener();
                 startActivationUsesListener();
                 // نستنى الترحيل يخلص الأول (لو محتاج يشتغل)، وبعدين نفتح الاستماع الحي على الفواتير/
@@ -2749,7 +2750,16 @@
         // بيتابع كل طلب متحجوز مخزونه من الأبليكشن (stockReserved) وبيحدث المخزون المحلي هنا بنفس
         // القيم اللي الأبليكشن خصمها فعليًا في Firestore، عشان مايحصلش تعارض لما نظام المعلم يرفع
         // نسخته المحلية فوق (pushStockLevelsToCloud) ويمسح الحجز من غير ما يعرف إنه موجود.
+        //
+        // *** إصلاح 2026-09: الدفتر ده كان قبل كده متخزن في localStorage بس (خاص بكل جهاز لوحده) ***
+        // ده كان بيسبب خصم مزدوج فعلي: أي جهاز جديد (أو نفس الجهاز بعد مسح البيانات) كان بيفتح
+        // النظام وميلاقيش حاجة في الدفتر المحلي بتاعه، فيعتبر كل الطلبات المحجوزة حاليًا "جديدة"
+        // ويخصمها من الأول تاني فوق الخصم اللي جهاز تاني كان عمله بالفعل. دلوقتي الدفتر بقى مستند
+        // مشترك على السحابة (orderReservationLedger)، وكل تحديث بيتم جوه transaction ذرية عشان لو
+        // جهازين حاولوا يعدّلوا نفس الطلب في نفس اللحظة بالظبط، واحد بس هو اللي يطبق الفرق فعليًا.
         let reservedStockLedger = JSON.parse(localStorage.getItem('reservedStockLedger') || '{}');
+        let reservationLedgerLoaded = false;
+        let reservationLedgerListenerStarted = false;
 
         function computeOrderStockVector(order) {
             const vec = {};
@@ -2762,52 +2772,99 @@
             return vec;
         }
 
+        // بيمسح مستند الدفتر بتاع الطلب من غير ما يغيّر أي كمية في المخزون - بيتستخدم لما الطلب
+        // يتحول لـ "تم التجهيز"، لأن fulfillOrderCore هي اللي بتضمن إن الخصم ماتكررش وقتها
+        function clearLedgerDoc(orderId) {
+            delete reservedStockLedger[orderId];
+            localStorage.setItem('reservedStockLedger', JSON.stringify(reservedStockLedger));
+            if (db) db.collection('orderReservationLedger').doc(orderId).delete().catch(function(e) { console.error('clear ledger doc failed:', e); });
+        }
+
+        // بيطبّق الفرق بين آخر حالة معروفة على السحابة وبين الحالة المطلوبة دلوقتي (newVec)، لكن
+        // القرار النهائي بيتاخد *جوه* transaction بيقرا فيها أحدث نسخة من مستند الدفتر المشترك.
+        // لو جهاز تاني كان سبقنا وحدّث نفس الطلب لنفس القيمة، الفرق هنا بيبقى صفر ومفيش خصم مكرر.
+        // newVec = null معناها "الغاء الحجز بالكامل" (طلب اترفض/اتلغى).
+        function applyLedgerChangeTransactional(order, newVec) {
+            if (!db) return;
+            const ledgerRef = db.collection('orderReservationLedger').doc(order.id);
+            db.runTransaction(function(t) {
+                return t.get(ledgerRef).then(function(snap) {
+                    const cloudVec = snap.exists ? ((snap.data() || {}).vector || {}) : {};
+                    const codes = new Set(Object.keys(newVec || {}).concat(Object.keys(cloudVec)));
+                    const deltas = {};
+                    codes.forEach(function(code) {
+                        const cloudQty = cloudVec[code] || 0;
+                        const targetQty = newVec ? (newVec[code] || 0) : 0;
+                        const d = targetQty - cloudQty;
+                        if (d !== 0) deltas[code] = d;
+                    });
+                    if (newVec) t.set(ledgerRef, { orderId: order.id, vector: newVec, updatedAt: Date.now() });
+                    else t.delete(ledgerRef);
+                    return deltas;
+                });
+            }).then(function(deltas) {
+                if (newVec) reservedStockLedger[order.id] = newVec; else delete reservedStockLedger[order.id];
+                localStorage.setItem('reservedStockLedger', JSON.stringify(reservedStockLedger));
+                if (!deltas || Object.keys(deltas).length === 0) return; // جهاز تاني كان سبقنا بنفس القيمة فعليًا - مفيش خصم مكرر
+                let changed = false;
+                Object.keys(deltas).forEach(function(code) {
+                    const delta = deltas[code];
+                    if (inventory[code]) {
+                        inventory[code].qty -= delta;
+                        const ref = 'طلب أبليكشن #' + order.id.slice(-6);
+                        const name = (products.find(p => p.code === code) || {}).name || code;
+                        if (delta > 0) addStockMovement(code, name, 'out', -delta, inventory[code].qty, ref, newVec ? 'حجز تلقائي وقت الطلب من الأبليكشن' : 'خصم إضافي عند إلغاء حجز');
+                        else addStockMovement(code, name, 'in', -delta, inventory[code].qty, ref, newVec ? 'تقليل/حذف صنف من طلب أبليكشن قبل التجهيز' : 'إرجاع مخزون كان محجوز لطلب اتلغى/اترفض');
+                        changed = true;
+                    }
+                });
+                if (changed) {
+                    localStorage.setItem('inventory', JSON.stringify(inventory));
+                    scheduleStockLevelsSync();
+                    if (document.getElementById('inventory-section') && document.getElementById('inventory-section').classList.contains('active')) renderInventory();
+                    if (document.getElementById('reports-section') && document.getElementById('reports-section').classList.contains('active')) { try { renderLowStock(); } catch (e) {} }
+                }
+            }).catch(function(err) { console.error('applyLedgerChangeTransactional failed for order ' + order.id + ':', err); });
+        }
+
         function syncReservedOrdersIntoLocalInventory(orders) {
-            let changed = false;
+            // مهم: منعملش أي حساب أو خصم قبل ما الدفتر الحقيقي (المشترك على السحابة) يوصل فعليًا
+            // من startReservationLedgerListener - لو حسبنا بناءً على دفتر فاضي هنا هيبقى زي بالظبط
+            // نفس المشكلة القديمة (كل جهاز يفتكر إنه أول واحد يعالج الطلب).
+            if (!reservationLedgerLoaded) return;
             orders.forEach(function(order) {
                 if (!order.stockReserved) return;
                 const prevVec = reservedStockLedger[order.id] || null;
                 if (order.status === 'rejected') {
-                    if (prevVec) {
-                        Object.keys(prevVec).forEach(function(code) {
-                            if (inventory[code]) {
-                                inventory[code].qty += prevVec[code];
-                                addStockMovement(code, (products.find(p => p.code === code) || {}).name || code, 'in', prevVec[code], inventory[code].qty, 'إلغاء طلب أبليكشن #' + order.id.slice(-6), 'إرجاع مخزون كان محجوز لطلب اتلغى/اترفض');
-                            }
-                        });
-                        delete reservedStockLedger[order.id];
-                        changed = true;
-                    }
+                    if (prevVec) applyLedgerChangeTransactional(order, null);
                     return;
                 }
                 if (order.status === 'fulfilled') {
-                    if (prevVec) { delete reservedStockLedger[order.id]; changed = true; }
+                    if (prevVec) clearLedgerDoc(order.id);
                     return;
                 }
                 // الطلب لسه "جديد" أو "قيد التجهيز" - نتابع أي فرق حصل من الأبليكشن (طلب جديد/إضافة/حذف/تعديل كمية)
                 const currVec = computeOrderStockVector(order);
-                const codes = new Set(Object.keys(currVec).concat(prevVec ? Object.keys(prevVec) : []));
-                codes.forEach(function(code) {
-                    const prevQty = prevVec ? (prevVec[code] || 0) : 0;
-                    const currQty = currVec[code] || 0;
-                    const delta = currQty - prevQty;
-                    if (delta !== 0 && inventory[code]) {
-                        inventory[code].qty -= delta;
-                        const ref = 'طلب أبليكشن #' + order.id.slice(-6);
-                        if (delta > 0) addStockMovement(code, (products.find(p => p.code === code) || {}).name || code, 'out', -delta, inventory[code].qty, ref, 'حجز تلقائي وقت الطلب من الأبليكشن');
-                        else addStockMovement(code, (products.find(p => p.code === code) || {}).name || code, 'in', -delta, inventory[code].qty, ref, 'تقليل/حذف صنف من طلب أبليكشن قبل التجهيز');
-                        changed = true;
-                    }
-                });
-                reservedStockLedger[order.id] = currVec;
+                if (JSON.stringify(currVec) !== JSON.stringify(prevVec || {})) {
+                    applyLedgerChangeTransactional(order, currVec);
+                }
             });
-            localStorage.setItem('reservedStockLedger', JSON.stringify(reservedStockLedger));
-            if (changed) {
-                localStorage.setItem('inventory', JSON.stringify(inventory));
-                scheduleStockLevelsSync();
-                if (document.getElementById('inventory-section') && document.getElementById('inventory-section').classList.contains('active')) renderInventory();
-                if (document.getElementById('reports-section') && document.getElementById('reports-section').classList.contains('active')) { try { renderLowStock(); } catch (e) {} }
-            }
+        }
+
+        // بيحمّل دفتر الحجوزات المشترك من السحابة (مستند واحد لكل طلب) بدل الاعتماد على localStorage
+        // الخاص بكل جهاز. أول ما يوصل أول Snapshot بنعلّم reservationLedgerLoaded = true ونعيد فحص
+        // الطلبات المفتوحة عليه، عشان أي فرق حقيقي (لو فيه) يتطبق من غير ما نكرر خصم جهاز تاني عمله.
+        function startReservationLedgerListener() {
+            if (!db || reservationLedgerListenerStarted) return;
+            reservationLedgerListenerStarted = true;
+            db.collection('orderReservationLedger').onSnapshot(function(snap) {
+                const ledger = {};
+                snap.forEach(function(d) { ledger[d.id] = (d.data() || {}).vector || {}; });
+                reservedStockLedger = ledger;
+                localStorage.setItem('reservedStockLedger', JSON.stringify(reservedStockLedger));
+                reservationLedgerLoaded = true;
+                syncReservedOrdersIntoLocalInventory(customerOrders);
+            }, function(err) { console.error('Reservation ledger listener error:', err); });
         }
 
 
