@@ -6941,8 +6941,13 @@
                 if (inv) {
                     inv.items.forEach(item => {
                         if (inventory[item.productCode]) {
-                            inventory[item.productCode].qty += item.qty;
-                            addStockMovement(item.productCode, item.productName, 'in', item.qty, inventory[item.productCode].qty, 'حذف فاتورة', 'استرجاع مخزون من حذف فاتورة بيع #' + inv.number);
+                            // *** إصلاح 2026-09: نفس باگ حذف مرتجع البيع بالظبط - كان بيستخدم item.qty ***
+                            // (بوحدة البيع، ممكن تكون "علبة" مثلاً) بدل item.stockDeductQty (بعد التحويل
+                            // لوحدة الكرتونة). حذف فاتورة بيع كانت بالقطاعي كان بيرجّع كمية أكبر بكتير
+                            // من الصح للمخزون.
+                            const deductQty = item.stockDeductQty != null ? item.stockDeductQty : item.qty;
+                            inventory[item.productCode].qty += deductQty;
+                            addStockMovement(item.productCode, item.productName, 'in', deductQty, inventory[item.productCode].qty, 'حذف فاتورة', 'استرجاع مخزون من حذف فاتورة بيع #' + inv.number);
                         }
                     });
                     if (inv.paymentMethod === 'نقدي' || inv.paymentMethod === 'بطاقة' || inv.paymentMethod === 'تحويل بنكي') {
