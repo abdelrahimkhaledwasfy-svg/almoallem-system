@@ -2825,8 +2825,7 @@
                     }
                 });
                 if (changed) {
-                    localStorage.setItem('inventory', JSON.stringify(inventory));
-                    scheduleStockLevelsSync();
+                    saveInventory();
                     if (document.getElementById('inventory-section') && document.getElementById('inventory-section').classList.contains('active')) renderInventory();
                     if (document.getElementById('reports-section') && document.getElementById('reports-section').classList.contains('active')) { try { renderLowStock(); } catch (e) {} }
                 }
@@ -4223,7 +4222,12 @@
             saveInventory();
         }
 
-        function saveInventory() { localStorage.setItem('inventory', JSON.stringify(inventory)); scheduleStockLevelsSync(); }
+        // *** إصلاح 2026-09: saveInventory() كانت بترفع الكمية الجديدة بس لـ "stockLevels" (اللي الأبليكشن ***
+        // بيقرا منه)، ومكنتش بترفعها لـ "inventoryRecords" (اللي نظام المعلم نفسه بيقرا منه أول ما
+        // يفتح/يتعمله ريفريش عن طريق startInventoryRecordsListener). فأي تعديل مخزون - سواء يدوي، أو من
+        // فاتورة بيع/شراء، أو أي حاجة - كان بيفضل شغال محليًا بس لحد ما تعمل ريفريش، وبعدها يرجع للرقم
+        // القديم اللي لسه على السحابة. دلوقتي كل تغيير في المخزون بيترفع للمكانين مع بعض.
+        function saveInventory() { localStorage.setItem('inventory', JSON.stringify(inventory)); scheduleStockLevelsSync(); scheduleSplitSync('inventory'); }
 
         // *** تصحيح لمرة واحدة (17 سبتمبر 2026) ***
         // الأرقام دي طلعت من مراجعة كاملة لكل حركات المخزون وكل الفواتير المرتبطة بطلبات الأبليكشن،
