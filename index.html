@@ -1319,10 +1319,16 @@
                     #ordersTodayBreakdown span.b-preparing { background:rgba(52,152,219,0.15); color:var(--info); }
                     #ordersTodayBreakdown span.b-fulfilled { background:rgba(39,174,96,0.15); color:var(--accent); }
                 </style>
+                <div style="padding:12px 20px 0;display:flex;justify-content:flex-end;gap:10px;">
+                    <button class="btn btn-secondary btn-sm" onclick="openPrepZonesReport()"><i class="fas fa-boxes"></i> تقرير الأصناف المجمّع (حسب المنطقة)</button>
+                    <button class="btn btn-primary btn-sm" onclick="batchIssueForPreparation()"><i class="fas fa-receipt"></i> إصدار الفواتير (تحويل الطلبات الجديدة لقيد التجهيز دفعة واحدة)</button>
+                </div>
                 <div style="padding:0 20px;display:flex;gap:4px;border-bottom:2px solid var(--border);flex-wrap:wrap;">
                     <button class="tab-btn active" id="ordersTabBtn-pending" onclick="switchOrdersTab('pending')">🆕 جديد <span id="ordersTabCount-pending" class="badge badge-danger" style="margin-right:4px;"></span></button>
                     <button class="tab-btn" id="ordersTabBtn-preparing" onclick="switchOrdersTab('preparing')">⏳ قيد التجهيز <span id="ordersTabCount-preparing" class="badge badge-info" style="margin-right:4px;"></span></button>
-                    <button class="tab-btn" id="ordersTabBtn-fulfilled" onclick="switchOrdersTab('fulfilled')">✅ تم التجهيز <span id="ordersTabCount-fulfilled" class="badge badge-success" style="margin-right:4px;"></span></button>
+                    <button class="tab-btn" id="ordersTabBtn-ready" onclick="switchOrdersTab('ready')">🚚 تم التجهيز وخرج للتسليم <span id="ordersTabCount-ready" class="badge badge-info" style="margin-right:4px;"></span></button>
+                    <button class="tab-btn" id="ordersTabBtn-delivered" onclick="switchOrdersTab('delivered')">✅ تم التسليم <span id="ordersTabCount-delivered" class="badge badge-success" style="margin-right:4px;"></span></button>
+                    <button class="tab-btn" id="ordersTabBtn-returned" onclick="switchOrdersTab('returned')">↩️ مرتجع <span id="ordersTabCount-returned" class="badge badge-warning" style="margin-right:4px;"></span></button>
                     <button class="tab-btn" id="ordersTabBtn-rejected" onclick="switchOrdersTab('rejected')">❌ مرفوض <span id="ordersTabCount-rejected" class="badge badge-danger" style="margin-right:4px;"></span></button>
                     <button class="tab-btn" id="ordersTabBtn-all" onclick="switchOrdersTab('all')">الكل <span id="ordersTabCount-all" class="badge badge-primary" style="margin-right:4px;"></span></button>
                     <button class="tab-btn" id="ordersTabBtn-byCustomer" onclick="switchOrdersTab('byCustomer')">👥 حسب العميل</button>
@@ -1337,7 +1343,8 @@
                 </div>
                 <div class="orders-bulk-bar" id="ordersBulkBar">
                     <span id="ordersBulkCount" style="font-weight:700;"></span>
-                    <button class="btn btn-sm btn-success" onclick="bulkFulfillSelected()"><i class="fas fa-check-double"></i> تجهيز المحدد</button>
+                    <button class="btn btn-sm btn-success" onclick="bulkFulfillSelected()"><i class="fas fa-truck"></i> تجهيز المحدد (خروج للتسليم)</button>
+                    <button class="btn btn-sm btn-primary" onclick="bulkDeliverSelected()"><i class="fas fa-check-double"></i> تسليم المحدد</button>
                     <button class="btn btn-sm btn-secondary" onclick="clearBulkSelection()">إلغاء التحديد</button>
                 </div>
                 <div class="table-container">
@@ -1373,6 +1380,7 @@
                     <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-banners" onclick="switchAppMgmtTab('banners')"><i class="fas fa-images"></i> البانرات/الإعلانات</button>
                     <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-offers" onclick="switchAppMgmtTab('offers')"><i class="fas fa-percent"></i> العروض</button>
                     <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-geo" onclick="switchAppMgmtTab('geo')"><i class="fas fa-map-marked-alt"></i> المناطق الجغرافية</button>
+                    <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-zones" onclick="switchAppMgmtTab('zones')"><i class="fas fa-route"></i> مناطق التسليم</button>
                     <button class="btn btn-secondary btn-sm" id="appMgmtTabBtn-notifications" onclick="switchAppMgmtTab('notifications')"><i class="fas fa-bell"></i> الإشعارات</button>
                 </div>
                 <div style="padding:0 20px 15px;">
@@ -1463,6 +1471,21 @@
             <div class="card" id="appMgmtTab-geo-3" style="display:none;">
                 <div class="card-header"><div class="card-title"><i class="fas fa-map-pin"></i> الأحياء</div><button class="btn btn-success btn-sm" onclick="openAppNeighborhoodModal()"><i class="fas fa-plus"></i> إضافة حي</button></div>
                 <div class="table-container"><table><thead><tr><th>اسم الحي</th><th>المنطقة</th><th>الإجراءات</th></tr></thead><tbody id="appNeighborhoodsTable"></tbody></table></div>
+            </div>
+
+            <!-- مناطق التسليم: تجميعة أكبر من أحياء البيع (اللي بتظهر للعميل وقت التسجيل في الأبليكشن)
+                 عشان تقارير التجهيز والتسليم تتقسم حسب منطقة تسليم كل عميل -->
+            <div class="card" id="appMgmtTab-zones" style="display:none;">
+                <div class="card-header">
+                    <div class="card-title"><i class="fas fa-route"></i> مناطق التسليم</div>
+                    <button class="btn btn-success btn-sm" onclick="openDeliveryZoneModal()"><i class="fas fa-plus"></i> إضافة منطقة تسليم</button>
+                </div>
+                <div style="padding:0 20px 10px;color:var(--text-light);font-size:13px;">
+                    كل منطقة تسليم بتضم كذا حي بيع مع بعض (نفس الأحياء اللي العميل بيختار منها وقت التسجيل في الأبليكشن). التقارير المجمّعة هتتقسم على أساس المناطق دي.
+                </div>
+                <div class="table-container"><table><thead><tr><th>اسم منطقة التسليم</th><th>الإجراءات</th></tr></thead><tbody id="deliveryZonesTable"></tbody></table></div>
+                <div class="card-header" style="border-top:2px solid var(--bg);margin-top:10px;"><div class="card-title" style="font-size:15px;"><i class="fas fa-map-pin"></i> توزيع أحياء البيع على مناطق التسليم</div></div>
+                <div class="table-container"><table><thead><tr><th>حي البيع</th><th>منطقة التسليم</th></tr></thead><tbody id="neighborhoodZoneAssignTable"></tbody></table></div>
             </div>
 
             <!-- الإشعارات -->
@@ -2086,6 +2109,20 @@
         </div>
     </div>
 
+    <!-- تقرير الأصناف المجمّع لمرحلة "قيد التجهيز"، مقسّم حسب منطقة التسليم -->
+    <div class="modal-overlay" id="prepZonesReportModal">
+        <div class="modal wide">
+            <div class="modal-header"><h3 class="modal-title">تقرير الأصناف المجمّع (قيد التجهيز) - حسب منطقة التسليم</h3><button class="modal-close" onclick="closeModal('prepZonesReportModal')">&times;</button></div>
+            <div class="modal-body">
+                <div id="prepZonesReportContent"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('prepZonesReportModal')">إغلاق</button>
+                <button class="btn btn-success" onclick="printPrepZonesReport()"><i class="fas fa-print"></i> طباعة</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Edit Invoice Modal -->
     <div class="modal-overlay" id="editInvoiceModal">
         <div class="modal" style="max-width:700px;">
@@ -2319,6 +2356,10 @@
         let appRegions = JSON.parse(localStorage.getItem('appRegions')) || [];
         let appNeighborhoods = JSON.parse(localStorage.getItem('appNeighborhoods')) || [];
         let appNotifications = JSON.parse(localStorage.getItem('appNotifications')) || [];
+        // مناطق التسليم: تجميعة أكبر من "أحياء البيع" (ASWAN_NEIGHBORHOODS في الأبليكشن) - كل منطقة
+        // تسليم بتضم كذا حي بيع مع بعض، عشان تقارير التجهيز والتسليم تتقسم على أساسها
+        let deliveryZones = JSON.parse(localStorage.getItem('deliveryZones')) || [];
+        let neighborhoodZoneMap = JSON.parse(localStorage.getItem('neighborhoodZoneMap')) || {};
         let currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
 
         const ROLES = {
@@ -2360,7 +2401,7 @@
         // منهم ميضربش تعديل تاني حصل في نفس اللحظة تقريبًا. شوف startInvoiceRecordsListener وأخواتها.
         const CLOUD_SYNCED_KEYS = new Set([
             'salesmen', 'expenses', 'treasury', 'salesReturns',
-            'purchaseReturns', 'supplierAdjustments', 'users', 'appCategories', 'appBrands', 'activationCodes', 'requireActivationCode', 'loyaltySettings', 'appBanners', 'appOffers', 'appCities', 'appRegions', 'appNeighborhoods', 'appNotifications'
+            'purchaseReturns', 'supplierAdjustments', 'users', 'appCategories', 'appBrands', 'activationCodes', 'requireActivationCode', 'loyaltySettings', 'appBanners', 'appOffers', 'appCities', 'appRegions', 'appNeighborhoods', 'appNotifications', 'deliveryZones', 'neighborhoodZoneMap'
         ]);
         // المنتجات والعملاء والموردين والمخزون اتنقلوا لمزامنة "فرق" (diff) لكل عنصر لوحده -
         // بدل ما ينضموا لملف storeData/main الضخم زي باقي المفاتيح فوق. شوف SPLIT_COLLECTION_KEYS تحت.
@@ -2633,7 +2674,7 @@
                 salesmen,
                 expenses, treasury, salesReturns, purchaseReturns, supplierAdjustments,
                 users, appCategories, appBrands, activationCodes, requireActivationCode, loyaltySettings, appBanners, appOffers,
-                appCities, appRegions, appNeighborhoods, appNotifications,
+                appCities, appRegions, appNeighborhoods, appNotifications, deliveryZones, neighborhoodZoneMap,
                 updatedAt: Date.now(),
                 updatedBy: DEVICE_ID
             };
@@ -2776,6 +2817,8 @@
                 appRegions = data.appRegions || [];
                 appNeighborhoods = data.appNeighborhoods || [];
                 appNotifications = data.appNotifications || [];
+                deliveryZones = data.deliveryZones || [];
+                neighborhoodZoneMap = data.neighborhoodZoneMap || {};
 
                 localStorage.setItem('salesmen', JSON.stringify(salesmen));
                 localStorage.setItem('expenses', JSON.stringify(expenses));
@@ -2795,6 +2838,8 @@
                 localStorage.setItem('appRegions', JSON.stringify(appRegions));
                 localStorage.setItem('appNeighborhoods', JSON.stringify(appNeighborhoods));
                 localStorage.setItem('appNotifications', JSON.stringify(appNotifications));
+                localStorage.setItem('deliveryZones', JSON.stringify(deliveryZones));
+                localStorage.setItem('neighborhoodZoneMap', JSON.stringify(neighborhoodZoneMap));
                 applyingRemoteUpdate = false;
                 // دلوقتي عندنا فعليًا آخر نسخة مؤكدة من المخزون من السحابة، فنبعتها لمخزون الأبليكشن الحي بأمان
                 scheduleStockLevelsSync();
@@ -2901,15 +2946,15 @@
             orders.forEach(function(order) {
                 if (!order.stockReserved) return;
                 const prevVec = reservedStockLedger[order.id] || null;
-                if (order.status === 'rejected') {
+                if (order.status === 'rejected' || order.status === 'returned') {
                     if (prevVec) applyLedgerChangeTransactional(order, null);
                     return;
                 }
-                if (order.status === 'fulfilled') {
+                if (order.status === 'delivered') {
                     if (prevVec) clearLedgerDoc(order.id);
                     return;
                 }
-                // الطلب لسه "جديد" أو "قيد التجهيز" - نتابع أي فرق حصل من الأبليكشن (طلب جديد/إضافة/حذف/تعديل كمية)
+                // الطلب لسه "جديد" أو "قيد التجهيز" أو "خرج للتسليم" - نتابع أي فرق حصل من الأبليكشن (طلب جديد/إضافة/حذف/تعديل كمية)
                 const currVec = computeOrderStockVector(order);
                 if (JSON.stringify(currVec) !== JSON.stringify(prevVec || {})) {
                     applyLedgerChangeTransactional(order, currVec);
@@ -3321,9 +3366,9 @@
                 if (count > 0) { badge.textContent = count; badge.style.display = 'inline-block'; badge.classList.add('badge-pulse'); }
                 else { badge.style.display = 'none'; badge.classList.remove('badge-pulse'); }
             }
-            const counts = { pending: 0, preparing: 0, fulfilled: 0, rejected: 0, all: customerOrders.length };
+            const counts = { pending: 0, preparing: 0, ready: 0, delivered: 0, returned: 0, rejected: 0, all: customerOrders.length };
             customerOrders.forEach(o => { if (counts[o.status] !== undefined) counts[o.status]++; });
-            ['pending', 'preparing', 'fulfilled', 'rejected', 'all'].forEach(t => {
+            ['pending', 'preparing', 'ready', 'delivered', 'returned', 'rejected', 'all'].forEach(t => {
                 const el = document.getElementById('ordersTabCount-' + t);
                 if (el) { el.textContent = counts[t]; el.style.display = counts[t] > 0 ? 'inline-block' : 'none'; }
             });
@@ -3384,7 +3429,9 @@
             const statusMap = {
                 pending: { label: 'جديد', cls: 'badge-warning' },
                 preparing: { label: 'قيد التجهيز', cls: 'badge-info' },
-                fulfilled: { label: 'تم التجهيز', cls: 'badge-success' },
+                ready: { label: 'تم التجهيز وخرج للتسليم', cls: 'badge-info' },
+                delivered: { label: 'تم التسليم', cls: 'badge-success' },
+                returned: { label: 'مرتجع', cls: 'badge-warning' },
                 rejected: { label: 'مرفوض', cls: 'badge-danger' }
             };
 
@@ -3409,23 +3456,32 @@
                        <div class="row-actions-wrap">
                          <button class="row-actions-btn" onclick="toggleRowActionsMenu(this)">الإجراء <i class="fas fa-caret-down"></i></button>
                          <div class="row-actions-menu">
-                           <button class="success" onclick="fulfillOrder('${o.id}')"><i class="fas fa-check"></i> تم التجهيز</button>
+                           <button class="success" onclick="markOrderReady('${o.id}')"><i class="fas fa-truck"></i> تم التجهيز وخرج للتسليم</button>
                            <button onclick="cancelPreparingOrder('${o.id}')"><i class="fas fa-undo"></i> إلغاء التجهيز</button>
                            <button class="danger" onclick="rejectOrder('${o.id}')"><i class="fas fa-times"></i> رفض الطلب</button>
+                         </div>
+                       </div>`;
+                } else if (o.status === 'ready') {
+                    actions = `<button class="btn btn-primary btn-sm" onclick="viewOrderAsInvoice('${o.id}')"><i class="fas fa-file-invoice"></i> فتح الفاتورة</button>
+                       <div class="row-actions-wrap">
+                         <button class="row-actions-btn" onclick="toggleRowActionsMenu(this)">الإجراء <i class="fas fa-caret-down"></i></button>
+                         <div class="row-actions-menu">
+                           <button class="success" onclick="fulfillOrder('${o.id}')"><i class="fas fa-check-double"></i> تم التسليم</button>
+                           <button class="danger" onclick="returnOrder('${o.id}')"><i class="fas fa-undo"></i> فشل التسليم / مرتجع</button>
                          </div>
                        </div>`;
                 } else {
                     actions = `<button class="btn btn-primary btn-sm" onclick="viewOrderAsInvoice('${o.id}')"><i class="fas fa-file-invoice"></i> عرض الفاتورة</button>`;
                 }
 
-                // تلوين الطلب لو لسه معلّق أو قيد التجهيز من فترة طويلة عشان محدش ينساه
+                // تلوين الطلب لو لسه معلّق أو قيد التجهيز أو خارج للتسليم من فترة طويلة عشان محدش ينساه
                 let rowClass = '';
-                if ((o.status === 'pending' || o.status === 'preparing') && o.createdAt) {
+                if ((o.status === 'pending' || o.status === 'preparing' || o.status === 'ready') && o.createdAt) {
                     const minutesAgo = (Date.now() - o.createdAt) / 60000;
                     if (minutesAgo >= 20) rowClass = 'order-row-danger';
                     else if (minutesAgo >= 8) rowClass = 'order-row-warn';
                 }
-                const cb = (o.status === 'pending' || o.status === 'preparing')
+                const cb = (o.status === 'pending' || o.status === 'preparing' || o.status === 'ready')
                     ? `<input type="checkbox" class="order-select-cb" data-id="${o.id}" onchange="toggleOrderSelect('${o.id}', this.checked)" ${selectedBulkOrderIds.has(o.id) ? 'checked' : ''}>`
                     : '';
                 let ratingHtml = '';
@@ -3468,7 +3524,7 @@
 
         function switchOrdersTab(tab) {
             ordersCurrentTab = tab;
-            ['pending', 'preparing', 'fulfilled', 'rejected', 'all', 'byCustomer'].forEach(t => {
+            ['pending', 'preparing', 'ready', 'delivered', 'returned', 'rejected', 'all', 'byCustomer'].forEach(t => {
                 const btn = document.getElementById('ordersTabBtn-' + t);
                 if (btn) btn.classList.toggle('active', t === tab);
             });
@@ -3483,7 +3539,7 @@
             if (!tbody) return;
             const searchEl = document.getElementById('ordersSearch');
             const q = searchEl ? searchEl.value.trim().toLowerCase() : '';
-            const open = customerOrders.filter(o => (o.status === 'pending' || o.status === 'preparing') && (!q || [o.customerName, o.shopName, o.phone, o.customerCode].filter(Boolean).join(' ').toLowerCase().indexOf(q) !== -1));
+            const open = customerOrders.filter(o => (o.status === 'pending' || o.status === 'preparing' || o.status === 'ready') && (!q || [o.customerName, o.shopName, o.phone, o.customerCode].filter(Boolean).join(' ').toLowerCase().indexOf(q) !== -1));
             if (open.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="5" class="empty-state"><i class="fas fa-shopping-basket"></i><h3>لا توجد طلبات مفتوحة حاليًا</h3></td></tr>`;
                 return;
@@ -3520,14 +3576,14 @@
         // اللي بالحالة دي من الأول لحد دلوقتي) — نفس المنطق اللي بيتحسب بيه الكارت والتقرير مع بعض
         function getOrdersStatusScopeForTab(tab) {
             if (tab === 'all') return null;
-            if (tab === 'byCustomer') return ['pending', 'preparing'];
+            if (tab === 'byCustomer') return ['pending', 'preparing', 'ready'];
             return [tab];
         }
         function getScopedOrders(tab) {
             const statuses = getOrdersStatusScopeForTab(tab);
             return statuses ? customerOrders.filter(o => statuses.includes(o.status)) : customerOrders.slice();
         }
-        const ORDERS_TAB_LABELS = { pending: 'جديد', preparing: 'قيد التجهيز', fulfilled: 'تم التجهيز', rejected: 'مرفوض', all: 'كل الطلبات', byCustomer: 'الطلبات المفتوحة' };
+        const ORDERS_TAB_LABELS = { pending: 'جديد', preparing: 'قيد التجهيز', ready: 'تم التجهيز وخرج للتسليم', delivered: 'تم التسليم', returned: 'مرتجع', rejected: 'مرفوض', all: 'كل الطلبات', byCustomer: 'الطلبات المفتوحة' };
 
         // كارت الملخص فوق تبويبات طلبات الأبليكشن، بيحسب على أساس التبويب المفتوح دلوقتي بالظبط
         // (كل الطلبات في التاريخ اللي بالحالة دي، مش بس اليوم)
@@ -3556,11 +3612,13 @@
                 if (ordersCurrentTab === 'all' || ordersCurrentTab === 'byCustomer') {
                     const pendingCount = scoped.filter(o => o.status === 'pending').length;
                     const preparingCount = scoped.filter(o => o.status === 'preparing').length;
-                    const fulfilledCount = scoped.filter(o => o.status === 'fulfilled').length;
+                    const readyCount = scoped.filter(o => o.status === 'ready').length;
+                    const deliveredCount = scoped.filter(o => o.status === 'delivered').length;
                     let html = '';
                     if (pendingCount) html += `<span class="b-pending">🆕 ${pendingCount} جديد</span>`;
                     if (preparingCount) html += `<span class="b-preparing">⏳ ${preparingCount} قيد التجهيز</span>`;
-                    if (ordersCurrentTab === 'all' && fulfilledCount) html += `<span class="b-fulfilled">✅ ${fulfilledCount} تم تجهيزه</span>`;
+                    if (ordersCurrentTab === 'all' && readyCount) html += `<span class="b-preparing">🚚 ${readyCount} خرج للتسليم</span>`;
+                    if (ordersCurrentTab === 'all' && deliveredCount) html += `<span class="b-fulfilled">✅ ${deliveredCount} تم تسليمه</span>`;
                     breakdownEl.innerHTML = html;
                 } else {
                     breakdownEl.innerHTML = '';
@@ -3747,7 +3805,7 @@
                 // هيلاقي - جوه نفس المعاملة - إن حالة الطلب بقت "fulfilled" بالفعل، فيوقف من غير ما
                 // يكرر أي خصم مخزون أو نقاط أو ينشئ فاتورة تانية لنفس الطلب.
                 return t.get(orderRef).then(function(orderSnap) {
-                    if (orderSnap.exists && orderSnap.data().status === 'fulfilled') {
+                    if (orderSnap.exists && orderSnap.data().status === 'delivered') {
                         return { alreadyFulfilledElsewhere: true };
                     }
                     const allRefs = custLoyaltyRef ? refs.concat([custLoyaltyRef]) : refs;
@@ -3788,7 +3846,7 @@
                         if (custLoyaltyRef) {
                             t.set(custLoyaltyRef, { points: newPoints, updatedAt: Date.now() }, { merge: true });
                         }
-                        t.update(orderRef, { status: 'fulfilled', fulfilledAt: Date.now(), fulfilledBy: DEVICE_ID });
+                        t.update(orderRef, { status: 'delivered', deliveredAt: Date.now(), deliveredBy: DEVICE_ID });
 
                         return { pointsToDeduct, appliedDiscount, grandTotal, earnedPoints, newPoints };
                     });
@@ -3797,7 +3855,7 @@
                 if (txResult.alreadyFulfilledElsewhere) {
                     // حد تاني (جهاز تاني أو ضغطة مزدوجة) كان سبقنا بالظبط ونفذ الطلب ده بالفعل -
                     // بنوقف من غير ما نكرر أي خصم أو ننشئ فاتورة تانية لنفس الطلب
-                    order.status = 'fulfilled';
+                    order.status = 'delivered';
                     localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
                     if (!opts.silent) showToast('الطلب ده اتنفذ بالفعل من قبل (جهاز تاني أو ضغطة سابقة) - مفيش داعي نكرره', 'warning', 6000);
                     updateDashboardStats(); renderInvoices(); renderRecentInvoices();
@@ -3877,10 +3935,10 @@
                 // المرتبطة (رقمها، النقاط المخصومة) كتحديث تكميلي غير حرج
                 return orderRef.update({ invoiceNumber: invoice.number, pointsDeducted: pointsToDeduct, appliedDiscount: appliedDiscount }).catch(function(e) { console.error('order metadata update failed:', e); });
             }).then(function() {
-                order.status = 'fulfilled';
+                order.status = 'delivered';
                 localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
-                if (!opts.silent) showToast('تم تجهيز الطلب وخصم المخزون بنجاح');
-                if (order.customerCode) sendPushNotification(order.customerCode, 'طلبك جاهز ✅', 'تم تجهيز طلبك #' + order.id.slice(-6) + ' وهيوصلك قريب');
+                if (!opts.silent) showToast('تم تسجيل تسليم الطلب وإصدار الفاتورة بنجاح');
+                if (order.customerCode) sendPushNotification(order.customerCode, 'تم تسليم طلبك ✅', 'شكرًا لتعاملك معنا - طلبك #' + order.id.slice(-6) + ' وصلك بنجاح');
                 updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderInventory(); renderMovements(); renderLowStock(); renderCustomers();
                 return true;
             }).catch(function(err) {
@@ -3905,13 +3963,32 @@
                     }
                 }
             }
-            if (!confirm('تأكيد تجهيز هذا الطلب؟ سيتم خصم الأصناف من المخزون وإنشاء فاتورة بيع.')) return;
+            if (!confirm('تأكيد تسليم هذا الطلب؟ سيتم إنشاء فاتورة البيع وتسجيلها.')) return;
             fulfillOrderCore(orderId);
         }
 
         // تجهيز مجموعة طلبات دفعة واحدة (Bulk). بنفّذها بالتتابع (مش كلها مرة واحدة)
         // عشان معاملات خصم المخزون تفضل متزامنة وصحيحة حتى لو نفس الصنف موجود في أكتر من طلب.
+        // تحويل مجموعة طلبات "قيد التجهيز" لحالة "تم التجهيز وخرج للتسليم" دفعة واحدة - مجرد تحديث
+        // حالة، مفيش تأثير على المخزون أو فاتورة (ده بيحصل بعدين في "تسليم المحدد")
         function bulkFulfillSelected() {
+            if (selectedBulkOrderIds.size === 0) return;
+            const ids = Array.from(selectedBulkOrderIds);
+            if (!confirm('تأكيد تحويل ' + ids.length + ' طلب لحالة "تم التجهيز وخرج للتسليم"؟')) return;
+
+            let successCount = 0, failCount = 0;
+            ids.reduce(function(chain, id) {
+                return chain.then(function() {
+                    return markOrderReady(id, { silent: true }).then(function(ok) { ok ? successCount++ : failCount++; });
+                });
+            }, Promise.resolve()).then(function() {
+                showToast('تم تحويل ' + successCount + ' طلب بنجاح' + (failCount > 0 ? ' — وفشل ' + failCount + ' طلب' : ''), failCount > 0 ? 'warning' : 'success', 5000);
+                clearBulkSelection();
+            });
+        }
+
+        // تسليم مجموعة طلبات "خرج للتسليم" دفعة واحدة - هنا بيتعمل الخصم النهائي وإنشاء الفواتير
+        function bulkDeliverSelected() {
             if (selectedBulkOrderIds.size === 0) return;
             const ids = Array.from(selectedBulkOrderIds);
 
@@ -3927,7 +4004,7 @@
                 }
             });
 
-            let warnMsg = 'تأكيد تجهيز ' + ids.length + ' طلب دفعة واحدة؟ سيتم خصم الأصناف من المخزون وإنشاء فاتورة بيع لكل طلب.';
+            let warnMsg = 'تأكيد تسليم ' + ids.length + ' طلب دفعة واحدة؟ سيتم إنشاء فاتورة بيع لكل طلب.';
             if (overLimitNames.length > 0) warnMsg += '\n\n⚠️ تنبيه: العملاء التاليين هيتجاوزوا الحد الائتماني بعد الطلب: ' + overLimitNames.join('، ');
             if (!confirm(warnMsg)) return;
 
@@ -3937,7 +4014,7 @@
                     return fulfillOrderCore(id, { silent: true }).then(function(ok) { ok ? successCount++ : failCount++; });
                 });
             }, Promise.resolve()).then(function() {
-                showToast('تم تجهيز ' + successCount + ' طلب بنجاح' + (failCount > 0 ? ' — وفشل ' + failCount + ' طلب' : ''), failCount > 0 ? 'warning' : 'success', 5000);
+                showToast('تم تسليم ' + successCount + ' طلب بنجاح' + (failCount > 0 ? ' — وفشل ' + failCount + ' طلب' : ''), failCount > 0 ? 'warning' : 'success', 5000);
                 clearBulkSelection();
             });
         }
@@ -3991,6 +4068,128 @@
                     renderCustomerOrders();
                     updatePendingOrdersBadge();
                     showToast('تم إلغاء التجهيز، الطلب رجع لحالة "جديد"');
+                })
+                .catch(err => { console.error(err); showToast('تعذر تحديث حالة الطلب', 'error'); });
+        }
+
+        // دفعة واحدة: تحويل كل الطلبات "الجديدة" لحالة "قيد التجهيز" مرة واحدة (زرار "إصدار الفواتير").
+        // ده مجرد تغيير حالة - المخزون أصلاً اتحجز من وقت الطلب نفسه، فمفيش أي خصم بيحصل هنا تاني.
+        function batchIssueForPreparation() {
+            if (!db) { showToast('لا يوجد اتصال بالسحابة', 'error'); return; }
+            const pendingOrders = customerOrders.filter(o => o.status === 'pending');
+            if (pendingOrders.length === 0) { showToast('لا توجد طلبات جديدة حاليًا', 'warning'); return; }
+            if (!confirm('تأكيد تحويل ' + pendingOrders.length + ' طلب جديد لحالة "قيد التجهيز" دفعة واحدة؟')) return;
+            let successCount = 0, failCount = 0;
+            pendingOrders.reduce(function(chain, order) {
+                return chain.then(function() {
+                    return db.collection('customerOrders').doc(order.id).update({ status: 'preparing', preparingAt: Date.now(), preparingBy: DEVICE_ID })
+                        .then(function() {
+                            order.status = 'preparing';
+                            successCount++;
+                            if (order.customerCode) sendPushNotification(order.customerCode, 'جاري تجهيز طلبك ⏳', 'طلبك #' + order.id.slice(-6) + ' دلوقتي قيد التجهيز');
+                        })
+                        .catch(function(e) { console.error('batch issue failed for order ' + order.id, e); failCount++; });
+                });
+            }, Promise.resolve()).then(function() {
+                localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
+                renderCustomerOrders();
+                updatePendingOrdersBadge();
+                showToast('تم تحويل ' + successCount + ' طلب لقيد التجهيز' + (failCount > 0 ? ' — وفشل ' + failCount : ''), failCount > 0 ? 'warning' : 'success', 5000);
+            });
+        }
+
+        // تقرير مجمّع للأصناف المطلوبة في الطلبات "قيد التجهيز"، مقسّم حسب منطقة التسليم بتاعة كل طلب -
+        // كل منطقة بجدول منفصل بإجمالي كمية كل صنف عبرها، عشان أمين المخزن يجهّز منطقة لوحدها في كل مرة
+        function buildPrepZonesReportHtml() {
+            const preparingOrders = customerOrders.filter(o => o.status === 'preparing');
+            if (preparingOrders.length === 0) {
+                return `<div class="empty-state"><i class="fas fa-boxes"></i><h3>لا توجد طلبات قيد التجهيز حاليًا</h3></div>`;
+            }
+            const byZone = {};
+            preparingOrders.forEach(function(order) {
+                const zoneName = getOrderZoneName(order);
+                if (!byZone[zoneName]) byZone[zoneName] = { orderCount: 0, products: {} };
+                byZone[zoneName].orderCount++;
+                (order.items || []).forEach(function(item) {
+                    const p = byZone[zoneName].products;
+                    if (!p[item.productCode]) p[item.productCode] = { name: item.productName, unit: item.unit, qty: 0 };
+                    p[item.productCode].qty += item.qty;
+                });
+            });
+            const zoneNames = Object.keys(byZone).sort(function(a, b) { return byZone[b].orderCount - byZone[a].orderCount; });
+            return zoneNames.map(function(zoneName) {
+                const zoneData = byZone[zoneName];
+                const rows = Object.values(zoneData.products).sort(function(a, b) { return b.qty - a.qty; }).map(function(p) {
+                    return `<tr><td>${p.name}</td><td style="text-align:center;">${p.qty}</td><td style="text-align:center;">${p.unit || '-'}</td></tr>`;
+                }).join('');
+                return `<div style="margin-bottom:25px;">
+                    <h3 style="background:var(--bg);padding:10px 15px;border-radius:8px;margin-bottom:10px;">📍 ${zoneName} <span style="font-weight:400;color:var(--text-light);font-size:13px;">(${zoneData.orderCount} طلب)</span></h3>
+                    <table style="width:100%;border-collapse:collapse;font-size:14px;">
+                        <thead><tr style="background:#f5f0e8;"><th style="padding:8px;border:1px solid #ddd;">الصنف</th><th style="padding:8px;border:1px solid #ddd;">الإجمالي المطلوب</th><th style="padding:8px;border:1px solid #ddd;">الوحدة</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>`;
+            }).join('');
+        }
+
+        function openPrepZonesReport() {
+            document.getElementById('prepZonesReportContent').innerHTML = buildPrepZonesReportHtml();
+            openModal('prepZonesReportModal');
+        }
+
+        function printPrepZonesReport() {
+            const html = buildPrepZonesReportHtml();
+            const area = document.getElementById('printInvoiceArea');
+            area.innerHTML = `<div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;">
+                <h2 style="text-align:center;">تقرير الأصناف المجمّع - قيد التجهيز</h2>
+                <p style="text-align:center;color:#666;margin-bottom:20px;">${new Date().toLocaleDateString('ar-EG')}</p>
+                ${html}</div>`;
+            document.body.classList.add('printing-invoice-mode');
+            setTimeout(function() {
+                window.print();
+                setTimeout(function() { document.body.classList.remove('printing-invoice-mode'); }, 500);
+            }, 100);
+        }
+
+        // قيد التجهيز → تم التجهيز وخرج للتسليم. مجرد تحديث حالة برضو، مفيش تأثير على المخزون أو فاتورة -
+        // ده هيحصل بعدين في مرحلة "تم التسليم" لما المندوب يأكد التسليم فعليًا وتتحصل الفلوس
+        function markOrderReady(orderId, opts) {
+            opts = opts || {};
+            if (!db) { showToast('لا يوجد اتصال بالسحابة', 'error'); return Promise.resolve(false); }
+            const order = customerOrders.find(o => o.id === orderId);
+            if (!order) return Promise.resolve(false);
+            return db.collection('customerOrders').doc(orderId).update({ status: 'ready', readyAt: Date.now(), readyBy: DEVICE_ID })
+                .then(function() {
+                    order.status = 'ready';
+                    localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
+                    renderCustomerOrders();
+                    updatePendingOrdersBadge();
+                    if (!opts.silent) showToast('الطلب خرج للتسليم');
+                    if (order.customerCode) sendPushNotification(order.customerCode, 'طلبك خرج للتسليم 🚚', 'طلبك #' + order.id.slice(-6) + ' في الطريق إليك');
+                    return true;
+                })
+                .catch(function(err) { console.error(err); if (!opts.silent) showToast('تعذر تحديث حالة الطلب', 'error'); return false; });
+        }
+
+        // لو المندوب فشل يسلّم الطلب (العميل مش موجود/رفض الاستلام)، الطلب يتحول "مرتجع": البضاعة
+        // بترجع فعليًا للمخزن فالمخزون المحجوز يترجع متاح تاني (زي الرفض بالظبط)، ومفيش أي فاتورة
+        // اتعملت أصلاً لأن الطلب ما وصلش لمرحلة "تم التسليم" خالص
+        function returnOrder(orderId) {
+            if (!db) return;
+            var reason = prompt('سبب فشل التسليم/الإرجاع (اختياري):', '');
+            if (reason === null) return;
+            if (!confirm('تأكيد تحويل هذا الطلب لحالة "مرتجع"؟ هيرجع المخزون المحجوز متاح تاني.')) return;
+            var updateData = { status: 'returned', returnedAt: Date.now(), returnedBy: DEVICE_ID };
+            if (reason && reason.trim()) updateData.returnReason = reason.trim();
+            db.collection('customerOrders').doc(orderId).update(updateData)
+                .then(function() {
+                    var ord = customerOrders.find(function(o) { return o.id === orderId; });
+                    if (ord) { ord.status = 'returned'; if (updateData.returnReason) ord.returnReason = updateData.returnReason; }
+                    localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
+                    renderCustomerOrders();
+                    updatePendingOrdersBadge();
+                    showToast('تم تسجيل الطلب كمرتجع، ورجع المخزون المحجوز متاح تاني');
+                    if (ord && ord.customerCode) sendPushNotification(ord.customerCode, 'لم يتم تسليم طلبك', updateData.returnReason ? ('السبب: ' + updateData.returnReason) : 'للاستفسار كلم المعلم');
                 })
                 .catch(err => { console.error(err); showToast('تعذر تحديث حالة الطلب', 'error'); });
         }
@@ -4857,11 +5056,11 @@
         }
 
         function switchAppMgmtTab(tab) {
-            ['categories', 'brands', 'codes', 'loyalty', 'banners', 'offers', 'geo', 'geo-2', 'geo-3', 'notifications'].forEach(t => {
+            ['categories', 'brands', 'codes', 'loyalty', 'banners', 'offers', 'geo', 'geo-2', 'geo-3', 'zones', 'notifications'].forEach(t => {
                 const el = document.getElementById('appMgmtTab-' + t);
                 if (el) el.style.display = (t === tab || (tab === 'geo' && (t === 'geo-2' || t === 'geo-3'))) ? 'block' : 'none';
             });
-            ['categories', 'brands', 'codes', 'loyalty', 'banners', 'offers', 'geo', 'notifications'].forEach(t => {
+            ['categories', 'brands', 'codes', 'loyalty', 'banners', 'offers', 'geo', 'zones', 'notifications'].forEach(t => {
                 const btn = document.getElementById('appMgmtTabBtn-' + t);
                 if (btn) btn.className = 'btn btn-sm ' + (t === tab ? 'btn-primary' : 'btn-secondary');
             });
@@ -4872,7 +5071,87 @@
             else if (tab === 'banners') renderAppBanners();
             else if (tab === 'offers') renderAppOffers();
             else if (tab === 'geo') { renderAppCities(); renderAppRegions(); renderAppNeighborhoods(); }
+            else if (tab === 'zones') { renderDeliveryZones(); renderNeighborhoodZoneAssignments(); }
             else if (tab === 'notifications') renderNotificationsTab();
+        }
+
+        // نفس قائمة أحياء البيع المستخدمة فعليًا في تطبيق العملاء (ASWAN_NEIGHBORHOODS) - لازم تفضل
+        // متطابقة معاها بالظبط عشان توزيع المناطق يشتغل صح على طلبات حقيقية
+        const SALES_NEIGHBORHOODS = [
+            'السيل الشرقي بحري', 'السيل الشرقي قبلي', 'السيل الغربي', 'المدينة القديمة (وسط البلد)',
+            'كورنيش النيل', 'أسوان الجديدة', 'كيما', 'المطار', 'عبد المنعم رياض', 'النوبة الجديدة (دهمية)',
+            'جزيرة الفنتين', 'كوم أمبو - المدينة', 'إدفو - المدينة', 'دراو - المدينة', 'نصر النوبة - المدينة',
+            'البصيلية - المدينة', 'الرديسية - المدينة', 'كلابشة - المدينة', 'أخرى'
+        ];
+
+        function saveDeliveryZonesData() {
+            localStorage.setItem('deliveryZones', JSON.stringify(deliveryZones));
+            localStorage.setItem('neighborhoodZoneMap', JSON.stringify(neighborhoodZoneMap));
+            scheduleCloudSync();
+        }
+
+        function openDeliveryZoneModal() {
+            const name = prompt('اسم منطقة التسليم الجديدة (مثلاً: منطقة 1):', '');
+            if (!name || !name.trim()) return;
+            deliveryZones.push({ id: 'zone_' + Date.now(), name: name.trim() });
+            saveDeliveryZonesData();
+            renderDeliveryZones();
+            renderNeighborhoodZoneAssignments();
+            showToast('تمت إضافة منطقة التسليم');
+        }
+
+        function renameDeliveryZone(id) {
+            const zone = deliveryZones.find(z => z.id === id);
+            if (!zone) return;
+            const name = prompt('الاسم الجديد لمنطقة التسليم:', zone.name);
+            if (!name || !name.trim()) return;
+            zone.name = name.trim();
+            saveDeliveryZonesData();
+            renderDeliveryZones();
+            renderNeighborhoodZoneAssignments();
+        }
+
+        function deleteDeliveryZone(id) {
+            if (!confirm('حذف منطقة التسليم دي؟ الأحياء المرتبطة بيها هترجع "بدون منطقة".')) return;
+            deliveryZones = deliveryZones.filter(z => z.id !== id);
+            Object.keys(neighborhoodZoneMap).forEach(function(n) { if (neighborhoodZoneMap[n] === id) delete neighborhoodZoneMap[n]; });
+            saveDeliveryZonesData();
+            renderDeliveryZones();
+            renderNeighborhoodZoneAssignments();
+        }
+
+        function renderDeliveryZones() {
+            const tbody = document.getElementById('deliveryZonesTable');
+            if (!tbody) return;
+            if (deliveryZones.length === 0) { tbody.innerHTML = `<tr><td colspan="2" class="empty-state"><h3>لا توجد مناطق تسليم مضافة بعد</h3></td></tr>`; return; }
+            tbody.innerHTML = deliveryZones.map(z => `
+                <tr><td>${z.name}</td>
+                <td><button class="btn btn-secondary btn-sm" onclick="renameDeliveryZone('${z.id}')"><i class="fas fa-edit"></i></button>
+                <button class="btn btn-danger btn-sm" onclick="deleteDeliveryZone('${z.id}')"><i class="fas fa-trash"></i></button></td></tr>`).join('');
+        }
+
+        function setNeighborhoodZone(neighborhood, zoneId) {
+            if (zoneId) neighborhoodZoneMap[neighborhood] = zoneId; else delete neighborhoodZoneMap[neighborhood];
+            saveDeliveryZonesData();
+        }
+
+        function renderNeighborhoodZoneAssignments() {
+            const tbody = document.getElementById('neighborhoodZoneAssignTable');
+            if (!tbody) return;
+            tbody.innerHTML = SALES_NEIGHBORHOODS.map(function(n) {
+                const options = '<option value="">— بدون منطقة —</option>' + deliveryZones.map(function(z) {
+                    return `<option value="${z.id}" ${neighborhoodZoneMap[n] === z.id ? 'selected' : ''}>${z.name}</option>`;
+                }).join('');
+                return `<tr><td>${n}</td><td><select class="form-control" onchange="setNeighborhoodZone('${n.replace(/'/g, "\\'")}', this.value)">${options}</select></td></tr>`;
+            }).join('');
+        }
+
+        // بيرجع اسم منطقة التسليم لطلب معيّن (حسب الحي المسجل بيه)، أو "بدون منطقة" لو الحي مش متعيّن له منطقة
+        function getOrderZoneName(order) {
+            const zoneId = neighborhoodZoneMap[order.neighborhood];
+            if (!zoneId) return 'بدون منطقة';
+            const zone = deliveryZones.find(z => z.id === zoneId);
+            return zone ? zone.name : 'بدون منطقة';
         }
 
         let editingAppCategory = null;
@@ -7119,7 +7398,7 @@
 
         function buildOrderInvoiceHtml(order) {
             const dateStr = order.createdAt ? new Date(order.createdAt).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' }) : '-';
-            const statusMap = { pending: 'جديد - قيد الانتظار', preparing: 'قيد التجهيز', fulfilled: 'تم التجهيز', rejected: 'مرفوض' };
+            const statusMap = { pending: 'جديد - قيد الانتظار', preparing: 'قيد التجهيز', ready: 'تم التجهيز وخرج للتسليم', delivered: 'تم التسليم', returned: 'مرتجع', rejected: 'مرفوض' };
             const itemsRows = (order.items || []).map((item, idx) => `
                 <tr>
                     <td style="text-align:center;">${idx + 1}</td>
