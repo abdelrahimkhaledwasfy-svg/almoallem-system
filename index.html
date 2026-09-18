@@ -2555,10 +2555,30 @@
         // لو التاب هيتقفل أو هيتخبّى (ريفريش، تبديل تطبيق، قفل الصفحة) وفيه تعديل محلي لسه مستني
         // مهلة الـ900ms قبل ما يترفع، بنحاول نرفعه فورًا دلوقتي من غير ما ننتظر، عشان نقلل الفترة
         // اللي ممكن يضيع فيها التعديل لو حصل ريفريش قبل ما يوصل للسحابة
+        //
+        // *** إصلاح 2026-09: الفلش ده كان بيغطي مزامنة storeData الكبيرة بس (pushStateToCloud) ***
+        // ولا كان بيلمس تايمرات "مزامنة الفرق" (المنتجات/العملاء/الموردين/المخزون عن طريق
+        // scheduleSplitSync) ولا مزامنة مخزون الأبليكشن (scheduleStockLevelsSync). الاتنين دول
+        // بردو بيستنوا 900ms قبل ما يترفعوا فعليًا للسحابة، فلو حد عمل تعديل مخزون (أو صنف/عميل/
+        // مورد) وعمل ريفريش بسرعة قبل ما الـ900ms تخلص، التعديل كان بيتلغي محليًا من غير ما يوصل
+        // للسحابة خالص - وبعدين لما الصفحة تفتح تاني، الـ listener بيجيب النسخة القديمة من السحابة
+        // ويمسح التعديل. ده هو السبب الحقيقي اللي كان بيخلي تعديلات المخزون "ترجع تصفر" بعد الريفريش.
         function flushPendingSyncNow() {
             if (pendingLocalSync && cloudSyncTimer) {
                 clearTimeout(cloudSyncTimer);
                 pushStateToCloud().catch(function() {});
+            }
+            Object.keys(splitSyncTimers).forEach(function(key) {
+                if (splitSyncTimers[key]) {
+                    clearTimeout(splitSyncTimers[key]);
+                    splitSyncTimers[key] = null;
+                    pushSplitDiff(key);
+                }
+            });
+            if (stockLevelsSyncTimer) {
+                clearTimeout(stockLevelsSyncTimer);
+                stockLevelsSyncTimer = null;
+                pushStockLevelsToCloud().catch(function() {});
             }
         }
         document.addEventListener('visibilitychange', function() { if (document.hidden) flushPendingSyncNow(); });
@@ -3675,52 +3695,73 @@
             const alreadyReserved = !!order.stockReserved;
             const refs = alreadyReserved ? [] : (order.items || []).map(item => db.collection('stockLevels').doc(item.productCode));
             const custLoyaltyRef = order.customerCode ? db.collection('customerLoyaltyPoints').doc(order.customerCode) : null;
+            const orderRef = db.collection('customerOrders').doc(order.id);
             const pv = loyaltySettings.pointValue || 1;
             const itemsTotal = order.items.reduce((sum, it) => sum + (it.total || (it.price * it.qty) || 0), 0);
 
             return db.runTransaction(function(t) {
-                const allRefs = custLoyaltyRef ? refs.concat([custLoyaltyRef]) : refs;
-                return Promise.all(allRefs.map(r => t.get(r))).then(function(snaps) {
-                    const stockSnaps = snaps.slice(0, refs.length);
-                    const loyaltySnap = custLoyaltyRef ? snaps[snaps.length - 1] : null;
+                // *** إصلاح 2026-09: بنقرا حالة الطلب نفسه *جوه نفس المعاملة الذرية* اللي بتخصم المخزون ***
+                // والنقاط. لو جهازين (أو نفس الجهاز بضغطة مزدوجة على "تم التجهيز") حاولوا ينفذوا نفس
+                // الطلب في نفس اللحظة بالظبط، فايرستور بيضمن إن واحد بس ينجح فعليًا ويخصم، والتاني
+                // هيلاقي - جوه نفس المعاملة - إن حالة الطلب بقت "fulfilled" بالفعل، فيوقف من غير ما
+                // يكرر أي خصم مخزون أو نقاط أو ينشئ فاتورة تانية لنفس الطلب.
+                return t.get(orderRef).then(function(orderSnap) {
+                    if (orderSnap.exists && orderSnap.data().status === 'fulfilled') {
+                        return { alreadyFulfilledElsewhere: true };
+                    }
+                    const allRefs = custLoyaltyRef ? refs.concat([custLoyaltyRef]) : refs;
+                    return Promise.all(allRefs.map(r => t.get(r))).then(function(snaps) {
+                        const stockSnaps = snaps.slice(0, refs.length);
+                        const loyaltySnap = custLoyaltyRef ? snaps[snaps.length - 1] : null;
 
-                    for (let i = 0; i < stockSnaps.length; i++) {
-                        const item = order.items[i];
-                        const currentQty = stockSnaps[i].exists ? (stockSnaps[i].data().qty || 0) : 0;
-                        if (currentQty < item.stockDeductQty) {
-                            throw new Error('الكمية غير متوفرة حاليًا للصنف: ' + item.productName + ' (المتاح: ' + currentQty + ')');
+                        for (let i = 0; i < stockSnaps.length; i++) {
+                            const item = order.items[i];
+                            const currentQty = stockSnaps[i].exists ? (stockSnaps[i].data().qty || 0) : 0;
+                            if (currentQty < item.stockDeductQty) {
+                                throw new Error('الكمية غير متوفرة حاليًا للصنف: ' + item.productName + ' (المتاح: ' + currentQty + ')');
+                            }
                         }
-                    }
 
-                    // رصيد النقاط الفعلي بيتقرا هنا *داخل نفس المعاملة الذرية*. لو فيه طلب تاني لنفس
-                    // العميل بيتنفذ في نفس اللحظة (حتى من جهاز مختلف)، فايرستور بيعيد محاولة المعاملة
-                    // دي تلقائيًا لحد ما يقرا الرصيد الصحيح بعد خصم الطلب الأول، فمستحيل يتخصم نفس
-                    // الرصيد مرتين على طلبين مختلفين.
-                    const currentPoints = loyaltySnap && loyaltySnap.exists
-                        ? (loyaltySnap.data().points || 0)
-                        : (cust ? (cust.loyaltyPoints || 0) : 0);
+                        // رصيد النقاط الفعلي بيتقرا هنا *داخل نفس المعاملة الذرية*. لو فيه طلب تاني لنفس
+                        // العميل بيتنفذ في نفس اللحظة (حتى من جهاز مختلف)، فايرستور بيعيد محاولة المعاملة
+                        // دي تلقائيًا لحد ما يقرا الرصيد الصحيح بعد خصم الطلب الأول، فمستحيل يتخصم نفس
+                        // الرصيد مرتين على طلبين مختلفين.
+                        const currentPoints = loyaltySnap && loyaltySnap.exists
+                            ? (loyaltySnap.data().points || 0)
+                            : (cust ? (cust.loyaltyPoints || 0) : 0);
 
-                    let pointsToDeduct = 0, appliedDiscount = 0;
-                    if (order.pointsRedeemed > 0) {
-                        pointsToDeduct = Math.min(order.pointsRedeemed, currentPoints);
-                        appliedDiscount = Math.min(pointsToDeduct * pv, itemsTotal, order.discountFromPoints || Infinity);
-                    }
-                    const grandTotal = Math.max(0, itemsTotal - appliedDiscount);
-                    const earnedPoints = Math.floor(grandTotal / (loyaltySettings.pointsPerAmount || 10));
-                    const newPoints = Math.max(0, currentPoints - pointsToDeduct) + earnedPoints;
+                        let pointsToDeduct = 0, appliedDiscount = 0;
+                        if (order.pointsRedeemed > 0) {
+                            pointsToDeduct = Math.min(order.pointsRedeemed, currentPoints);
+                            appliedDiscount = Math.min(pointsToDeduct * pv, itemsTotal, order.discountFromPoints || Infinity);
+                        }
+                        const grandTotal = Math.max(0, itemsTotal - appliedDiscount);
+                        const earnedPoints = Math.floor(grandTotal / (loyaltySettings.pointsPerAmount || 10));
+                        const newPoints = Math.max(0, currentPoints - pointsToDeduct) + earnedPoints;
 
-                    for (let i = 0; i < stockSnaps.length; i++) {
-                        const item = order.items[i];
-                        const newQty = (stockSnaps[i].data().qty || 0) - item.stockDeductQty;
-                        t.set(refs[i], { code: item.productCode, qty: newQty, updatedAt: Date.now() });
-                    }
-                    if (custLoyaltyRef) {
-                        t.set(custLoyaltyRef, { points: newPoints, updatedAt: Date.now() }, { merge: true });
-                    }
+                        for (let i = 0; i < stockSnaps.length; i++) {
+                            const item = order.items[i];
+                            const newQty = (stockSnaps[i].data().qty || 0) - item.stockDeductQty;
+                            t.set(refs[i], { code: item.productCode, qty: newQty, updatedAt: Date.now() });
+                        }
+                        if (custLoyaltyRef) {
+                            t.set(custLoyaltyRef, { points: newPoints, updatedAt: Date.now() }, { merge: true });
+                        }
+                        t.update(orderRef, { status: 'fulfilled', fulfilledAt: Date.now(), fulfilledBy: DEVICE_ID });
 
-                    return { pointsToDeduct, appliedDiscount, grandTotal, earnedPoints, newPoints };
+                        return { pointsToDeduct, appliedDiscount, grandTotal, earnedPoints, newPoints };
+                    });
                 });
             }).then(function(txResult) {
+                if (txResult.alreadyFulfilledElsewhere) {
+                    // حد تاني (جهاز تاني أو ضغطة مزدوجة) كان سبقنا بالظبط ونفذ الطلب ده بالفعل -
+                    // بنوقف من غير ما نكرر أي خصم أو ننشئ فاتورة تانية لنفس الطلب
+                    order.status = 'fulfilled';
+                    localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
+                    if (!opts.silent) showToast('الطلب ده اتنفذ بالفعل من قبل (جهاز تاني أو ضغطة سابقة) - مفيش داعي نكرره', 'warning', 6000);
+                    updateDashboardStats(); renderInvoices(); renderRecentInvoices();
+                    return false;
+                }
                 const pointsToDeduct = txResult.pointsToDeduct, appliedDiscount = txResult.appliedDiscount,
                       grandTotal = txResult.grandTotal, earnedPoints = txResult.earnedPoints, newPoints = txResult.newPoints;
 
@@ -3784,14 +3825,16 @@
                     if (pointsToDeduct > 0) {
                         logAction('استخدام نقاط ولاء', `العميل ${finalCust.name}: -${pointsToDeduct} نقطة مقابل خصم ${appliedDiscount.toFixed(2)} ر.س (رصيده الآن ${newPoints})`);
                     }
-                    const earnedPoints = txResult.earnedPoints;
-                    if (earnedPoints > 0) {
-                        logAction('منح نقاط ولاء', `العميل ${finalCust.name}: +${earnedPoints} نقطة (رصيده الآن ${newPoints})`);
+                    const earnedPoints2 = txResult.earnedPoints;
+                    if (earnedPoints2 > 0) {
+                        logAction('منح نقاط ولاء', `العميل ${finalCust.name}: +${earnedPoints2} نقطة (رصيده الآن ${newPoints})`);
                     }
                     localStorage.setItem('customers', JSON.stringify(customers));
                 }
 
-                return db.collection('customerOrders').doc(order.id).update({ status: 'fulfilled', fulfilledAt: Date.now(), fulfilledBy: DEVICE_ID, invoiceNumber: invoice.number, pointsDeducted: pointsToDeduct, appliedDiscount: appliedDiscount });
+                // حالة الطلب اتحدّثت بالفعل جوه المعاملة الذرية فوق؛ هنا بس بنضيف بيانات الفاتورة
+                // المرتبطة (رقمها، النقاط المخصومة) كتحديث تكميلي غير حرج
+                return orderRef.update({ invoiceNumber: invoice.number, pointsDeducted: pointsToDeduct, appliedDiscount: appliedDiscount }).catch(function(e) { console.error('order metadata update failed:', e); });
             }).then(function() {
                 order.status = 'fulfilled';
                 localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
