@@ -5138,7 +5138,11 @@
         function renderNeighborhoodZoneAssignments() {
             const tbody = document.getElementById('neighborhoodZoneAssignTable');
             if (!tbody) return;
-            tbody.innerHTML = SALES_NEIGHBORHOODS.map(function(n) {
+            // *** إصلاح 2026-09: بنستخدم قائمة الأحياء اللي إنت بتديرها فعليًا من "المناطق الجغرافية" ***
+            // (appNeighborhoods) بدل القائمة الثابتة القديمة - دلوقتي الأبليكشن نفسه بيقرا من نفس
+            // القائمة دي، فبقوا مصدر واحد متطابق مع بعضه.
+            const namesList = appNeighborhoods.length > 0 ? appNeighborhoods.map(n => n.name) : SALES_NEIGHBORHOODS;
+            tbody.innerHTML = namesList.map(function(n) {
                 const options = '<option value="">— بدون منطقة —</option>' + deliveryZones.map(function(z) {
                     return `<option value="${z.id}" ${neighborhoodZoneMap[n] === z.id ? 'selected' : ''}>${z.name}</option>`;
                 }).join('');
