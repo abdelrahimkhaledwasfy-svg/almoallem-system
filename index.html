@@ -2150,6 +2150,9 @@
                 <div class="form-group"><label class="form-label">اسم العميل</label><input type="text" class="form-control" id="customerName" placeholder="اسم العميل الكامل"></div>
                 <div class="form-group"><label class="form-label">رقم الهاتف</label><input type="text" class="form-control" id="customerPhone" placeholder="05xxxxxxxx"></div>
                 <div class="form-group"><label class="form-label">العنوان</label><input type="text" class="form-control" id="customerAddress" placeholder="عنوان العميل"></div>
+                <div class="form-group"><label class="form-label">الحي الجغرافي</label><select class="form-control" id="customerNeighborhood" onchange="updateCustomerZoneDisplay()"><option value="">— اختر الحي —</option></select></div>
+                <div class="form-group"><label class="form-label">منطقة التسليم</label><input type="text" class="form-control" id="customerZoneDisplay" disabled placeholder="بتتحدد تلقائيًا حسب الحي"></div>
+                <div class="form-group"><label class="form-label">مندوب البيع المتابع</label><select class="form-control" id="customerSalesman"><option value="">— بدون مندوب —</option></select></div>
                 <div class="form-group"><label class="form-label">الحد الائتماني الأقصى (أقصى دين مسموح به)</label><input type="number" class="form-control" id="customerCreditLimit" placeholder="اتركه فارغاً لعدم وضع حد" min="0"></div>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('customerModal')">إلغاء</button><button class="btn btn-success" onclick="saveCustomer()">حفظ</button></div>
@@ -6161,6 +6164,13 @@
         }
 
         // ==================== CUSTOMERS ====================
+        function updateCustomerZoneDisplay() {
+            const neighborhood = document.getElementById('customerNeighborhood').value;
+            const zoneId = neighborhoodZoneMap[neighborhood];
+            const zone = zoneId ? deliveryZones.find(z => z.id === zoneId) : null;
+            document.getElementById('customerZoneDisplay').value = neighborhood ? (zone ? zone.name : 'بدون منطقة تسليم محددة') : '';
+        }
+
         function openCustomerModal(customer = null) {
             editingCustomer = customer;
             document.getElementById('customerCode').value = customer ? customer.code : '';
@@ -6168,6 +6178,14 @@
             document.getElementById('customerPhone').value = customer ? customer.phone : '';
             document.getElementById('customerAddress').value = customer ? customer.address : '';
             document.getElementById('customerCreditLimit').value = customer ? (customer.creditLimit ?? '') : '';
+            // الحي الجغرافي بيتعمّر من نفس القائمة اللي الأدمن بيديرها (appNeighborhoods)
+            const nSel = document.getElementById('customerNeighborhood');
+            nSel.innerHTML = '<option value="">— اختر الحي —</option>' + appNeighborhoods.map(n => `<option value="${n.name}">${n.name}</option>`).join('');
+            nSel.value = customer && customer.neighborhood ? customer.neighborhood : '';
+            const sSel = document.getElementById('customerSalesman');
+            sSel.innerHTML = '<option value="">— بدون مندوب —</option>' + salesmen.filter(s => s.status === 'نشط').map(s => `<option value="${s.code}">${s.name}</option>`).join('');
+            sSel.value = customer && customer.salesmanCode ? customer.salesmanCode : '';
+            updateCustomerZoneDisplay();
             openModal('customerModal');
         }
 
@@ -6176,15 +6194,17 @@
             const name = document.getElementById('customerName').value.trim();
             const phone = document.getElementById('customerPhone').value.trim();
             const address = document.getElementById('customerAddress').value.trim();
+            const neighborhood = document.getElementById('customerNeighborhood').value;
+            const salesmanCode = document.getElementById('customerSalesman').value;
             const creditLimitRaw = document.getElementById('customerCreditLimit').value;
             const creditLimit = creditLimitRaw === '' ? null : parseFloat(creditLimitRaw);
             if (!code || !name) { showToast('الرجاء ملء الحقول الإلزامية', 'error'); return; }
             if (editingCustomer) {
                 const idx = customers.findIndex(c => c.code === editingCustomer.code);
-                if (idx !== -1) customers[idx] = { code, name, phone, address, creditLimit };
+                if (idx !== -1) customers[idx] = { code, name, phone, address, neighborhood, salesmanCode, creditLimit };
             } else {
                 if (customers.find(c => c.code === code)) { showToast('كود العميل موجود مسبقاً', 'error'); return; }
-                customers.push({ code, name, phone, address, creditLimit });
+                customers.push({ code, name, phone, address, neighborhood, salesmanCode, creditLimit });
             }
             localStorage.setItem('customers', JSON.stringify(customers));
             logAction(editingCustomer ? 'تعديل عميل' : 'إضافة عميل', `${editingCustomer ? 'تم تعديل' : 'تم إضافة'} العميل "${name}" (${code})`);
