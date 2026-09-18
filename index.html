@@ -380,6 +380,7 @@
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 </head>
 <body>
@@ -2455,6 +2456,38 @@
         }
 
         let db = null;
+        let auth = null;
+        // *** نظام حماية 2026-09: تسجيل الدخول بقى بيستخدم Firebase Authentication الحقيقي بدل مقارنة ***
+        // كلمة السر كنص عادي في جدول users. كل يوزر بياخد بريد وهمي (username@almoallem-system.local)
+        // عشان Firebase Auth محتاج شكل بريد إلكتروني. الصلاحية (role) بقت متسجلة في مستند واحد مشترك
+        // "systemRoles/main"، بمفتاح كل مستخدم فيه هو نفس البريد الوهمي بتاعه (مش uid) - عشان الأدمن
+        // يقدر يحدد صلاحية موظف *قبل* ما يسجل دخول لأول مرة أصلاً. قواعد الأمان الجديدة بتتأكد إن
+        // الكتابة على المستند ده بعد أول مرة تتعمل، ميقدرش يعملها غير أدمن موجود بالفعل، فمستحيل حد
+        // يسجل حساب لنفسه ويدي لنفسه صلاحية من غير ما يكون أدمن أصلًا معتمده قبل كده.
+        // بنستخدم "تطبيق فايربيز ثانوي" (secondaryAuthApp) عشان إنشاء حساب مستخدم جديد (أو ترحيل
+        // مستخدم قديم لأول مرة) ما يبدلش جلسة الدخول الحالية بتاعت المدير اللي بيعمل الإضافة.
+        let secondaryAuthApp = null;
+        function getSecondaryAuth() {
+            if (!secondaryAuthApp) {
+                secondaryAuthApp = firebase.initializeApp(firebaseConfig, 'secondary-' + Date.now());
+            }
+            return secondaryAuthApp.auth();
+        }
+        function pseudoEmailForUsername(username) {
+            const clean = (username || '').trim().toLowerCase().replace(/[^a-z0-9_.-]/g, '');
+            return clean + '@almoallem-system.local';
+        }
+        function upsertSystemRole(pseudoEmail, data) {
+            if (!db) return Promise.resolve();
+            const update = {}; update[pseudoEmail] = data;
+            return db.collection('systemRoles').doc('main').set(update, { merge: true });
+        }
+        function removeSystemRole(pseudoEmail) {
+            if (!db) return Promise.resolve();
+            const update = {}; update[pseudoEmail] = firebase.firestore.FieldValue.delete();
+            return db.collection('systemRoles').doc('main').update(update).catch(function(e) { console.error('role revoke failed:', e); });
+        }
+
         let cloudSyncTimer = null;
         let applyingRemoteUpdate = false;
         let cloudListenerStarted = false;
@@ -2485,6 +2518,8 @@
             try {
                 const app = firebase.initializeApp(firebaseConfig);
                 db = firebase.firestore();
+                auth = firebase.auth();
+                checkLoginState();
                 hookLocalStorageForCloudSync();
                 // لو الأبليكشن اتقفل أو الصفحة اتعملها ريفريش وفيه تعديل محلي كان لسه مستني يترفع
                 // للسحابة (مسجل في _syncOutboxPending)، بنحاول نرفعه فورًا تاني من هنا، بدل ما نسيب
@@ -3967,26 +4002,34 @@
             initProfitChartDates();
             initExpenseDates();
             setInterval(updateDate, 60000);
-            checkLoginState();
+            document.getElementById('loginOverlay').style.display = 'flex'; // قفل افتراضي لحد ما نتأكد من الجلسة الحقيقية
             initFirebaseSync();
             applyMobileLayoutFix();
         });
 
         // ==================== AUTH & PERMISSIONS ====================
+        // *** إصلاح 2026-09: القرار النهائي (هل نفتح الشاشة ولا نسيب overlay الدخول) بقى معلّق على ***
+        // auth.onAuthStateChanged - أي جلسة Firebase Authentication حقيقية ومطابقة - مش بس على وجود
+        // currentUser في localStorage زي الأول. كده لو حد كانت عنده جلسة قديمة محفوظة محليًا من قبل
+        // تحديث الحماية، هيتاخد على شاشة الدخول تلقائيًا (وهيترحّل بشفافية أول ما يدخل بياناته تاني).
         function checkLoginState() {
             saveUsers();
-            if (currentUser) {
-                const existing = users.find(u => u.id === currentUser.id && u.active);
-                if (existing) {
-                    document.getElementById('loginOverlay').style.display = 'none';
-                    applyRolePermissions();
-                    updateUserBar();
-                    return;
+            if (!auth) { document.getElementById('loginOverlay').style.display = 'flex'; return; }
+            auth.onAuthStateChanged(function(fbUser) {
+                if (fbUser && currentUser) {
+                    const existing = users.find(u => u.id === currentUser.id && u.active && u.authMigrated);
+                    const expectedEmail = existing ? pseudoEmailForUsername(existing.username) : null;
+                    if (existing && fbUser.email === expectedEmail) {
+                        document.getElementById('loginOverlay').style.display = 'none';
+                        applyRolePermissions();
+                        updateUserBar();
+                        return;
+                    }
                 }
-            }
-            currentUser = null;
-            saveCurrentUser();
-            document.getElementById('loginOverlay').style.display = 'flex';
+                currentUser = null;
+                saveCurrentUser();
+                document.getElementById('loginOverlay').style.display = 'flex';
+            });
         }
 
         function debugShowLoginState() {
@@ -4003,7 +4046,7 @@
             const username = document.getElementById('loginUsername').value.trim();
             const password = document.getElementById('loginPassword').value;
             const errorEl = document.getElementById('loginError');
-            const user = users.find(u => u.username.trim().toLowerCase() === username.toLowerCase() && u.password === password);
+            const user = users.find(u => u.username.trim().toLowerCase() === username.toLowerCase());
             if (!user) {
                 errorEl.textContent = 'اسم المستخدم أو كلمة المرور غير صحيحة';
                 errorEl.style.display = 'block';
@@ -4014,24 +4057,101 @@
                 errorEl.style.display = 'block';
                 return;
             }
+            if (!db || !auth) {
+                errorEl.textContent = 'لا يوجد اتصال بالسحابة حاليًا، حاول تاني بعد شوية';
+                errorEl.style.display = 'block';
+                return;
+            }
             errorEl.style.display = 'none';
-            user.lastLogin = new Date().toISOString();
-            saveUsers();
-            currentUser = { id: user.id, username: user.username, fullName: user.fullName, role: user.role };
-            saveCurrentUser();
-            document.getElementById('loginOverlay').style.display = 'none';
-            document.getElementById('loginUsername').value = '';
-            document.getElementById('loginPassword').value = '';
-            applyRolePermissions();
-            updateUserBar();
-            logAction('تسجيل دخول', `قام المستخدم ${user.fullName} بتسجيل الدخول`);
-            showSection('dashboard');
+            const loginBtn = document.getElementById('loginSubmitBtn');
+            if (loginBtn) loginBtn.disabled = true;
+            const pseudoEmail = pseudoEmailForUsername(user.username);
+
+            const finishLogin = function() {
+                user.lastLogin = new Date().toISOString();
+                saveUsers();
+                currentUser = { id: user.id, username: user.username, fullName: user.fullName, role: user.role };
+                saveCurrentUser();
+                document.getElementById('loginOverlay').style.display = 'none';
+                document.getElementById('loginUsername').value = '';
+                document.getElementById('loginPassword').value = '';
+                if (loginBtn) loginBtn.disabled = false;
+                applyRolePermissions();
+                updateUserBar();
+                logAction('تسجيل دخول', `قام المستخدم ${user.fullName} بتسجيل الدخول`);
+                showSection('dashboard');
+            };
+            const showLoginError = function(msg) {
+                if (loginBtn) loginBtn.disabled = false;
+                errorEl.textContent = msg || 'اسم المستخدم أو كلمة المرور غير صحيحة';
+                errorEl.style.display = 'block';
+            };
+
+            if (user.authMigrated) {
+                // مستخدم اتترحّل بالفعل لـ Firebase Authentication - تسجيل الدخول العادي
+                auth.signInWithEmailAndPassword(pseudoEmail, password).then(finishLogin).catch(function(err) {
+                    console.error('Auth sign-in failed:', err);
+                    showLoginError('اسم المستخدم أو كلمة المرور غير صحيحة');
+                });
+                return;
+            }
+
+            // *** ترحيل تلقائي لمرة واحدة بس: أول مرة يسجل فيها هذا المستخدم دخول بعد تحديث الحماية ***
+            // بنتحقق من كلمة السر بالطريقة القديمة (المقارنة المباشرة)، ولو صحيحة، بننشئله حساب
+            // Firebase Authentication حقيقي بنفس كلمة السر دي (من غير ما يحس بأي فرق)، ونمسح كلمة
+            // السر النصية القديمة من قاعدة البيانات نهائيًا بعد كده.
+            if (user.password !== password) {
+                showLoginError('اسم المستخدم أو كلمة المرور غير صحيحة');
+                return;
+            }
+            // لو ده أول تسجيل دخول *لأي حد* بعد تحديث الحماية، مستند صلاحيات النظام (systemRoles/main)
+            // لسه مش موجود على السحابة خالص. أول واحد يوصل هنا هو اللي "بيبذر" (bootstrap) المستند ده
+            // بصلاحيات كل المستخدمين الحاليين مرة واحدة، عشان بعد كده محدش (غير أدمن موجود بالفعل)
+            // يقدر يعدّل عليه - فمستحيل حد يسجل حساب لنفسه ويدّي لنفسه صلاحية مش مستحقها.
+            // مهم: بنعمل الكتابة دي *بعد* ما نسجل دخول فعليًا على الحساب الجديد (مش قبل)، عشان قاعدة
+            // الأمان بتتطلب إن الشخص يكون مسجّل دخول أصلًا قبل ما يقدر حتى يبذر المستند ده.
+            const secAuth = getSecondaryAuth();
+            secAuth.createUserWithEmailAndPassword(pseudoEmail, password).then(function() {
+                return secAuth.signOut();
+            }).then(function() {
+                return auth.signInWithEmailAndPassword(pseudoEmail, password);
+            }).then(function() {
+                const rolesDocRef = db.collection('systemRoles').doc('main');
+                return rolesDocRef.get().then(function(rolesSnap) {
+                    if (rolesSnap.exists) return;
+                    const allEntries = {};
+                    users.forEach(function(u) {
+                        allEntries[pseudoEmailForUsername(u.username)] = { role: u.role, username: u.username, fullName: u.fullName, active: !!u.active };
+                    });
+                    return rolesDocRef.set(allEntries);
+                });
+            }).then(function() {
+                user.authMigrated = true;
+                delete user.password; // مانسيبش كلمة السر كنص عادي في قاعدة البيانات بعد الترحيل
+                saveUsers();
+            }).then(finishLogin).catch(function(err) {
+                console.error('Migration/sign-in failed:', err);
+                if (err && err.code === 'auth/email-already-in-use') {
+                    // حساب Firebase Auth موجود بالفعل (اتعمل من قبل بس ماتسجلش صح في السجل المحلي)
+                    // بنحاول نسجل دخول بيه مباشرة كحل بديل
+                    auth.signInWithEmailAndPassword(pseudoEmail, password).then(function() {
+                        user.authMigrated = true;
+                        delete user.password;
+                        saveUsers();
+                    }).then(finishLogin).catch(function() {
+                        showLoginError('حدث خطأ أثناء ترحيل الحساب، تواصل مع مدير النظام');
+                    });
+                } else {
+                    showLoginError('حدث خطأ أثناء تسجيل الدخول، حاول تاني');
+                }
+            });
         }
 
         function logoutUser() {
             if (currentUser) logAction('تسجيل خروج', `قام المستخدم ${currentUser.fullName} بتسجيل الخروج`);
             currentUser = null;
             saveCurrentUser();
+            if (auth) auth.signOut().catch(function(e) { console.error('sign-out failed:', e); });
             document.getElementById('loginOverlay').style.display = 'flex';
         }
 
@@ -4180,28 +4300,63 @@
             const active = document.getElementById('userActive').value === 'true';
             if (!fullName || !username) { showToast('الرجاء إدخال الاسم الكامل واسم المستخدم', 'error'); return; }
             if (!id && !password) { showToast('الرجاء إدخال كلمة مرور للمستخدم الجديد', 'error'); return; }
+            if (password && password.length < 6) { showToast('كلمة المرور لازم تكون 6 حروف/أرقام على الأقل', 'error'); return; }
 
             if (id) {
                 const u = users.find(x => x.id === parseFloat(id));
-                if (users.some(x => x.username === username && x.id !== parseFloat(id))) { showToast('اسم المستخدم مستخدم بالفعل', 'error'); return; }
+                const usernameChanged = u.authMigrated && u.username !== username;
+                const oldPseudoEmail = pseudoEmailForUsername(u.username);
                 u.fullName = fullName; u.username = username; u.role = role; u.active = active;
-                if (password) u.password = password;
+                if (users.some(x => x.username === username && x.id !== parseFloat(id))) { showToast('اسم المستخدم مستخدم بالفعل', 'error'); return; }
+                // بنحدّث صلاحيته في مستند systemRoles المشترك (ده المصدر اللي قواعد الأمان فعليًا
+                // بتتأكد منه) بغض النظر هل سجل دخول قبل كده ولا لسه - عشان لو غيّرت صلاحيته دلوقتي
+                // تتطبق فورًا حتى لو هو مسجل دخول في تاب تاني
+                upsertSystemRole(pseudoEmailForUsername(username), { role: role, username: username, fullName: fullName, active: active });
+                if (usernameChanged) {
+                    // غيّرنا اليوزرنيم لمستخدم كان مترحّل بالفعل لحساب حقيقي - حساب الدخول بتاعه القديم
+                    // مرتبط بالبريد الوهمي القديم ومش هيتغيّر تلقائيًا، فبنشيل صلاحيته القديمة ونطلب
+                    // منه يتواصل مع الدعم لإعادة ضبط حسابه بدل ما يفضل عنده وصول بإيميل قديم منسي
+                    removeSystemRole(oldPseudoEmail);
+                    showToast('تنبيه: غيّرت يوزرنيم مستخدم مسجّل بالفعل - هيحتاج يتواصل مع الدعم الفني لإعادة ضبط حسابه', 'info', 8000);
+                } else if (password && u.authMigrated) {
+                    showToast('تنبيه: تغيير كلمة السر لمستخدم مرحّل مسبقًا محتاج يدخل هو نفسه ويسجل دخول بالقديمة الأول، أو تواصل مع الدعم الفني', 'info', 8000);
+                } else if (password) {
+                    u.password = password; // لسه ماترحّلش - هيترحّل تلقائيًا أول ما يسجل دخول
+                }
                 logAction('تعديل مستخدم', `تم تعديل بيانات المستخدم ${fullName}`);
+                saveUsers();
+                closeModal('userModal');
+                renderUsers();
+                showToast('تم حفظ بيانات المستخدم بنجاح');
             } else {
                 if (users.some(x => x.username === username)) { showToast('اسم المستخدم مستخدم بالفعل', 'error'); return; }
-                users.push({ id: Date.now(), username, password, fullName, role, active, lastLogin: null });
-                logAction('إضافة مستخدم', `تم إضافة مستخدم جديد: ${fullName} (${ROLES[role].label})`);
+                if (!db) { showToast('لا يوجد اتصال بالسحابة، لا يمكن إضافة مستخدم الآن', 'error'); return; }
+                // بنسجّل صلاحيته في systemRoles فورًا (مش لازم ننتظر أول تسجيل دخول له، لأن المفتاح
+                // هو البريد الوهمي المبني على اليوزرنيم، ومعروف من دلوقتي)؛ حساب الدخول الفعلي بتاعه
+                // (Firebase Authentication) هيتعمل تلقائيًا أول ما يسجل دخول بنفسه لأول مرة
+                const pseudoEmail = pseudoEmailForUsername(username);
+                upsertSystemRole(pseudoEmail, { role: role, username: username, fullName: fullName, active: active }).then(function() {
+                    users.push({ id: Date.now(), username, password, fullName, role, active, lastLogin: null });
+                    logAction('إضافة مستخدم', `تم إضافة مستخدم جديد: ${fullName} (${ROLES[role].label})`);
+                    saveUsers();
+                    closeModal('userModal');
+                    renderUsers();
+                    showToast('تم حفظ بيانات المستخدم بنجاح');
+                }).catch(function(err) {
+                    console.error('Create user role failed:', err);
+                    showToast('تعذر إنشاء المستخدم: ' + (err && err.message ? err.message : err), 'error', 6000);
+                });
             }
-            saveUsers();
-            closeModal('userModal');
-            renderUsers();
-            showToast('تم حفظ بيانات المستخدم بنجاح');
         }
 
         function deleteUser(id) {
             const u = users.find(x => x.id === id);
             if (!u || u.username === 'admin') return;
             if (!confirm(`هل أنت متأكد من حذف المستخدم "${u.fullName}"؟`)) return;
+            // مينفعش نحذف حساب Firebase Authentication بتاعه من هنا (محتاج صلاحيات سيرفر مش متاحة لنا)،
+            // فبدل كده بنمسح صلاحيته من systemRoles - وده اللي قواعد الأمان بتتأكد منه فعليًا، فحتى
+            // لو حاول يسجل دخول تاني بنفس الحساب، مش هيقدر يعمل أي حاجة لأنه مالوش صلاحية مسجلة
+            removeSystemRole(pseudoEmailForUsername(u.username));
             users = users.filter(x => x.id !== id);
             saveUsers();
             logAction('حذف مستخدم', `تم حذف المستخدم ${u.fullName}`);
@@ -7315,8 +7470,13 @@
             if (ret) {
                 ret.items.forEach(item => {
                     if (inventory[item.productCode]) {
-                        inventory[item.productCode].qty -= item.qty;
-                        addStockMovement(item.productCode, item.productName, 'out', -item.qty, inventory[item.productCode].qty, 'حذف مرتجع بيع', 'خصم مخزون من حذف مرتجع بيع #' + ret.number);
+                        // *** إصلاح 2026-09: كان بيستخدم item.qty (كمية الإرجاع بالوحدة اللي اتسجلت بيها، ***
+                        // ممكن تكون "علبة" مثلاً) بدل item.stockDeductQty (نفس الكمية بعد تحويلها لوحدة
+                        // الكرتونة الأساسية اللي المخزون متسجل بيها). ده كان بيخصم كمية أكبر بكتير من
+                        // المفروض عند حذف مرتجع بيع كان مسجل بوحدة فرعية (قطاعي)، ويطلع رقم غلط في المخزون.
+                        const deductQty = item.stockDeductQty != null ? item.stockDeductQty : item.qty;
+                        inventory[item.productCode].qty -= deductQty;
+                        addStockMovement(item.productCode, item.productName, 'out', -deductQty, inventory[item.productCode].qty, 'حذف مرتجع بيع', 'خصم مخزون من حذف مرتجع بيع #' + ret.number);
                     }
                 });
                 if (!ret.affectsBalance) {
