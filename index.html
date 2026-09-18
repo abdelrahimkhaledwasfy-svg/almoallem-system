@@ -188,7 +188,11 @@
         .profit-value { font-size: 32px; font-weight: 800; color: var(--brand-red); }
         .profit-label { font-size: 14px; color: var(--text-light); font-weight: 500; }
         .profit-margin { font-size: 18px; font-weight: 700; color: var(--brand-gold); }
-        @media print { .sidebar, .top-bar, .invoice-actions, .toggle-btn, .nav-menu, .btn-delete-row, .inventory-alert, .no-print { display: none !important; }
+        @media print {
+            /* *** إصلاح 2026-09: تثبيت مقاس الطباعة على A4 بالظبط، بهوامش معقولة تسمح بالكتابة اليدوية. ***
+               من غيرها، الطباعة كانت بتعتمد على إعداد الطابعة الافتراضي في المتصفح (ممكن يبقى أي حجم). */
+            @page { size: A4; margin: 12mm; }
+            .sidebar, .top-bar, .invoice-actions, .toggle-btn, .nav-menu, .btn-delete-row, .inventory-alert, .no-print { display: none !important; }
             .main-content { margin: 0 !important; padding: 0 !important; }
             .invoice-container { box-shadow: none; max-width: 100%; }
             .section { display: none !important; }
@@ -196,7 +200,9 @@
             #customers-section.section.active .card:not(#customerStatementCard) { display: none !important; }
             body { background: white; } .card { box-shadow: none; border: 1px solid #ddd; }
             body.printing-invoice-mode > *:not(#printInvoiceArea) { display: none !important; }
-            body.printing-invoice-mode #printInvoiceArea { display: block !important; position: static; }
+            body.printing-invoice-mode #printInvoiceArea { display: block !important; position: static; width: 186mm; max-width: 186mm; margin: 0 auto; font-size: 13px; }
+            body.printing-invoice-mode #printInvoiceArea table { page-break-inside: auto; }
+            body.printing-invoice-mode #printInvoiceArea tr { page-break-inside: avoid; }
         }
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
         .modal-overlay.active { display: flex; }
@@ -1349,7 +1355,7 @@
             @media print {
                 body * { visibility: hidden; }
                 #deliverySheetPrintArea, #deliverySheetPrintArea * { visibility: visible; }
-                #deliverySheetPrintArea { position: absolute; top: 0; right: 0; width: 100%; display: block !important; padding: 20px; }
+                #deliverySheetPrintArea { position: absolute; top: 0; right: 0; width: 186mm; max-width: 186mm; display: block !important; padding: 0; margin: 0 auto; }
             }
         </style>
 
@@ -7123,7 +7129,9 @@
                     <td style="text-align:center;">${(item.price || 0).toFixed(2)}</td>
                     <td style="text-align:center;font-weight:700;">${(item.total || (item.price * item.qty) || 0).toFixed(2)}</td>
                 </tr>`).join('');
-            const grandTotal = (order.items || []).reduce((s, it) => s + (it.total || (it.price * it.qty) || 0), 0);
+            const itemsTotal = (order.items || []).reduce((s, it) => s + (it.total || (it.price * it.qty) || 0), 0);
+            const orderDiscount = order.discountFromPoints || 0;
+            const grandTotal = Math.max(0, itemsTotal - orderDiscount);
             return `
             <div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;border:1px solid #ddd;border-radius:10px;overflow:hidden;">
                 <div style="background:linear-gradient(135deg,#8b1e1e,#5e1414);color:#fff;padding:20px;text-align:center;">
@@ -7150,8 +7158,14 @@
                         </tr></thead>
                         <tbody>${itemsRows}</tbody>
                     </table>
-                    <div style="text-align:left;margin-top:20px;padding-top:15px;border-top:2px dashed #ddd;font-size:20px;font-weight:800;color:#8b1e1e;">
+                    <div style="text-align:left;margin-top:20px;padding-top:15px;border-top:2px dashed #ddd;">
+                        ${orderDiscount > 0 ? `
+                        <div style="font-size:14px;color:#555;margin-bottom:4px;">إجمالي الأصناف: ${itemsTotal.toFixed(2)} ر.س</div>
+                        <div style="font-size:14px;color:#8b1e1e;margin-bottom:8px;">خصم (نقاط ولاء): -${orderDiscount.toFixed(2)} ر.س</div>
+                        ` : ''}
+                        <div style="font-size:20px;font-weight:800;color:#8b1e1e;">
                         الإجمالي الكلي: ${grandTotal.toFixed(2)} ر.س
+                        </div>
                     </div>
                 </div>
                 <div style="background:#f9f9f9;text-align:center;padding:10px;font-size:12px;color:#999;">شكرًا لتعاملكم مع المعلم</div>
@@ -7291,8 +7305,14 @@
                         </tr></thead>
                         <tbody>${itemsRows}</tbody>
                     </table>
-                    <div style="text-align:left;margin-top:20px;padding-top:15px;border-top:2px dashed #ddd;font-size:20px;font-weight:800;color:#8b1e1e;">
+                    <div style="text-align:left;margin-top:20px;padding-top:15px;border-top:2px dashed #ddd;">
+                        ${invoice.discount > 0 ? `
+                        <div style="font-size:14px;color:#555;margin-bottom:4px;">إجمالي الأصناف: ${invoice.items.reduce((s, it) => s + (it.total || 0), 0).toFixed(2)} ر.س</div>
+                        <div style="font-size:14px;color:#8b1e1e;margin-bottom:8px;">خصم${invoice.notes && invoice.notes.includes('نقاط ولاء') ? ' (نقاط ولاء)' : ''}: -${invoice.discount.toFixed(2)} ر.س</div>
+                        ` : ''}
+                        <div style="font-size:20px;font-weight:800;color:#8b1e1e;">
                         الإجمالي الكلي: ${invoice.grandTotal.toFixed(2)} ر.س
+                        </div>
                     </div>
                     ${invoice.notes ? `<div style="margin-top:10px;font-size:13px;color:#888;">ملاحظات: ${invoice.notes}</div>` : ''}
                 </div>
