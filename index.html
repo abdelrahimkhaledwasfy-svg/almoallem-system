@@ -2941,6 +2941,22 @@
             }).catch(function(err) { console.error('applyLedgerChangeTransactional failed for order ' + order.id + ':', err); });
         }
 
+        // *** إصلاح 2026-09 (أداء): كنا بنقارن "هل الكمية المحجوزة اتغيرت؟" بمقارنة JSON.stringify لنص ***
+        // كامل، وده بيفشل لو ترتيب المفاتيح جوه الكائن اختلف (وارد جدًا لما القيمة راجعة من فايرستور
+        // بعد ما اترحّلت عبر الشبكة) حتى لو المحتوى الفعلي مطابق تمامًا. النتيجة كانت إن كل تغيير حالة
+        // بسيط للطلب (زي "بدء التجهيز") كان بيخلي النظام يفتكر إن كل الكميات "اتغيرت" ويبدأ Transaction
+        // كامل على السحابة لكل طلب محجوز عنده - وده اللي كان بيسبب البطء الشديد وقت تغيير حالة الطلبات.
+        // دلوقتي المقارنة بتتم على القيم نفسها بغض النظر عن ترتيب المفاتيح.
+        function stockVectorsEqual(a, b) {
+            a = a || {}; b = b || {};
+            const keysA = Object.keys(a), keysB = Object.keys(b);
+            if (keysA.length !== keysB.length) return false;
+            for (const k of keysA) {
+                if (!(k in b) || Math.abs((a[k] || 0) - (b[k] || 0)) > 1e-9) return false;
+            }
+            return true;
+        }
+
         function syncReservedOrdersIntoLocalInventory(orders) {
             // مهم: منعملش أي حساب أو خصم قبل ما الدفتر الحقيقي (المشترك على السحابة) يوصل فعليًا
             // من startReservationLedgerListener - لو حسبنا بناءً على دفتر فاضي هنا هيبقى زي بالظبط
@@ -2959,7 +2975,7 @@
                 }
                 // الطلب لسه "جديد" أو "قيد التجهيز" أو "خرج للتسليم" - نتابع أي فرق حصل من الأبليكشن (طلب جديد/إضافة/حذف/تعديل كمية)
                 const currVec = computeOrderStockVector(order);
-                if (JSON.stringify(currVec) !== JSON.stringify(prevVec || {})) {
+                if (!stockVectorsEqual(currVec, prevVec)) {
                     applyLedgerChangeTransactional(order, currVec);
                 }
             });
