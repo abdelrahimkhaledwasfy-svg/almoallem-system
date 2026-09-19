@@ -1517,8 +1517,9 @@
                     <div class="card-title"><i class="fas fa-boxes"></i> قاعدة بيانات الأصناف</div>
                     <div style="display:flex;gap:10px;flex-wrap:wrap;">
                         <button class="btn btn-success btn-sm" onclick="openProductModal()"><i class="fas fa-plus"></i> إضافة صنف</button>
+                        <button class="btn btn-info btn-sm" onclick="exportProductsToExcel()"><i class="fas fa-file-export"></i> تصدير الأصناف الحالية</button>
                         <button class="btn btn-primary btn-sm" onclick="document.getElementById('productExcelFileInput').click()"><i class="fas fa-file-excel"></i> رفع ملف Excel</button>
-                        <button class="btn btn-secondary btn-sm" onclick="downloadProductTemplate()"><i class="fas fa-download"></i> تحميل نموذج</button>
+                        <button class="btn btn-secondary btn-sm" onclick="downloadProductTemplate()"><i class="fas fa-download"></i> تحميل نموذج فارغ</button>
                         <input type="file" id="productExcelFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleProductExcelUpload(event)">
                     </div>
                 </div>
@@ -1536,8 +1537,9 @@
                     <div class="card-title"><i class="fas fa-users"></i> قاعدة بيانات العملاء</div>
                     <div style="display:flex;gap:10px;flex-wrap:wrap;">
                         <button class="btn btn-success btn-sm" onclick="openCustomerModal()"><i class="fas fa-plus"></i> إضافة عميل</button>
+                        <button class="btn btn-info btn-sm" onclick="exportCustomersToExcel()"><i class="fas fa-file-export"></i> تصدير العملاء الحاليين</button>
                         <button class="btn btn-primary btn-sm" onclick="document.getElementById('excelFileInput').click()"><i class="fas fa-file-excel"></i> رفع ملف Excel</button>
-                        <button class="btn btn-secondary btn-sm" onclick="downloadCustomerTemplate()"><i class="fas fa-download"></i> تحميل نموذج</button>
+                        <button class="btn btn-secondary btn-sm" onclick="downloadCustomerTemplate()"><i class="fas fa-download"></i> تحميل نموذج فارغ</button>
                         <button class="btn btn-danger btn-sm" onclick="openDeleteAllCustomersModal()"><i class="fas fa-trash-alt"></i> مسح الكل</button>
                         <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleExcelUpload(event)">
                     </div>
@@ -2381,6 +2383,7 @@
         let profitChartInstance = null;
         let excelCustomersData = [];
         let excelProductsData = [];
+        let excelCustomerColumnsPresent = { phone: false, address: false, neighborhood: false, salesman: false, creditLimit: false };
         // مهم: بنستخدم sessionStorage مش localStorage عشان كل تاب مفتوح ياخد رقم تعريف (Device ID) خاص
         // بيه لوحده، حتى لو التابات دي كلها في نفس المتصفح ونفس الجهاز (زي فتح النظام بأكتر من يوزر
         // في نفس الوقت). لو استخدمنا localStorage هنا، كل التابات كانت هتاخد نفس الرقم وتفتكر إن
@@ -9648,6 +9651,10 @@
                         if (detected) { headerRowIndex = i; headerMap = detected; break; }
                     }
                     if (!headerMap) { showToast('تنسيق الأعمدة غير صحيح. تأكد من وجود: كود العميل، اسم العميل', 'error'); return; }
+                    excelCustomerColumnsPresent = {
+                        phone: headerMap.phone >= 0, address: headerMap.address >= 0, neighborhood: headerMap.neighborhood >= 0,
+                        salesman: headerMap.salesmanName >= 0 || headerMap.salesmanCode >= 0, creditLimit: headerMap.creditLimit >= 0
+                    };
 
                     excelCustomersData = []; let skippedRows = 0;
                     for (let i = headerRowIndex + 1; i < jsonData.length; i++) {
@@ -9658,10 +9665,21 @@
                         const codeVal = row[headerMap.code]; const nameVal = row[headerMap.name];
                         if (codeVal === undefined || codeVal === null || codeVal === '') { skippedRows++; continue; }
                         if (nameVal === undefined || nameVal === null || nameVal === '') { skippedRows++; continue; }
+                        const salesmanNameVal = headerMap.salesmanName >= 0 ? String(row[headerMap.salesmanName] || '').trim() : '';
+                        let resolvedSalesmanCode = headerMap.salesmanCode >= 0 ? String(row[headerMap.salesmanCode] || '').trim() : '';
+                        let salesmanNotFound = false;
+                        if (!resolvedSalesmanCode && salesmanNameVal) {
+                            const match = salesmen.find(s => s.name && s.name.trim().toLowerCase() === salesmanNameVal.toLowerCase());
+                            if (match) resolvedSalesmanCode = match.code; else salesmanNotFound = true;
+                        }
+                        const creditLimitVal = headerMap.creditLimit >= 0 ? row[headerMap.creditLimit] : '';
                         const customer = {
                             code: String(codeVal).trim(), name: String(nameVal).trim(),
                             phone: headerMap.phone >= 0 ? String(row[headerMap.phone] || '').trim() : '',
-                            address: headerMap.address >= 0 ? String(row[headerMap.address] || '').trim() : ''
+                            address: headerMap.address >= 0 ? String(row[headerMap.address] || '').trim() : '',
+                            neighborhood: headerMap.neighborhood >= 0 ? String(row[headerMap.neighborhood] || '').trim() : '',
+                            salesmanCode: resolvedSalesmanCode, salesmanNameInput: salesmanNameVal, salesmanNotFound: salesmanNotFound,
+                            creditLimit: creditLimitVal === '' || creditLimitVal === undefined || creditLimitVal === null ? null : parseFloat(creditLimitVal)
                         };
                         if (customer.code && customer.name && customer.code.toLowerCase() !== 'كود العميل') { excelCustomersData.push(customer); }
                         else { skippedRows++; }
@@ -9681,7 +9699,11 @@
                 code: ['كود العميل', 'الكود', 'code', 'id', 'معرف', 'رقم', 'customer code', 'كود', 'customer id', 'رقم العميل', 'client code', 'client id'],
                 name: ['اسم العميل', 'الاسم', 'name', 'customer name', 'اسم', 'الاسم الكامل', 'client name', 'full name', 'الاسم الرباعي', 'اسم العميل الكامل'],
                 phone: ['رقم الهاتف', 'الهاتف', 'phone', 'mobile', 'tel', 'رقم الجوال', 'جوال', 'التليفون', 'رقم التليفون', 'phone number', 'mobile number'],
-                address: ['العنوان', 'address', 'location', 'الموقع', 'عنوان', 'المنطقة', 'region', 'area', 'zone']
+                address: ['العنوان', 'address', 'location', 'الموقع', 'عنوان'],
+                neighborhood: ['الحي الجغرافي', 'الحي', 'neighborhood', 'district', 'المنطقة الجغرافية', 'حي'],
+                salesmanName: ['اسم المندوب', 'المندوب', 'مندوب البيع', 'مندوب البيع المتابع', 'salesman', 'salesman name', 'rep name'],
+                salesmanCode: ['كود المندوب', 'salesman code', 'rep code'],
+                creditLimit: ['الحد الائتماني', 'حد الائتمان', 'credit limit', 'creditlimit']
             };
             const map = {};
             for (const [key, possible] of Object.entries(possibleHeaders)) {
@@ -9694,30 +9716,40 @@
             if (map.code !== undefined && map.name !== undefined) {
                 if (map.phone === undefined) map.phone = -1;
                 if (map.address === undefined) map.address = -1;
+                if (map.neighborhood === undefined) map.neighborhood = -1;
+                if (map.salesmanName === undefined) map.salesmanName = -1;
+                if (map.salesmanCode === undefined) map.salesmanCode = -1;
+                if (map.creditLimit === undefined) map.creditLimit = -1;
                 return map;
             }
             if (headers.length >= 2) {
-                return { code: 0, name: 1, phone: headers.length > 2 ? 2 : -1, address: headers.length > 3 ? 3 : -1 };
+                return { code: 0, name: 1, phone: headers.length > 2 ? 2 : -1, address: headers.length > 3 ? 3 : -1, neighborhood: -1, salesmanName: -1, salesmanCode: -1, creditLimit: -1 };
             }
             return null;
         }
 
         function showExcelPreview(skippedCount) {
             const tbody = document.getElementById('excelPreviewTable');
-            let validCount = 0; let duplicateCount = 0;
+            let validCount = 0; let duplicateCount = 0; let salesmanWarnCount = 0;
             tbody.innerHTML = excelCustomersData.map((c, index) => {
                 const exists = customers.some(existing => existing.code === c.code);
                 if (exists) duplicateCount++; else validCount++;
+                if (c.salesmanNotFound) salesmanWarnCount++;
                 let issueBadge = '';
-                if (exists) issueBadge = '<span class="badge badge-danger"><i class="fas fa-exclamation-circle"></i> موجود مسبقاً</span>';
+                if (c.salesmanNotFound) issueBadge = `<span class="badge badge-warning"><i class="fas fa-exclamation-triangle"></i> اسم مندوب "${escapeHtml(c.salesmanNameInput)}" غير معروف</span>`;
+                else if (exists) issueBadge = '<span class="badge badge-danger"><i class="fas fa-exclamation-circle"></i> موجود (هيتحدث لو فعلت الخيار تحت)</span>';
                 else if (!c.phone) issueBadge = '<span class="badge badge-warning"><i class="fas fa-phone-slash"></i> لا يوجد هاتف</span>';
-                else issueBadge = '<span class="badge badge-success"><i class="fas fa-check-circle"></i> صالح</span>';
+                else issueBadge = '<span class="badge badge-success"><i class="fas fa-check-circle"></i> جديد</span>';
+                const salesmanDisplay = c.salesmanCode ? (salesmen.find(s => s.code === c.salesmanCode) || {}).name || c.salesmanCode : (c.salesmanNameInput || '');
                 return `<tr style="${exists ? 'background:rgba(231,76,60,0.05);' : ''}"><td><code style="background:#f0f2f5;padding:2px 6px;border-radius:4px;font-size:12px;">${escapeHtml(c.code)}</code></td>
                 <td><strong>${escapeHtml(c.name)}</strong></td><td>${c.phone ? escapeHtml(c.phone) : '<span style="color:#ccc;">-</span>'}</td>
-                <td>${c.address ? escapeHtml(c.address.substring(0, 30)) + (c.address.length > 30 ? '...' : '') : '<span style="color:#ccc;">-</span>'}</td><td>${issueBadge}</td></tr>`;
+                <td>${c.address ? escapeHtml(c.address.substring(0, 30)) + (c.address.length > 30 ? '...' : '') : '<span style="color:#ccc;">-</span>'}</td>
+                <td>${c.neighborhood ? escapeHtml(c.neighborhood) : '<span style="color:#ccc;">-</span>'}</td>
+                <td>${salesmanDisplay ? escapeHtml(salesmanDisplay) : '<span style="color:#ccc;">-</span>'}</td><td>${issueBadge}</td></tr>`;
             }).join('');
             document.getElementById('excelPreviewCount').innerHTML = `${excelCustomersData.length} عميل`;
-            document.getElementById('excelPreviewValid').innerHTML = `<span style="color:var(--accent);"><i class="fas fa-check"></i> ${validCount} جديد</span>${duplicateCount > 0 ? ` | <span style="color:var(--danger);"><i class="fas fa-times"></i> ${duplicateCount} موجود</span>` : ''}${skippedCount > 0 ? ` | <span style="color:var(--warning);"><i class="fas fa-filter"></i> ${skippedCount} صف تخطى</span>` : ''}`;
+            document.getElementById('excelPreviewValid').innerHTML = `<span style="color:var(--accent);"><i class="fas fa-check"></i> ${validCount} جديد</span>${duplicateCount > 0 ? ` | <span style="color:var(--danger);"><i class="fas fa-times"></i> ${duplicateCount} موجود</span>` : ''}${salesmanWarnCount > 0 ? ` | <span style="color:var(--warning);"><i class="fas fa-exclamation-triangle"></i> ${salesmanWarnCount} اسم مندوب مش متعرف عليه</span>` : ''}${skippedCount > 0 ? ` | <span style="color:var(--warning);"><i class="fas fa-filter"></i> ${skippedCount} صف تخطى</span>` : ''}`;
+            document.getElementById('excelUpdateExisting').checked = false;
             openModal('excelPreviewModal');
         }
 
@@ -9728,18 +9760,60 @@
         }
 
         function importExcelCustomers() {
-            let added = 0; let skipped = 0;
+            const updateExisting = document.getElementById('excelUpdateExisting').checked;
+            let added = 0, updated = 0, skipped = 0;
             excelCustomersData.forEach(c => {
                 if (!c.code || !c.name) { skipped++; return; }
-                if (customers.some(existing => existing.code === c.code)) { skipped++; return; }
-                customers.push({ code: c.code, name: c.name, phone: c.phone || '', address: c.address || '' });
-                added++;
+                const idx = customers.findIndex(existing => existing.code === c.code);
+                if (idx !== -1) {
+                    if (!updateExisting) { skipped++; return; }
+                    const existing = customers[idx];
+                    customers[idx] = {
+                        code: existing.code,
+                        name: c.name || existing.name,
+                        phone: excelCustomerColumnsPresent.phone ? (c.phone || '') : existing.phone,
+                        address: excelCustomerColumnsPresent.address ? (c.address || '') : existing.address,
+                        neighborhood: excelCustomerColumnsPresent.neighborhood ? (c.neighborhood || '') : existing.neighborhood,
+                        salesmanCode: excelCustomerColumnsPresent.salesman ? (c.salesmanNotFound ? existing.salesmanCode : (c.salesmanCode || '')) : existing.salesmanCode,
+                        creditLimit: excelCustomerColumnsPresent.creditLimit ? c.creditLimit : existing.creditLimit
+                    };
+                    updated++;
+                } else {
+                    customers.push({
+                        code: c.code, name: c.name, phone: c.phone || '', address: c.address || '',
+                        neighborhood: c.neighborhood || '', salesmanCode: c.salesmanNotFound ? '' : (c.salesmanCode || ''), creditLimit: c.creditLimit
+                    });
+                    added++;
+                }
             });
             localStorage.setItem('customers', JSON.stringify(customers));
+            logAction('استيراد عملاء من Excel', `تم إضافة ${added} عميل جديد` + (updated > 0 ? ` وتحديث ${updated} عميل` : ''));
             renderCustomers(); updateInvoiceDropdowns(); updateDashboardStats();
             closeModal('excelPreviewModal'); excelCustomersData = [];
-            if (added > 0) { let msg = `تم استيراد ${added} عميل بنجاح`; if (skipped > 0) msg += ` (تم تخطي ${skipped})`; showToast(msg); }
-            else { showToast('لم يتم استيراد أي عميل جديد. جميع الأكواد موجودة مسبقاً.', 'warning'); }
+            if (added > 0 || updated > 0) {
+                let msg = '';
+                if (added > 0) msg += `تم إضافة ${added} عميل جديد`;
+                if (updated > 0) msg += (msg ? ' و' : 'تم ') + `تحديث ${updated} عميل`;
+                if (skipped > 0) msg += ` (تم تخطي ${skipped} موجود)`;
+                showToast(msg);
+            } else {
+                showToast('لم يتم استيراد أي عميل جديد. فعّل خيار "تحديث العملاء الموجودين" لو عايز تحدثهم.', 'warning');
+            }
+        }
+
+        function exportCustomersToExcel() {
+            if (customers.length === 0) { showToast('لا يوجد عملاء لتصديرهم', 'warning'); return; }
+            const templateData = [['كود العميل', 'اسم العميل', 'رقم الهاتف', 'العنوان', 'الحي الجغرافي', 'اسم المندوب', 'الحد الائتماني']];
+            customers.forEach(c => {
+                const salesmanName = c.salesmanCode ? ((salesmen.find(s => s.code === c.salesmanCode) || {}).name || '') : '';
+                templateData.push([c.code, c.name, c.phone || '', c.address || '', c.neighborhood || '', salesmanName, c.creditLimit ?? '']);
+            });
+            const ws = XLSX.utils.aoa_to_sheet(templateData);
+            ws['!cols'] = [{ wch: 15 }, { wch: 35 }, { wch: 18 }, { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 15 }];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'العملاء');
+            XLSX.writeFile(wb, 'عملاء_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+            showToast('تم تصدير ' + customers.length + ' عميل — عدّل الملف وارفعه تاني بعد التعديل لتحديث بياناتهم');
         }
 
         function downloadCustomerTemplate() {
@@ -9896,6 +9970,21 @@
             }
         }
 
+        function exportProductsToExcel() {
+            if (products.length === 0) { showToast('لا يوجد أصناف لتصديرها', 'warning'); return; }
+            const templateData = [['كود الصنف', 'اسم الصنف', 'الوحدة', 'القسم', 'سعر البيع', 'سعر التكلفة', 'الكمية الأولية']];
+            products.forEach(p => {
+                const qty = inventory[p.code] ? inventory[p.code].qty : 0;
+                templateData.push([p.code, p.name, p.unit || '', p.category || '', p.price || 0, p.cost || 0, qty]);
+            });
+            const ws = XLSX.utils.aoa_to_sheet(templateData);
+            ws['!cols'] = [{ wch: 12 }, { wch: 32 }, { wch: 12 }, { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 15 }];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'الأصناف');
+            XLSX.writeFile(wb, 'أصناف_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+            showToast('تم تصدير ' + products.length + ' صنف — عدّل الملف وارفعه تاني (وفعّل "تحديث الأصناف الموجودة") لتحديث بياناتهم');
+        }
+
         function downloadProductTemplate() {
             const templateData = [
                 ['كود الصنف', 'اسم الصنف', 'الوحدة', 'القسم', 'سعر البيع', 'سعر التكلفة', 'الكمية الأولية'],
@@ -9938,17 +10027,21 @@
                 <div style="margin-bottom:15px;padding:15px;background:rgba(39,174,96,0.08);border-radius:10px;border-right:4px solid var(--accent);">
                     <p style="margin:0;font-size:14px;color:var(--text);">
                         <i class="fas fa-info-circle" style="color:var(--accent);"></i>
-                        <strong>تعليمات:</strong> يجب أن يحتوي ملف Excel على الأعمدة التالية بالترتيب:
-                        <strong>كود العميل</strong> | <strong>اسم العميل</strong> | <strong>رقم الهاتف</strong> | <strong>العنوان</strong>
+                        <strong>تعليمات:</strong> أعمدة الملف: <strong>كود العميل</strong> | <strong>اسم العميل</strong> | <strong>رقم الهاتف</strong> | <strong>العنوان</strong> | <strong>الحي الجغرافي</strong> (اختياري) | <strong>اسم المندوب</strong> (اختياري) | <strong>الحد الائتماني</strong> (اختياري)
                     </p>
                 </div>
                 <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
                     <span id="excelPreviewCount" style="font-weight:700;color:var(--primary);">0 عميل</span>
                     <span id="excelPreviewValid" style="font-size:13px;color:var(--text-light);"></span>
                 </div>
+                <div style="margin:0 0 10px;">
+                    <label style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;">
+                        <input type="checkbox" id="excelUpdateExisting"> تحديث العملاء الموجودين بالفعل (الاسم، الهاتف، العنوان، الحي، المندوب، الحد الائتماني) بدل تخطيهم
+                    </label>
+                </div>
                 <div class="table-container" style="max-height:350px;overflow-y:auto;">
                     <table>
-                        <thead><tr><th>كود العميل</th><th>اسم العميل</th><th>رقم الهاتف</th><th>العنوان</th><th>الحالة</th></tr></thead>
+                        <thead><tr><th>كود العميل</th><th>اسم العميل</th><th>رقم الهاتف</th><th>العنوان</th><th>الحي</th><th>المندوب</th><th>الحالة</th></tr></thead>
                         <tbody id="excelPreviewTable"></tbody>
                     </table>
                 </div>
