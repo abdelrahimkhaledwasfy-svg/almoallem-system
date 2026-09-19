@@ -2899,8 +2899,17 @@
         // القرار النهائي بيتاخد *جوه* transaction بيقرا فيها أحدث نسخة من مستند الدفتر المشترك.
         // لو جهاز تاني كان سبقنا وحدّث نفس الطلب لنفس القيمة، الفرق هنا بيبقى صفر ومفيش خصم مكرر.
         // newVec = null معناها "الغاء الحجز بالكامل" (طلب اترفض/اتلغى).
+        // *** إصلاح 2026-09 (أداء - السبب الحقيقي للتعليق الطويل): عندنا اتنين Listener بيراقبوا حاجتين ***
+        // مختلفتين (الطلبات، ودفتر الحجوزات) وكل واحد فيهم كان بينادي على نفس دالة المزامنة دي. لو
+        // الاتنين اشتغلوا في نفس اللحظة تقريبًا لنفس الطلب، كل واحد كان بيبدأ Transaction لوحده على
+        // نفس المستند، فيتعارضوا مع بعض ويرجعوا يحاولوا تاني وتاني - وده اللي كان بيسبب التعليق
+        // الطويل ("failed-precondition" متكرر في الـ Console). دلوقتي في "قفل" بسيط بيمنع بدء أي
+        // محاولة جديدة لنفس الطلب لحد ما المحاولة اللي قبلها تخلص تمامًا.
+        const ledgerTxInFlight = new Set();
         function applyLedgerChangeTransactional(order, newVec) {
             if (!db) return;
+            if (ledgerTxInFlight.has(order.id)) return; // فيه محاولة شغالة بالفعل لنفس الطلب - متبدأش واحدة تانية فوقها
+            ledgerTxInFlight.add(order.id);
             const ledgerRef = db.collection('orderReservationLedger').doc(order.id);
             db.runTransaction(function(t) {
                 return t.get(ledgerRef).then(function(snap) {
@@ -2938,7 +2947,8 @@
                     if (document.getElementById('inventory-section') && document.getElementById('inventory-section').classList.contains('active')) renderInventory();
                     if (document.getElementById('reports-section') && document.getElementById('reports-section').classList.contains('active')) { try { renderLowStock(); } catch (e) {} }
                 }
-            }).catch(function(err) { console.error('applyLedgerChangeTransactional failed for order ' + order.id + ':', err); });
+            }).catch(function(err) { console.error('applyLedgerChangeTransactional failed for order ' + order.id + ':', err); })
+            .then(function() { ledgerTxInFlight.delete(order.id); });
         }
 
         // *** إصلاح 2026-09 (أداء): كنا بنقارن "هل الكمية المحجوزة اتغيرت؟" بمقارنة JSON.stringify لنص ***
