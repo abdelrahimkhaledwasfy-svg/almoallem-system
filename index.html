@@ -1537,6 +1537,7 @@
                     <div class="card-title"><i class="fas fa-users"></i> قاعدة بيانات العملاء</div>
                     <div style="display:flex;gap:10px;flex-wrap:wrap;">
                         <button class="btn btn-success btn-sm" onclick="openCustomerModal()"><i class="fas fa-plus"></i> إضافة عميل</button>
+                        <button class="btn btn-warning btn-sm" onclick="openAppPasswordResetModal()"><i class="fas fa-key"></i> إعادة ضبط رقم سري (أبليكيشن)</button>
                         <button class="btn btn-info btn-sm" onclick="exportCustomersToExcel()"><i class="fas fa-file-export"></i> تصدير العملاء الحاليين</button>
                         <button class="btn btn-primary btn-sm" onclick="document.getElementById('excelFileInput').click()"><i class="fas fa-file-excel"></i> رفع ملف Excel</button>
                         <button class="btn btn-secondary btn-sm" onclick="downloadCustomerTemplate()"><i class="fas fa-download"></i> تحميل نموذج فارغ</button>
@@ -6467,6 +6468,58 @@
             return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
+        // ==================== إعادة ضبط رقم سري عميل الأبليكيشن ====================
+        let pwResetFoundPhone = null;
+        function openAppPasswordResetModal() {
+            pwResetFoundPhone = null;
+            document.getElementById('pwResetPhone').value = '';
+            document.getElementById('pwResetNewPassword').value = '';
+            document.getElementById('pwResetCustomerInfo').style.display = 'none';
+            document.getElementById('pwResetNotFound').style.display = 'none';
+            document.getElementById('pwResetFields').style.display = 'none';
+            document.getElementById('pwResetSaveBtn').style.display = 'none';
+            openModal('appPasswordResetModal');
+        }
+        async function searchAppCustomerForReset() {
+            const phone = document.getElementById('pwResetPhone').value.trim();
+            document.getElementById('pwResetCustomerInfo').style.display = 'none';
+            document.getElementById('pwResetNotFound').style.display = 'none';
+            document.getElementById('pwResetFields').style.display = 'none';
+            document.getElementById('pwResetSaveBtn').style.display = 'none';
+            pwResetFoundPhone = null;
+            if (!phone || phone.length < 8) { showToast('ادخل رقم هاتف صحيح', 'error'); return; }
+            if (!db) { showToast('لا يوجد اتصال بالإنترنت حاليًا', 'error'); return; }
+            try {
+                const doc = await db.collection('appCustomers').doc(phone).get();
+                if (!doc.exists) { document.getElementById('pwResetNotFound').style.display = 'block'; return; }
+                const data = doc.data();
+                const name = (data.profile && (data.profile.customerName || data.profile.shopName)) || phone;
+                document.getElementById('pwResetCustomerName').textContent = 'العميل: ' + name;
+                document.getElementById('pwResetCustomerInfo').style.display = 'block';
+                document.getElementById('pwResetFields').style.display = 'block';
+                document.getElementById('pwResetSaveBtn').style.display = 'inline-block';
+                pwResetFoundPhone = phone;
+            } catch (err) {
+                console.error(err);
+                showToast('تعذر البحث، حاول تاني', 'error');
+            }
+        }
+        async function saveAppPasswordReset() {
+            const newPw = document.getElementById('pwResetNewPassword').value.trim();
+            if (!pwResetFoundPhone) { showToast('دوس بحث الأول وتأكد من العميل', 'error'); return; }
+            if (!newPw || newPw.length < 4) { showToast('الرقم السري لازم يكون 4 أرقام على الأقل', 'error'); return; }
+            try {
+                const hash = await hashRepPassword(newPw);
+                await db.collection('appCustomers').doc(pwResetFoundPhone).set({ passwordHash: hash }, { merge: true });
+                logAction('إعادة ضبط رقم سري (أبليكيشن)', 'تم تغيير الرقم السري لعميل الأبليكيشن رقم ' + pwResetFoundPhone);
+                showToast('تم تغيير الرقم السري بنجاح ✓');
+                closeModal('appPasswordResetModal');
+            } catch (err) {
+                console.error(err);
+                showToast('تعذر حفظ الرقم السري الجديد', 'error');
+            }
+        }
+
         function openSalesmanModal(salesman = null) {
             editingSalesman = salesman;
             document.getElementById('salesmanCode').value = salesman ? salesman.code : '';
@@ -10115,6 +10168,40 @@
             <div class="modal-footer" style="justify-content:center;gap:15px;">
                 <button class="btn btn-secondary" onclick="closeModal('deleteAllCustomersModal')"><i class="fas fa-times"></i> إلغاء</button>
                 <button class="btn btn-danger" onclick="confirmDeleteAllCustomers()" style="min-width:120px;"><i class="fas fa-trash-alt"></i> نعم، امسح الكل</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="appPasswordResetModal">
+        <div class="modal" style="max-width:450px;">
+            <div class="modal-header">
+                <h3 class="modal-title"><i class="fas fa-key"></i> إعادة ضبط رقم سري عميل الأبليكيشن</h3>
+                <button class="modal-close" onclick="closeModal('appPasswordResetModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">رقم هاتف العميل (اللي بيدخل بيه على التطبيق)</label>
+                    <div style="display:flex;gap:8px;">
+                        <input type="text" class="form-control" id="pwResetPhone" placeholder="01xxxxxxxxx" dir="ltr" style="text-align:left;">
+                        <button class="btn btn-secondary btn-sm" onclick="searchAppCustomerForReset()" style="white-space:nowrap;"><i class="fas fa-search"></i> بحث</button>
+                    </div>
+                </div>
+                <div id="pwResetCustomerInfo" style="display:none;margin-bottom:15px;padding:12px;background:rgba(39,174,96,0.08);border-radius:8px;border-right:3px solid var(--accent);">
+                    <strong id="pwResetCustomerName" style="color:var(--accent);"></strong>
+                </div>
+                <div id="pwResetNotFound" style="display:none;margin-bottom:15px;padding:12px;background:rgba(231,76,60,0.08);border-radius:8px;border-right:3px solid var(--danger);color:var(--danger);">
+                    مفيش حساب أبليكيشن مسجل بالرقم ده
+                </div>
+                <div id="pwResetFields" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label">الرقم السري الجديد</label>
+                        <input type="text" class="form-control" id="pwResetNewPassword" placeholder="رقم سري جديد" dir="ltr" style="text-align:left;">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('appPasswordResetModal')">إلغاء</button>
+                <button class="btn btn-success" id="pwResetSaveBtn" style="display:none;" onclick="saveAppPasswordReset()"><i class="fas fa-save"></i> حفظ الرقم السري الجديد</button>
             </div>
         </div>
     </div>    <div id="printInvoiceArea" style="display:none;padding:20px;"></div>
