@@ -2151,6 +2151,7 @@
             <div class="modal-body">
                 <div class="form-group"><label class="form-label">كود العميل</label><input type="text" class="form-control" id="customerCode" placeholder="مثال: C001"></div>
                 <div class="form-group"><label class="form-label">اسم العميل</label><input type="text" class="form-control" id="customerName" placeholder="اسم العميل الكامل"></div>
+                <div class="form-group"><label class="form-label">اسم المحل</label><input type="text" class="form-control" id="customerShopName" placeholder="اسم المحل / المتجر"></div>
                 <div class="form-group"><label class="form-label">رقم الهاتف</label><input type="text" class="form-control" id="customerPhone" placeholder="05xxxxxxxx"></div>
                 <div class="form-group"><label class="form-label">العنوان</label><input type="text" class="form-control" id="customerAddress" placeholder="عنوان العميل"></div>
                 <div class="form-group"><label class="form-label">الحي الجغرافي</label><select class="form-control" id="customerNeighborhood" onchange="updateCustomerZoneDisplay()"><option value="">— اختر الحي —</option></select></div>
@@ -2384,7 +2385,7 @@
         let profitChartInstance = null;
         let excelCustomersData = [];
         let excelProductsData = [];
-        let excelCustomerColumnsPresent = { phone: false, address: false, neighborhood: false, salesman: false, creditLimit: false };
+        let excelCustomerColumnsPresent = { phone: false, address: false, neighborhood: false, salesman: false, creditLimit: false, shopName: false };
         // مهم: بنستخدم sessionStorage مش localStorage عشان كل تاب مفتوح ياخد رقم تعريف (Device ID) خاص
         // بيه لوحده، حتى لو التابات دي كلها في نفس المتصفح ونفس الجهاز (زي فتح النظام بأكتر من يوزر
         // في نفس الوقت). لو استخدمنا localStorage هنا، كل التابات كانت هتاخد نفس الرقم وتفتكر إن
@@ -6205,6 +6206,7 @@
             editingCustomer = customer;
             document.getElementById('customerCode').value = customer ? customer.code : '';
             document.getElementById('customerName').value = customer ? customer.name : '';
+            document.getElementById('customerShopName').value = customer ? (customer.shopName || '') : '';
             document.getElementById('customerPhone').value = customer ? customer.phone : '';
             document.getElementById('customerAddress').value = customer ? customer.address : '';
             document.getElementById('customerCreditLimit').value = customer ? (customer.creditLimit ?? '') : '';
@@ -6222,6 +6224,7 @@
         function saveCustomer() {
             const code = document.getElementById('customerCode').value.trim();
             const name = document.getElementById('customerName').value.trim();
+            const shopName = document.getElementById('customerShopName').value.trim();
             const phone = document.getElementById('customerPhone').value.trim();
             const address = document.getElementById('customerAddress').value.trim();
             const neighborhood = document.getElementById('customerNeighborhood').value;
@@ -6231,10 +6234,10 @@
             if (!code || !name) { showToast('الرجاء ملء الحقول الإلزامية', 'error'); return; }
             if (editingCustomer) {
                 const idx = customers.findIndex(c => c.code === editingCustomer.code);
-                if (idx !== -1) customers[idx] = { code, name, phone, address, neighborhood, salesmanCode, creditLimit };
+                if (idx !== -1) customers[idx] = { code, name, shopName, phone, address, neighborhood, salesmanCode, creditLimit };
             } else {
                 if (customers.find(c => c.code === code)) { showToast('كود العميل موجود مسبقاً', 'error'); return; }
-                customers.push({ code, name, phone, address, neighborhood, salesmanCode, creditLimit });
+                customers.push({ code, name, shopName, phone, address, neighborhood, salesmanCode, creditLimit });
             }
             localStorage.setItem('customers', JSON.stringify(customers));
             logAction(editingCustomer ? 'تعديل عميل' : 'إضافة عميل', `${editingCustomer ? 'تم تعديل' : 'تم إضافة'} العميل "${name}" (${code})`);
@@ -9706,7 +9709,8 @@
                     if (!headerMap) { showToast('تنسيق الأعمدة غير صحيح. تأكد من وجود: كود العميل، اسم العميل', 'error'); return; }
                     excelCustomerColumnsPresent = {
                         phone: headerMap.phone >= 0, address: headerMap.address >= 0, neighborhood: headerMap.neighborhood >= 0,
-                        salesman: headerMap.salesmanName >= 0 || headerMap.salesmanCode >= 0, creditLimit: headerMap.creditLimit >= 0
+                        salesman: headerMap.salesmanName >= 0 || headerMap.salesmanCode >= 0, creditLimit: headerMap.creditLimit >= 0,
+                        shopName: headerMap.shopName >= 0
                     };
 
                     excelCustomersData = []; let skippedRows = 0;
@@ -9728,6 +9732,7 @@
                         const creditLimitVal = headerMap.creditLimit >= 0 ? row[headerMap.creditLimit] : '';
                         const customer = {
                             code: String(codeVal).trim(), name: String(nameVal).trim(),
+                            shopName: headerMap.shopName >= 0 ? String(row[headerMap.shopName] || '').trim() : '',
                             phone: headerMap.phone >= 0 ? String(row[headerMap.phone] || '').trim() : '',
                             address: headerMap.address >= 0 ? String(row[headerMap.address] || '').trim() : '',
                             neighborhood: headerMap.neighborhood >= 0 ? String(row[headerMap.neighborhood] || '').trim() : '',
@@ -9751,6 +9756,7 @@
             const possibleHeaders = {
                 code: ['كود العميل', 'الكود', 'code', 'id', 'معرف', 'رقم', 'customer code', 'كود', 'customer id', 'رقم العميل', 'client code', 'client id'],
                 name: ['اسم العميل', 'الاسم', 'name', 'customer name', 'اسم', 'الاسم الكامل', 'client name', 'full name', 'الاسم الرباعي', 'اسم العميل الكامل'],
+                shopName: ['اسم المحل', 'المحل', 'shop name', 'store name', 'shopname'],
                 phone: ['رقم الهاتف', 'الهاتف', 'phone', 'mobile', 'tel', 'رقم الجوال', 'جوال', 'التليفون', 'رقم التليفون', 'phone number', 'mobile number'],
                 address: ['العنوان', 'address', 'location', 'الموقع', 'عنوان'],
                 neighborhood: ['الحي الجغرافي', 'الحي', 'neighborhood', 'district', 'المنطقة الجغرافية', 'حي'],
@@ -9773,10 +9779,11 @@
                 if (map.salesmanName === undefined) map.salesmanName = -1;
                 if (map.salesmanCode === undefined) map.salesmanCode = -1;
                 if (map.creditLimit === undefined) map.creditLimit = -1;
+                if (map.shopName === undefined) map.shopName = -1;
                 return map;
             }
             if (headers.length >= 2) {
-                return { code: 0, name: 1, phone: headers.length > 2 ? 2 : -1, address: headers.length > 3 ? 3 : -1, neighborhood: -1, salesmanName: -1, salesmanCode: -1, creditLimit: -1 };
+                return { code: 0, name: 1, phone: headers.length > 2 ? 2 : -1, address: headers.length > 3 ? 3 : -1, neighborhood: -1, salesmanName: -1, salesmanCode: -1, creditLimit: -1, shopName: -1 };
             }
             return null;
         }
@@ -9824,6 +9831,7 @@
                     customers[idx] = {
                         code: existing.code,
                         name: c.name || existing.name,
+                        shopName: excelCustomerColumnsPresent.shopName ? (c.shopName || '') : existing.shopName,
                         phone: excelCustomerColumnsPresent.phone ? (c.phone || '') : existing.phone,
                         address: excelCustomerColumnsPresent.address ? (c.address || '') : existing.address,
                         neighborhood: excelCustomerColumnsPresent.neighborhood ? (c.neighborhood || '') : existing.neighborhood,
@@ -9833,7 +9841,7 @@
                     updated++;
                 } else {
                     customers.push({
-                        code: c.code, name: c.name, phone: c.phone || '', address: c.address || '',
+                        code: c.code, name: c.name, shopName: c.shopName || '', phone: c.phone || '', address: c.address || '',
                         neighborhood: c.neighborhood || '', salesmanCode: c.salesmanNotFound ? '' : (c.salesmanCode || ''), creditLimit: c.creditLimit
                     });
                     added++;
@@ -9856,13 +9864,13 @@
 
         function exportCustomersToExcel() {
             if (customers.length === 0) { showToast('لا يوجد عملاء لتصديرهم', 'warning'); return; }
-            const templateData = [['كود العميل', 'اسم العميل', 'رقم الهاتف', 'العنوان', 'الحي الجغرافي', 'اسم المندوب', 'الحد الائتماني']];
+            const templateData = [['كود العميل', 'اسم العميل', 'اسم المحل', 'رقم الهاتف', 'العنوان', 'الحي الجغرافي', 'اسم المندوب', 'الحد الائتماني']];
             customers.forEach(c => {
                 const salesmanName = c.salesmanCode ? ((salesmen.find(s => s.code === c.salesmanCode) || {}).name || '') : '';
-                templateData.push([c.code, c.name, c.phone || '', c.address || '', c.neighborhood || '', salesmanName, c.creditLimit ?? '']);
+                templateData.push([c.code, c.name, c.shopName || '', c.phone || '', c.address || '', c.neighborhood || '', salesmanName, c.creditLimit ?? '']);
             });
             const ws = XLSX.utils.aoa_to_sheet(templateData);
-            ws['!cols'] = [{ wch: 15 }, { wch: 35 }, { wch: 18 }, { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 15 }];
+            ws['!cols'] = [{ wch: 15 }, { wch: 35 }, { wch: 25 }, { wch: 18 }, { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 15 }];
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'العملاء');
             XLSX.writeFile(wb, 'عملاء_' + new Date().toISOString().slice(0, 10) + '.xlsx');
