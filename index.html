@@ -653,6 +653,12 @@
 
         <!-- Invoice Section (Sales) -->
         <section id="invoice-section" class="section">
+            <div id="saleDraftBanner" class="no-print" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding:12px 15px;background:rgba(52,152,219,0.08);border-radius:10px;border-right:4px solid var(--info);">
+                <i class="fas fa-file-signature" style="color:var(--info);"></i>
+                <span id="saleDraftText" style="flex:1;min-width:200px;font-size:14px;"></span>
+                <button class="btn btn-primary btn-sm" onclick="restoreInvoiceDraft('sale')"><i class="fas fa-undo"></i> رجّعها</button>
+                <button class="btn btn-secondary btn-sm" onclick="discardInvoiceDraft('sale')"><i class="fas fa-trash"></i> امسحها</button>
+            </div>
             <div class="inventory-alert no-print">
                 <i class="fas fa-exclamation-circle"></i>
                 <span>ملاحظة مهمة: عند حفظ فاتورة البيع، يتم خصم الكميات تلقائياً من المخزون المتاح. تأكد من توفر المخزون قبل البيع. في حالة الدفع الآجل، يتم تحديث رصيد العميل تلقائياً.</span>
@@ -706,6 +712,12 @@
 
         <!-- Purchase Invoice Section -->
         <section id="purchase-invoice-section" class="section">
+            <div id="purchaseDraftBanner" class="no-print" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding:12px 15px;background:rgba(52,152,219,0.08);border-radius:10px;border-right:4px solid var(--info);">
+                <i class="fas fa-file-signature" style="color:var(--info);"></i>
+                <span id="purchaseDraftText" style="flex:1;min-width:200px;font-size:14px;"></span>
+                <button class="btn btn-primary btn-sm" onclick="restoreInvoiceDraft('purchase')"><i class="fas fa-undo"></i> رجّعها</button>
+                <button class="btn btn-secondary btn-sm" onclick="discardInvoiceDraft('purchase')"><i class="fas fa-trash"></i> امسحها</button>
+            </div>
             <div class="invoice-container">
                 <div class="invoice-header">
                     <div class="invoice-logo">
@@ -723,7 +735,7 @@
                 </div>
                 <div class="invoice-details" style="grid-template-columns:1fr 1fr 1fr 1fr;">
                     <div class="invoice-detail-group searchable-select-wrapper"><label>المورد</label>
-                        <input type="text" class="form-control" id="purchaseSupplierSearch" placeholder="اكتب اسم المورد للبحث..." autocomplete="off"
+                        <input type="text" class="form-control" id="purchaseSupplierSearch" placeholder="ابحث بالاسم أو الكود أو التليفون..." autocomplete="off"
                             oninput="clearSearchSelection('purchaseSupplierSearch','purchaseSupplier','purchaseSupplierResults', suppliers, handlePurchasePaymentChange)"
                             onfocus="openSearchDropdown('purchaseSupplierSearch','purchaseSupplier','purchaseSupplierResults', suppliers, handlePurchasePaymentChange)"
                             onblur="hideSearchDropdownDelayed('purchaseSupplierResults')">
@@ -1401,7 +1413,14 @@
 
             <!-- الشركات -->
             <div class="card" id="appMgmtTab-brands" style="display:none;">
-                <div class="card-header"><div class="card-title"><i class="fas fa-tags"></i> الشركات / الماركات</div><button class="btn btn-success btn-sm" onclick="openAppBrandModal()"><i class="fas fa-plus"></i> إضافة شركة</button></div>
+                <div class="card-header"><div class="card-title"><i class="fas fa-tags"></i> الشركات / الماركات</div>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                        <button class="btn btn-success btn-sm" onclick="openAppBrandModal()"><i class="fas fa-plus"></i> إضافة شركة</button>
+                        <button class="btn btn-info btn-sm" onclick="exportBrandsToExcel()"><i class="fas fa-file-export"></i> تصدير الشركات الحالية</button>
+                        <button class="btn btn-primary btn-sm" onclick="document.getElementById('brandExcelFileInput').click()"><i class="fas fa-file-excel"></i> رفع ملف Excel</button>
+                        <button class="btn btn-secondary btn-sm" onclick="downloadBrandTemplate()"><i class="fas fa-download"></i> تحميل نموذج فارغ</button>
+                        <input type="file" id="brandExcelFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleBrandExcelUpload(event)">
+                    </div></div>
                 <div class="table-container">
                     <table><thead><tr><th>الشعار</th><th>اسم الشركة</th><th>القسم المرتبط</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="appBrandsTable"></tbody></table>
                 </div>
@@ -1593,7 +1612,7 @@
                 <div class="card-header"><div class="card-title"><i class="fas fa-file-alt"></i> كشف حساب مورد</div></div>
                 <div class="form-grid" style="margin-bottom:20px;">
                     <div class="form-group searchable-select-wrapper"><label class="form-label">اختر المورد</label>
-                        <input type="text" class="form-control" id="supplierStatementSearch" placeholder="اكتب اسم المورد للبحث..." autocomplete="off"
+                        <input type="text" class="form-control" id="supplierStatementSearch" placeholder="ابحث بالاسم أو الكود أو التليفون..." autocomplete="off"
                             oninput="clearSearchSelection('supplierStatementSearch','supplierStatementSelect','supplierStatementResults', suppliers, renderSupplierStatement)"
                             onfocus="openSearchDropdown('supplierStatementSearch','supplierStatementSelect','supplierStatementResults', suppliers, renderSupplierStatement)"
                             onblur="hideSearchDropdownDelayed('supplierStatementResults')">
@@ -1912,7 +1931,7 @@
                 <div class="form-group"><label class="form-label">المخزون الحالي</label><input type="number" class="form-control" id="adjustCurrentStock" readonly style="background:#f8f9fa;"></div>
                 <div class="form-group"><label class="form-label">نوع الحركة</label><select class="form-control" id="adjustType"><option value="in">إضافة (+)</option><option value="out">خصم (-)</option><option value="set">تعيين قيمة محددة</option></select></div>
                 <div class="form-group"><label class="form-label">الكمية / القيمة الجديدة</label><input type="number" class="form-control" id="adjustQty" placeholder="0"></div>
-                <div class="form-group"><label class="form-label">السبب / ملاحظات</label><input type="text" class="form-control" id="adjustReason" placeholder="سبب التعديل..."></div>
+                <div class="form-group"><label class="form-label">السبب <span style="color:var(--danger);">*</span></label><input type="text" class="form-control" id="adjustReason" placeholder="سبب التعديل (إجباري)..."></div>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('stockAdjustmentModal')">إلغاء</button><button class="btn btn-purple" onclick="saveStockAdjustment()"><i class="fas fa-save"></i> تطبيق التعديل</button></div>
         </div>
@@ -2318,7 +2337,7 @@
                 <div class="form-group"><label class="form-label">المبلغ</label><input type="number" class="form-control" id="treasuryOpeningAmount" placeholder="0.00"></div>
                 <div class="form-group"><label class="form-label">التاريخ</label><input type="date" class="form-control" id="treasuryOpeningDate"></div>
                 <div class="form-group"><label class="form-label">ملاحظات</label><input type="text" class="form-control" id="treasuryOpeningNotes" placeholder="ملاحظات..."></div>
-                <p style="color:var(--warning);font-size:13px;margin-top:10px;"><i class="fas fa-exclamation-triangle"></i> تنبيه: سيؤدي هذا إلى إعادة تعيين رصيد الخزنة بالكامل!</p>
+                <p style="color:var(--text-light);font-size:13px;margin-top:10px;"><i class="fas fa-info-circle"></i> لو الخزنة فاضية، المبلغ ده بيبقى أول رصيد. ولو فيها حركات، بتتضاف حركة تسوية بالفرق عشان الرصيد يبقى المبلغ ده، ومفيش أي حركة قديمة بتتمسح (للمدير فقط).</p>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('treasuryOpeningModal')">إلغاء</button><button class="btn btn-warning" onclick="saveTreasuryOpening()"><i class="fas fa-save"></i> تعيين</button></div>
         </div>
@@ -5025,7 +5044,8 @@
 
         function openProductModal(product = null) {
             editingProduct = product;
-            document.getElementById('productCode').value = product ? product.code : '';
+            document.getElementById('productCode').value = product ? product.code : makeAutoCoder(products.map(p => p.code), 'P')();
+            lockCodeField('productCode', !!product);
             document.getElementById('productName').value = product ? product.name : '';
             document.getElementById('productUnit').value = product ? product.unit : '';
             document.getElementById('productPrice').value = product ? product.price : '';
@@ -5293,22 +5313,41 @@
         function saveAppBrand() {
             const name = document.getElementById('appBrandName').value.trim();
             if (!name) { showToast('الرجاء إدخال اسم الشركة', 'error'); return; }
+            const duplicate = appBrands.find(b => normalizeArabicText(b.name) === normalizeArabicText(name) && (!editingAppBrand || b.id !== editingAppBrand.id));
+            if (duplicate) { showToast(`فيه شركة موجودة بنفس الاسم: ${duplicate.name}`, 'error'); return; }
             const categoryName = document.getElementById('appBrandCategory').value;
             const active = document.getElementById('appBrandActive').checked;
             document.getElementById('appBrandImageUploadStatus').textContent = 'جاري الحفظ...';
             uploadImageIfProvided('appBrandImageFile', 'app_brands/' + name.replace(/\s+/g, '_'), function(url) {
                 const logoUrl = url || document.getElementById('appBrandImageUrl').value || null;
+                let productsUpdated = 0;
                 if (editingAppBrand) {
                     const idx = appBrands.findIndex(b => b.id === editingAppBrand.id);
-                    if (idx !== -1) appBrands[idx] = { ...appBrands[idx], name, categoryName, active, logoUrl };
+                    if (idx !== -1) {
+                        const oldName = appBrands[idx].name;
+                        const oldCategory = appBrands[idx].categoryName || '';
+                        appBrands[idx] = { ...appBrands[idx], name, categoryName, active, logoUrl };
+                        // الأصناف التابعة للشركة بتتحدث معاها: الاسم الجديد، والقسم لو اتغير
+                        if (oldName !== name || oldCategory !== (categoryName || '')) {
+                            products.forEach(p => {
+                                if (p.brand !== oldName) return;
+                                let changed = false;
+                                if (oldName !== name) { p.brand = name; changed = true; }
+                                if (oldCategory !== (categoryName || '') && p.category !== categoryName) { p.category = categoryName; changed = true; }
+                                if (changed) productsUpdated++;
+                            });
+                            if (productsUpdated > 0) localStorage.setItem('products', JSON.stringify(products));
+                        }
+                    }
                 } else {
                     appBrands.push({ id: 'brand_' + Date.now(), name, categoryName, active, logoUrl });
                 }
                 localStorage.setItem('appBrands', JSON.stringify(appBrands));
-                logAction(editingAppBrand ? 'تعديل شركة أبليكشن' : 'إضافة شركة أبليكشن', `الشركة: ${name}`);
+                logAction(editingAppBrand ? 'تعديل شركة أبليكشن' : 'إضافة شركة أبليكشن', `الشركة: ${name}` + (editingAppBrand && editingAppBrand.name !== name ? ` (كان اسمها: ${editingAppBrand.name})` : '') + (productsUpdated ? ` — تم تحديث ${productsUpdated} صنف تابع` : ''));
                 closeModal('appBrandModal');
                 renderAppBrands();
-                showToast('تم الحفظ بنجاح');
+                if (productsUpdated > 0) renderProducts();
+                showToast('تم الحفظ بنجاح' + (productsUpdated ? ` (واتحدث ${productsUpdated} صنف تابع للشركة)` : ''));
             });
         }
 
@@ -5954,7 +5993,7 @@
         }
 
         function completeSaveProduct(imageUrl) {
-            const code = document.getElementById('productCode').value.trim();
+            const code = editingProduct ? editingProduct.code : document.getElementById('productCode').value.trim();
             const name = document.getElementById('productName').value.trim();
             const unit = document.getElementById('productUnit').value.trim();
             const category = document.getElementById('productCategory').value;
@@ -6100,6 +6139,7 @@
             document.getElementById('adjustCurrentStock').value = '';
             document.getElementById('adjustQty').value = '';
             document.getElementById('adjustReason').value = '';
+            enhanceSelectWithSearch(select, { placeholder: 'ابحث بالاسم أو الكود...' });
             openModal('stockAdjustmentModal');
         }
 
@@ -6118,8 +6158,10 @@
             const reason = document.getElementById('adjustReason').value.trim();
             if (!code) { showToast('الرجاء اختيار الصنف', 'error'); return; }
             if (isNaN(qty) || qty < 0) { showToast('الرجاء إدخال كمية صحيحة', 'error'); return; }
+            if (!reason) { showToast('اكتب سبب تعديل المخزون (مثلاً: جرد، تالف، هدية)', 'error'); return; }
 
             const product = products.find(p => p.code === code);
+            if (!inventory[code]) inventory[code] = { code, qty: 0, cost: product ? (product.cost || 0) : 0, minStock: 0 };
             const currentQty = inventory[code]?.qty || 0;
             let newQty = currentQty;
             let movementType = 'adjustment';
@@ -6204,7 +6246,8 @@
 
         function openCustomerModal(customer = null) {
             editingCustomer = customer;
-            document.getElementById('customerCode').value = customer ? customer.code : '';
+            document.getElementById('customerCode').value = customer ? customer.code : makeAutoCoder(customers.map(c => c.code), 'C')();
+            lockCodeField('customerCode', !!customer);
             document.getElementById('customerName').value = customer ? customer.name : '';
             document.getElementById('customerShopName').value = customer ? (customer.shopName || '') : '';
             document.getElementById('customerPhone').value = customer ? customer.phone : '';
@@ -6222,7 +6265,7 @@
         }
 
         function saveCustomer() {
-            const code = document.getElementById('customerCode').value.trim();
+            const code = editingCustomer ? editingCustomer.code : document.getElementById('customerCode').value.trim();
             const name = document.getElementById('customerName').value.trim();
             const shopName = document.getElementById('customerShopName').value.trim();
             const phone = document.getElementById('customerPhone').value.trim();
@@ -6232,6 +6275,21 @@
             const creditLimitRaw = document.getElementById('customerCreditLimit').value;
             const creditLimit = creditLimitRaw === '' ? null : parseFloat(creditLimitRaw);
             if (!code || !name) { showToast('الرجاء ملء الحقول الإلزامية', 'error'); return; }
+            {
+                const digits = p => String(p || '').replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/\D/g, '').slice(-10);
+                const squash = s => normalizeArabicText(s).replace(/ /g, '');
+                const others = customers.filter(c => !editingCustomer || c.code !== editingCustomer.code);
+                const phoneChanged = !editingCustomer || digits(editingCustomer.phone) !== digits(phone);
+                const nameChanged = !editingCustomer || squash(editingCustomer.name) !== squash(name);
+                const dupPhone = phoneChanged && digits(phone).length >= 8 ? others.find(c => digits(c.phone) === digits(phone)) : null;
+                const dupName = nameChanged ? others.find(c => squash(c.name) === squash(name)) : null;
+                if (dupPhone || dupName) {
+                    let msg = 'تنبيه: ممكن العميل ده متسجل قبل كده\n';
+                    if (dupPhone) msg += `\n• نفس رقم التليفون: ${dupPhone.name} (${dupPhone.code})`;
+                    if (dupName && dupName !== dupPhone) msg += `\n• نفس الاسم: ${dupName.name} (${dupName.code})`;
+                    if (!confirm(msg + '\n\nتحفظه برضه؟')) return;
+                }
+            }
             if (editingCustomer) {
                 const idx = customers.findIndex(c => c.code === editingCustomer.code);
                 if (idx !== -1) customers[idx] = { code, name, shopName, phone, address, neighborhood, salesmanCode, creditLimit };
@@ -6358,7 +6416,9 @@
         // ==================== SUPPLIERS ====================
         function openSupplierModal(supplier = null) {
             editingSupplier = supplier;
-            document.getElementById('supplierCode').value = supplier ? supplier.code : '';
+            pendingPurchaseSupplierSelect = false;
+            document.getElementById('supplierCode').value = supplier ? supplier.code : makeAutoCoder(suppliers.map(s => s.code), 'V')();
+            lockCodeField('supplierCode', !!supplier);
             document.getElementById('supplierName').value = supplier ? supplier.name : '';
             document.getElementById('supplierPhone').value = supplier ? supplier.phone : '';
             document.getElementById('supplierAddress').value = supplier ? supplier.address : '';
@@ -6366,7 +6426,7 @@
         }
 
         function saveSupplier() {
-            const code = document.getElementById('supplierCode').value.trim();
+            const code = editingSupplier ? editingSupplier.code : document.getElementById('supplierCode').value.trim();
             const name = document.getElementById('supplierName').value.trim();
             const phone = document.getElementById('supplierPhone').value.trim();
             const address = document.getElementById('supplierAddress').value.trim();
@@ -6382,6 +6442,12 @@
             logAction(editingSupplier ? 'تعديل مورد' : 'إضافة مورد', `${editingSupplier ? 'تم تعديل' : 'تم إضافة'} المورد "${name}" (${code})`);
             renderSuppliers(); updatePurchaseDropdowns(); updateDashboardStats(); closeModal('supplierModal');
             showToast(editingSupplier ? 'تم تحديث المورد' : 'تم إضافة المورد');
+            if (pendingPurchaseSupplierSelect && !editingSupplier) {
+                document.getElementById('purchaseSupplier').value = code;
+                document.getElementById('purchaseSupplierSearch').value = name;
+                handlePurchasePaymentChange();
+            }
+            pendingPurchaseSupplierSelect = false;
         }
 
         function deleteSupplier(code) {
@@ -6630,7 +6696,15 @@
 
             if (editingExpense) {
                 const idx = expenses.findIndex(e => e.id === editingExpense.id);
-                if (idx !== -1) expenses[idx] = { ...editingExpense, type, amount, costCenter, description, date: new Date(date).toISOString() };
+                if (idx !== -1) {
+                    const oldAmount = parseFloat(expenses[idx].amount) || 0;
+                    expenses[idx] = { ...editingExpense, type, amount, costCenter, description, date: new Date(date).toISOString() };
+                    // الخزنة بتتصلح بالفرق (من غير ما نلمس الحركة القديمة)
+                    const diff = amount - oldAmount;
+                    if (Math.abs(diff) >= 0.005) {
+                        addTreasuryEntry(diff > 0 ? 'out' : 'in', Math.abs(diff), 'نظام', 'expense', `تصحيح مصروف: ${description || type} (من ${oldAmount.toFixed(2)} إلى ${amount.toFixed(2)})`, 'تصحيح مصروف', false);
+                    }
+                }
             } else {
                 expenses.push({ id: Date.now(), type, amount, costCenter, description, date: new Date(date).toISOString() });
                 // Deduct from treasury
@@ -6643,10 +6717,12 @@
         }
 
         function deleteExpense(id) {
-            if (!confirm('هل أنت متأكد من حذف هذا المصروف؟')) return;
+            const exp = expenses.find(e => e.id === id);
+            if (!confirm('هل أنت متأكد من حذف هذا المصروف؟' + (exp ? `\nمبلغه (${Number(exp.amount).toFixed(2)} ر.س) هيرجع للخزنة.` : ''))) return;
             expenses = expenses.filter(e => e.id !== id);
             saveExpenses();
-            renderExpenses(); updateDashboardStats(); showToast('تم حذف المصروف');
+            if (exp && parseFloat(exp.amount) > 0) addTreasuryEntry('in', parseFloat(exp.amount), 'نظام', 'expense', `إلغاء مصروف: ${exp.description || exp.type}`, 'إلغاء مصروف', false);
+            renderExpenses(); updateDashboardStats(); renderTreasury(); showToast('تم حذف المصروف ورجع مبلغه للخزنة');
         }
 
         function renderExpenses() {
@@ -6731,6 +6807,7 @@
                 '<optgroup label="أخرى"><option value="إضافة رصيد">إضافة رصيد</option><option value="أخرى">أخرى</option></optgroup>';
             document.getElementById('treasuryInAmount').value = '';
             document.getElementById('treasuryInNotes').value = '';
+            enhanceSelectWithSearch(select, { placeholder: 'ابحث باسم العميل أو الكود...' });
             openModal('treasuryInModal');
         }
 
@@ -6741,6 +6818,7 @@
                 '<optgroup label="أخرى"><option value="سحب رصيد">سحب رصيد</option><option value="أخرى">أخرى</option></optgroup>';
             document.getElementById('treasuryOutAmount').value = '';
             document.getElementById('treasuryOutNotes').value = '';
+            enhanceSelectWithSearch(select, { placeholder: 'ابحث باسم المورد أو الكود...' });
             openModal('treasuryOutModal');
         }
 
@@ -6787,16 +6865,35 @@
             const amount = parseFloat(document.getElementById('treasuryOpeningAmount').value);
             const date = document.getElementById('treasuryOpeningDate').value;
             const notes = document.getElementById('treasuryOpeningNotes').value.trim();
-            if (isNaN(amount)) { showToast('الرجاء إدخال مبلغ صحيح', 'error'); return; }
+            if (isNaN(amount) || amount < 0) { showToast('الرجاء إدخال مبلغ صحيح', 'error'); return; }
+            if (!date) { showToast('الرجاء اختيار التاريخ', 'error'); return; }
 
-            treasury = [{
-                id: Date.now(), date: new Date(date).toISOString(), type: 'in', amount: amount,
-                party: 'رصيد افتتاحي', partyType: 'system', notes: notes || 'رصيد افتتاحي', reference: 'رصيد افتتاحي', balanceAfter: amount
-            }];
-            saveTreasury();
+            if (treasury.length === 0) {
+                // خزنة فاضية: الرصيد الافتتاحي بيبقى أول حركة
+                treasury = [{
+                    id: Date.now(), date: new Date(date).toISOString(), type: 'in', amount: amount,
+                    party: 'رصيد افتتاحي', partyType: 'system', notes: notes || 'رصيد افتتاحي', reference: 'رصيد افتتاحي', balanceAfter: amount, isDebtRelated: false
+                }];
+                saveTreasury();
+                logAction('رصيد افتتاحي للخزنة', `تم تعيين الرصيد الافتتاحي: ${amount.toFixed(2)} ر.س`);
+                renderTreasury(); updateDashboardStats();
+                closeModal('treasuryOpeningModal');
+                showToast('تم تعيين الرصيد الافتتاحي');
+                return;
+            }
+
+            // الخزنة فيها حركات: مفيش أي حركة بتتمسح، بتتضاف حركة تسوية بالفرق بس (للمدير فقط)
+            if (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin') {
+                showToast('تسوية رصيد الخزنة متاحة للمدير فقط', 'error'); return;
+            }
+            const current = getTreasuryBalance();
+            const diff = amount - current;
+            if (Math.abs(diff) < 0.005) { showToast('رصيد الخزنة الحالي بالفعل ' + current.toFixed(2) + ' ر.س', 'warning'); return; }
+            if (!confirm(`رصيد الخزنة الحالي: ${current.toFixed(2)} ر.س\nالرصيد الجديد: ${amount.toFixed(2)} ر.س\n\nهتتضاف حركة تسوية ${diff > 0 ? 'قبض' : 'صرف'} بمبلغ ${Math.abs(diff).toFixed(2)} ر.س\nوكل الحركات القديمة (والتحصيلات) هتفضل زي ما هي.\n\nتكمل؟`)) return;
+            addTreasuryEntry(diff > 0 ? 'in' : 'out', Math.abs(diff), 'تسوية رصيد', 'system', notes || 'تسوية رصيد الخزنة', 'تسوية رصيد', false);
             renderTreasury(); updateDashboardStats();
             closeModal('treasuryOpeningModal');
-            showToast('تم تعيين الرصيد الافتتاحي');
+            showToast('تم تسوية رصيد الخزنة');
         }
 
         function renderTreasury() {
@@ -6885,35 +6982,420 @@
             document.getElementById('invoiceDate').textContent = new Date().toLocaleDateString('ar-SA');
             document.getElementById('invoiceNumber').textContent = getNextDocNumber(invoices.filter(i => i.type === 'sale')).toString().padStart(4, '0');
             addInvoiceRow();
+            showInvoiceDraftBanner('sale');
         }
 
         // ==================== نظام البحث القابل لإعادة الاستخدام لاختيار العميل/المورد ====================
         // يُستخدم بدل القوائم المنسدلة العادية (select) لتسهيل الاختيار من بين آلاف العملاء/الموردين
+        // توحيد الحروف العربية عشان البحث ميفرقش بين (ه/ة) و(أ/إ/آ/ا) و(ى/ي) والتشكيل والأرقام العربية
+        function normalizeArabicText(s) {
+            return String(s == null ? '' : s).toLowerCase()
+                .replace(/[\u064B-\u0652\u0640]/g, '')
+                .replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')
+                .replace(/ؤ/g, 'و').replace(/ئ/g, 'ي')
+                .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+                .replace(/\s+/g, ' ').trim();
+        }
+
+        // مولّد أكواد تلقائي: بيكمل على نفس نمط الأكواد الموجودة (مثلاً P045 ← P046، أو 1203 ← 1204)
+        function makeAutoCoder(existingCodes, fallbackPrefix) {
+            const used = new Set(existingCodes.filter(c => c !== undefined && c !== null && c !== '').map(c => String(c).trim()));
+            const groups = {};
+            used.forEach(c => {
+                const m = c.match(/^(.*?)(\d+)$/);
+                if (!m) return;
+                const g = groups[m[1]] || (groups[m[1]] = { count: 0, max: 0, width: 0 });
+                g.count++; g.max = Math.max(g.max, parseInt(m[2], 10)); g.width = Math.max(g.width, m[2].length);
+            });
+            let prefix = fallbackPrefix, next = 1, width = 3, best = null;
+            Object.keys(groups).forEach(p => { if (best === null || groups[p].count > groups[best].count) best = p; });
+            if (best !== null) { prefix = best; next = groups[best].max + 1; width = groups[best].width; }
+            return function() {
+                let code;
+                do { code = prefix + String(next++).padStart(width, '0'); } while (used.has(code));
+                used.add(code);
+                return code;
+            };
+        }
+
+        function getRecentPurchaseSupplierCodes(limit) {
+            const seen = [];
+            purchaseInvoices.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))).some(inv => {
+                if (inv.supplierCode && !seen.includes(String(inv.supplierCode))) seen.push(String(inv.supplierCode));
+                return seen.length >= limit;
+            });
+            return seen;
+        }
+
         function renderSearchOptions(searchId, hiddenId, dropdownId, items, onSelect) {
             const dropdown = document.getElementById(dropdownId);
-            const query = (document.getElementById(searchId).value || '').trim().toLowerCase();
-            let filtered = query ? items.filter(it => it.name.toLowerCase().includes(query)) : items;
+            const input = document.getElementById(searchId);
+            const rawQuery = (input.value || '').trim();
+            const normQuery = normalizeArabicText(rawQuery);
+            const tokens = normQuery.split(' ').filter(Boolean);
+            const isPurchaseSupplier = searchId === 'purchaseSupplierSearch';
+            let filtered, recentCount = 0;
+            if (tokens.length) {
+                // البحث بالاسم أو الكود أو رقم التليفون، وكل كلمة لازم تكون موجودة
+                filtered = items.filter(it => {
+                    const hay = normalizeArabicText((it.name || '') + ' ' + (it.code || '') + ' ' + (it.phone || ''));
+                    return tokens.every(t => hay.includes(t));
+                });
+                // اللي اسمه بيبدأ بالكلام المكتوب يطلع الأول
+                filtered.sort((a, b) => (normalizeArabicText(b.name).startsWith(normQuery) ? 1 : 0) - (normalizeArabicText(a.name).startsWith(normQuery) ? 1 : 0));
+            } else {
+                filtered = items;
+                if (isPurchaseSupplier) {
+                    const recent = getRecentPurchaseSupplierCodes(5).map(c => items.find(it => String(it.code) === c)).filter(Boolean);
+                    if (recent.length) { filtered = recent.concat(items.filter(it => !recent.includes(it))); recentCount = recent.length; }
+                }
+            }
             const total = filtered.length;
             filtered = filtered.slice(0, 50);
+            const optionHtml = it => `<div class="searchable-option" data-code="${escapeHtml(String(it.code))}">${escapeHtml(it.name)}${it.code ? ' <span style="color:var(--text-light);font-size:12px;">(' + escapeHtml(String(it.code)) + ')</span>' : ''}</div>`;
+            let html = '';
             if (filtered.length === 0) {
-                dropdown.innerHTML = `<div class="searchable-option-empty">لا توجد نتائج مطابقة</div>`;
+                html = `<div class="searchable-option-empty">لا توجد نتائج مطابقة</div>`;
+            } else if (recentCount > 0) {
+                html = `<div class="searchable-option-hint" style="text-align:right;font-weight:700;">آخر الموردين</div>`
+                    + filtered.slice(0, recentCount).map(optionHtml).join('')
+                    + (filtered.length > recentCount ? `<div class="searchable-option-hint" style="text-align:right;font-weight:700;border-top:1px solid var(--border);">كل الموردين</div>` + filtered.slice(recentCount).map(optionHtml).join('') : '');
             } else {
-                dropdown.innerHTML = filtered.map(it =>
-                    `<div class="searchable-option" data-code="${it.code}">${it.name}${it.code ? ' <span style="color:var(--text-light);font-size:12px;">(' + it.code + ')</span>' : ''}</div>`
-                ).join('') + (total > 50 ? `<div class="searchable-option-hint">و${total - 50} نتيجة أخرى، اكتب أكتر لتضييق البحث</div>` : '');
+                html = filtered.map(optionHtml).join('');
             }
+            if (total > 50) html += `<div class="searchable-option-hint">و${total - 50} نتيجة أخرى، اكتب أكتر لتضييق البحث</div>`;
+            if (isPurchaseSupplier && rawQuery && !/^[\d\s+]+$/.test(normQuery) && !items.some(it => normalizeArabicText(it.name) === normQuery || normalizeArabicText(it.code) === normQuery)) {
+                html += `<div class="searchable-option" data-add="1" style="color:var(--accent);font-weight:700;border-top:1px solid var(--border);"><i class="fas fa-plus"></i> إضافة مورد جديد: ${escapeHtml(rawQuery)}</div>`;
+            }
+            dropdown.innerHTML = html;
             dropdown.style.display = 'block';
-            dropdown.querySelectorAll('.searchable-option').forEach(el => {
-                el.onmousedown = function(e) {
-                    e.preventDefault();
-                    const code = this.getAttribute('data-code');
-                    const item = items.find(it => String(it.code) === String(code));
-                    document.getElementById(hiddenId).value = code;
-                    document.getElementById(searchId).value = item ? item.name : '';
-                    dropdown.style.display = 'none';
-                    if (onSelect) onSelect();
-                };
+
+            const selectOption = function(el) {
+                if (!el) return;
+                if (el.getAttribute('data-add')) { quickAddPurchaseSupplier(rawQuery); return; }
+                const code = el.getAttribute('data-code');
+                const item = items.find(it => String(it.code) === String(code));
+                document.getElementById(hiddenId).value = item ? item.code : code;
+                input.value = item ? item.name : '';
+                dropdown.style.display = 'none';
+                if (onSelect) onSelect();
+            };
+            const opts = Array.from(dropdown.querySelectorAll('.searchable-option'));
+            opts.forEach(el => { el.onmousedown = function(e) { e.preventDefault(); selectOption(this); }; });
+            if (tokens.length && opts.length) opts[0].classList.add('active');
+
+            // التنقل بالكيبورد: الأسهم للتنقل، Enter للاختيار، Esc للإغلاق
+            input.onkeydown = function(e) {
+                if (dropdown.style.display !== 'block') {
+                    if (e.key === 'ArrowDown') { e.preventDefault(); renderSearchOptions(searchId, hiddenId, dropdownId, items, onSelect); }
+                    return;
+                }
+                const list = Array.from(dropdown.querySelectorAll('.searchable-option'));
+                if (e.key === 'Escape') { dropdown.style.display = 'none'; return; }
+                if (!list.length) return;
+                let idx = list.findIndex(o => o.classList.contains('active'));
+                if (e.key === 'Enter') { e.preventDefault(); selectOption(list[idx >= 0 ? idx : 0]); return; }
+                if (e.key === 'ArrowDown') idx = Math.min(idx + 1, list.length - 1);
+                else if (e.key === 'ArrowUp') idx = Math.max(idx - 1, 0);
+                else return;
+                e.preventDefault();
+                list.forEach(o => o.classList.remove('active'));
+                list[idx].classList.add('active');
+                list[idx].scrollIntoView({ block: 'nearest' });
+            };
+        }
+
+        // ==================== تقوية أدوات الإدخال ====================
+
+        // (1) منع الحفظ المزدوج: لو اتداس على زرار الحفظ مرتين ورا بعض، التانية بتتجاهل
+        let _lastToastType = null;
+        (function() {
+            const origToast = showToast;
+            showToast = function(message, type) { _lastToastType = type || 'success'; return origToast.apply(this, arguments); };
+        })();
+        function guardDoubleSave(fn) {
+            let lockedUntil = 0;
+            return function() {
+                if (Date.now() < lockedUntil) return;
+                _lastToastType = null;
+                const result = fn.apply(this, arguments);
+                if (_lastToastType === 'success') lockedUntil = Date.now() + 2000;
+                return result;
+            };
+        }
+        ['saveInvoice', 'savePurchaseInvoice', 'saveSalesReturn', 'savePurchaseReturn', 'saveCollection',
+         'saveTreasuryIn', 'saveTreasuryOut', 'saveTreasuryOpening', 'saveExpense', 'saveStockAdjustment', 'saveSupplierAdjustment'
+        ].forEach(name => { if (typeof window[name] === 'function') window[name] = guardDoubleSave(window[name]); });
+
+        // (2) قفل خانة الكود وقت التعديل عشان الفواتير القديمة تفضل مربوطة بصاحبها
+        function lockCodeField(id, locked) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.readOnly = locked;
+            el.style.background = locked ? '#f8f9fa' : '';
+            el.title = locked ? 'الكود مش بيتغير بعد الحفظ، عشان الفواتير والحسابات القديمة تفضل مربوطة' : 'الكود اتكتب تلقائي، وتقدر تغيّره قبل الحفظ';
+        }
+
+        // (3) تحويل أي قائمة (select) طويلة لخانة بحث: بالاسم أو الكود، والأسهم وEnter شغالين
+        function syncEnhancedSelect(select) {
+            const input = select && select._searchInput;
+            if (!input) return;
+            const o = select.options[select.selectedIndex];
+            input.value = (o && o.value) ? o.textContent.trim() : '';
+        }
+        function enhanceSelectWithSearch(select, opts) {
+            opts = opts || {};
+            if (!select) return null;
+            if (select._searchInput) { syncEnhancedSelect(select); return select._searchInput; }
+            const wrap = document.createElement('div');
+            wrap.className = 'searchable-select-wrapper';
+            const input = document.createElement('input');
+            input.type = 'text'; input.className = 'form-control enhanced-search-input'; input.autocomplete = 'off';
+            input.placeholder = opts.placeholder || 'اكتب للبحث...';
+            if (select.style.minWidth) input.style.minWidth = select.style.minWidth;
+            const dd = document.createElement('div');
+            dd.className = 'searchable-dropdown';
+            select.parentNode.insertBefore(wrap, select);
+            wrap.appendChild(input); wrap.appendChild(dd); wrap.appendChild(select);
+            select.style.display = 'none';
+            select._searchInput = input;
+
+            const place = () => {
+                if (!opts.fixed) return;
+                const r = input.getBoundingClientRect();
+                dd.style.position = 'fixed'; dd.style.top = r.bottom + 'px'; dd.style.left = 'auto';
+                dd.style.right = (document.documentElement.clientWidth - r.right) + 'px';
+                dd.style.width = Math.max(r.width, 300) + 'px';
+            };
+            const pick = value => {
+                select.value = value;
+                syncEnhancedSelect(select);
+                dd.style.display = 'none';
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                if (opts.onPicked) opts.onPicked(select, input);
+            };
+            const render = () => {
+                const q = normalizeArabicText(input.value);
+                const tokens = q.split(' ').filter(Boolean);
+                let items = Array.from(select.options).filter(o => o.value).map(o => ({
+                    value: o.value, text: o.textContent.trim(),
+                    group: o.parentNode && o.parentNode.tagName === 'OPTGROUP' ? o.parentNode.label : ''
+                }));
+                if (tokens.length) {
+                    items = items.filter(it => { const h = normalizeArabicText(it.text + ' ' + it.value); return tokens.every(t => h.includes(t)); });
+                    items.sort((a, b) => (normalizeArabicText(b.text).startsWith(q) ? 1 : 0) - (normalizeArabicText(a.text).startsWith(q) ? 1 : 0));
+                }
+                const total = items.length;
+                items = items.slice(0, 50);
+                dd.innerHTML = items.length
+                    ? items.map(it => `<div class="searchable-option" data-value="${escapeHtml(it.value)}">${escapeHtml(it.text)}${it.group ? ` <span style="color:var(--text-light);font-size:11px;">(${escapeHtml(it.group)})</span>` : ''}</div>`).join('')
+                        + (total > 50 ? `<div class="searchable-option-hint">و${total - 50} نتيجة أخرى، اكتب أكتر لتضييق البحث</div>` : '')
+                    : '<div class="searchable-option-empty">لا توجد نتائج مطابقة</div>';
+                const list = Array.from(dd.querySelectorAll('.searchable-option'));
+                list.forEach(el => { el.onmousedown = e => { e.preventDefault(); pick(el.getAttribute('data-value')); }; });
+                if (tokens.length && list.length) list[0].classList.add('active');
+                place();
+                dd.style.display = 'block';
+            };
+            input.addEventListener('focus', () => { try { input.select(); } catch (e) {} render(); });
+            input.addEventListener('input', render);
+            input.addEventListener('blur', () => setTimeout(() => { dd.style.display = 'none'; syncEnhancedSelect(select); }, 200));
+            input.addEventListener('keydown', e => {
+                if (dd.style.display !== 'block') { if (e.key === 'ArrowDown') { e.preventDefault(); render(); } return; }
+                const list = Array.from(dd.querySelectorAll('.searchable-option'));
+                if (e.key === 'Escape') { dd.style.display = 'none'; syncEnhancedSelect(select); return; }
+                if (!list.length) return;
+                let idx = list.findIndex(o => o.classList.contains('active'));
+                if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); pick(list[idx >= 0 ? idx : 0].getAttribute('data-value')); return; }
+                if (e.key === 'ArrowDown') idx = Math.min(idx + 1, list.length - 1);
+                else if (e.key === 'ArrowUp') idx = Math.max(idx - 1, 0);
+                else return;
+                e.preventDefault();
+                list.forEach(o => o.classList.remove('active'));
+                list[idx].classList.add('active');
+                list[idx].scrollIntoView({ block: 'nearest' });
             });
+            if (opts.fixed) window.addEventListener('scroll', ev => { if (ev.target !== dd && dd.style.display === 'block' && !dd.contains(ev.target)) dd.style.display = 'none'; }, true);
+            new MutationObserver(() => syncEnhancedSelect(select)).observe(select, { childList: true, subtree: true });
+            syncEnhancedSelect(select);
+            return input;
+        }
+
+        // بعد اختيار صنف في سطر فاتورة: تنبيه لو الصنف متكرر، والمؤشر يروح على الكمية
+        function onInvoiceRowProductPicked(select) {
+            const row = select.closest('tr');
+            const tbody = row.parentNode;
+            const others = Array.from(tbody.querySelectorAll('tr')).filter(r => r !== row);
+            const dupRow = others.find(r => { const s = r.querySelector('select'); return s && s.value && s.value === select.value; });
+            if (dupRow) showToast(`الصنف ده موجود بالفعل في سطر ${Array.from(tbody.children).indexOf(dupRow) + 1}`, 'warning', 4000);
+            const qty = row.querySelector('.qty-field');
+            if (qty) setTimeout(() => { qty.focus(); try { qty.select(); } catch (e) {} }, 0);
+        }
+
+        // (4) التنقل بـ Enter في سطور الفواتير: الخانة اللي بعدها، وفي آخر السطر يفتح سطر جديد
+        function setupInvoiceKeyboardNav(tbodyId, addRowFn) {
+            const tbody = document.getElementById(tbodyId);
+            if (!tbody || tbody._navReady) return;
+            tbody._navReady = true;
+            tbody.addEventListener('keydown', e => {
+                if (e.key !== 'Enter' || e.defaultPrevented) return;
+                const el = e.target;
+                if (!el.matches('input, select')) return;
+                e.preventDefault();
+                const row = el.closest('tr');
+                const fields = Array.from(row.querySelectorAll('input, select')).filter(f => f.type !== 'hidden' && !f.readOnly && !f.disabled && f.style.display !== 'none');
+                const i = fields.indexOf(el);
+                if (el.classList.contains('enhanced-search-input')) {
+                    const q = row.querySelector('.qty-field'); if (q) { q.focus(); try { q.select(); } catch (err) {} return; }
+                }
+                if (i >= 0 && i < fields.length - 1) { const nf = fields[i + 1]; nf.focus(); try { nf.select(); } catch (err) {} return; }
+                if (el.dispatchEvent) el.dispatchEvent(new Event('change', { bubbles: true }));
+                let next = row.nextElementSibling;
+                if (!next) { addRowFn(); next = tbody.lastElementChild; }
+                const first = next.querySelector('.enhanced-search-input') || next.querySelector('input:not([readonly])');
+                if (first) first.focus();
+            });
+        }
+        try { setupInvoiceKeyboardNav('invoiceItemsBody', addInvoiceRow); setupInvoiceKeyboardNav('purchaseItemsBody', addPurchaseRow); } catch (e) { console.error(e); }
+
+        // (5) آخر سعر شراء للصنف: من نفس المورد الأول، ولو مفيش فمن أي مورد
+        function getLastPurchasePrice(productCode, supplierCode) {
+            const sorted = purchaseInvoices.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+            const find = filterFn => {
+                for (const inv of sorted) {
+                    if (!filterFn(inv)) continue;
+                    const it = (inv.items || []).find(x => x.productCode === productCode);
+                    if (it && it.cost > 0) return { cost: it.cost, date: inv.date, supplier: inv.supplier };
+                }
+                return null;
+            };
+            if (supplierCode) { const r = find(inv => inv.supplierCode === supplierCode); if (r) return { ...r, sameSupplier: true }; }
+            const any = find(() => true);
+            return any ? { ...any, sameSupplier: false } : null;
+        }
+
+        // (6) مسودة الفاتورة: بتتحفظ على الجهاز ده تلقائي، ولو الصفحة قفلت ترجعلها
+        const INVOICE_DRAFT_KEYS = { sale: '_draft_saleInvoice', purchase: '_draft_purchaseInvoice' };
+        const invoiceDraftTimers = {};
+        function collectInvoiceDraft(kind) {
+            const isSale = kind === 'sale';
+            const rows = Array.from(document.querySelectorAll(isSale ? '#invoiceItemsBody tr' : '#purchaseItemsBody tr')).map(r => {
+                const sel = r.querySelector('select');
+                if (!sel || !sel.value) return null;
+                return isSale
+                    ? { code: sel.value, unit: (r.querySelector('.unit-field') || {}).value || '', qty: r.querySelector('.qty-field').value }
+                    : { code: sel.value, qty: r.querySelector('.qty-field').value, cost: r.querySelector('.cost-field').value };
+            }).filter(Boolean);
+            if (!rows.length) return null;
+            const v = id => (document.getElementById(id) || {}).value || '';
+            return isSale
+                ? { savedAt: new Date().toISOString(), party: v('invoiceCustomer'), partyText: v('invoiceCustomerSearch'), salesman: v('invoiceSalesman'), payment: v('paymentMethod'), notes: v('invoiceNotes'), rows }
+                : { savedAt: new Date().toISOString(), party: v('purchaseSupplier'), partyText: v('purchaseSupplierSearch'), supplierInvoice: v('purchaseSupplierInvoice'), payment: v('purchasePaymentMethod'), notes: v('purchaseNotes'), rows };
+        }
+        function scheduleInvoiceDraftSave(kind) {
+            const banner = document.getElementById(kind + 'DraftBanner');
+            if (banner && banner.style.display !== 'none') return; // فيه مسودة قديمة لسه مستنية قرارك
+            clearTimeout(invoiceDraftTimers[kind]);
+            invoiceDraftTimers[kind] = setTimeout(() => {
+                try {
+                    const d = collectInvoiceDraft(kind);
+                    if (d) _origLocalStorageSetItem(INVOICE_DRAFT_KEYS[kind], JSON.stringify(d));
+                    else localStorage.removeItem(INVOICE_DRAFT_KEYS[kind]);
+                } catch (e) { console.error('draft save failed', e); }
+            }, 500);
+        }
+        function clearInvoiceDraft(kind) {
+            clearTimeout(invoiceDraftTimers[kind]);
+            try { localStorage.removeItem(INVOICE_DRAFT_KEYS[kind]); } catch (e) {}
+            const banner = document.getElementById(kind + 'DraftBanner');
+            if (banner) banner.style.display = 'none';
+        }
+        function readInvoiceDraft(kind) {
+            try { return JSON.parse(localStorage.getItem(INVOICE_DRAFT_KEYS[kind]) || 'null'); } catch (e) { return null; }
+        }
+        function showInvoiceDraftBanner(kind) {
+            const d = readInvoiceDraft(kind);
+            const banner = document.getElementById(kind + 'DraftBanner');
+            if (!banner) return;
+            if (!d || !d.rows || !d.rows.length) { banner.style.display = 'none'; return; }
+            const when = new Date(d.savedAt).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' });
+            document.getElementById(kind + 'DraftText').textContent =
+                `فيه ${kind === 'sale' ? 'فاتورة بيع' : 'فاتورة شراء'} متحفظتش (${d.rows.length} صنف${d.partyText ? ' — ' + d.partyText : ''} — ${when}). ترجعها؟`;
+            banner.style.display = 'flex';
+        }
+        function discardInvoiceDraft(kind) {
+            if (!confirm('متأكد إنك عايز تمسح المسودة؟')) return;
+            clearInvoiceDraft(kind);
+        }
+        function restoreInvoiceDraft(kind) {
+            const d = readInvoiceDraft(kind);
+            if (!d) { clearInvoiceDraft(kind); return; }
+            const isSale = kind === 'sale';
+            const tbody = document.getElementById(isSale ? 'invoiceItemsBody' : 'purchaseItemsBody');
+            const setV = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.value = val; };
+            tbody.innerHTML = '';
+            let missing = 0;
+            d.rows.forEach(r => {
+                if (!products.find(p => p.code === r.code)) { missing++; return; }
+                if (isSale) addInvoiceRow(); else addPurchaseRow();
+                const row = tbody.lastElementChild;
+                const sel = row.querySelector('select');
+                sel.value = r.code; syncEnhancedSelect(sel);
+                if (isSale) {
+                    updateInvoiceRow(sel);
+                    const u = row.querySelector('.unit-field');
+                    if (r.unit && Array.from(u.options).some(o => o.value === r.unit)) { u.value = r.unit; onInvoiceUnitChange(u); }
+                    row.querySelector('.qty-field').value = r.qty;
+                    calculateInvoiceRow(row.querySelector('.qty-field'));
+                } else {
+                    updatePurchaseRow(sel);
+                    row.querySelector('.qty-field').value = r.qty;
+                    row.querySelector('.cost-field').value = r.cost;
+                    calculatePurchaseRow(row.querySelector('.qty-field'));
+                }
+            });
+            Array.from(tbody.children).forEach((tr, i) => { tr.cells[0].textContent = i + 1; });
+            if (!tbody.children.length) { if (isSale) addInvoiceRow(); else addPurchaseRow(); }
+            if (isSale) {
+                setV('invoiceCustomer', d.party); setV('invoiceCustomerSearch', d.partyText); setV('invoiceSalesman', d.salesman);
+                setV('paymentMethod', d.payment); setV('invoiceNotes', d.notes);
+                try { handlePaymentMethodChange(); } catch (e) {}
+            } else {
+                setV('purchaseSupplier', d.party); setV('purchaseSupplierSearch', d.partyText); setV('purchaseSupplierInvoice', d.supplierInvoice);
+                setV('purchasePaymentMethod', d.payment); setV('purchaseNotes', d.notes);
+                try { handlePurchasePaymentChange(); } catch (e) {}
+            }
+            document.getElementById(kind + 'DraftBanner').style.display = 'none';
+            showToast(missing ? `رجعت المسودة، بس ${missing} صنف مبقاش موجود في الأصناف` : 'رجعت المسودة زي ما كانت', missing ? 'warning' : 'success');
+            scheduleInvoiceDraftSave(kind);
+        }
+        (function() {
+            [['invoice-section', 'sale'], ['purchase-invoice-section', 'purchase']].forEach(([id, kind]) => {
+                const sec = document.getElementById(id);
+                if (!sec) return;
+                ['input', 'change', 'click'].forEach(ev => sec.addEventListener(ev, e => {
+                    if (e.target && e.target.closest && e.target.closest('#' + kind + 'DraftBanner')) return;
+                    scheduleInvoiceDraftSave(kind);
+                }));
+            });
+            window.addEventListener('beforeunload', () => {
+                ['sale', 'purchase'].forEach(kind => {
+                    const banner = document.getElementById(kind + 'DraftBanner');
+                    if (banner && banner.style.display !== 'none') return;
+                    try { const d = collectInvoiceDraft(kind); if (d) _origLocalStorageSetItem(INVOICE_DRAFT_KEYS[kind], JSON.stringify(d)); } catch (e) {}
+                });
+            });
+        })();
+
+        // إضافة مورد جديد من جوه فاتورة الشراء، وبعد الحفظ بيتختار في الفاتورة على طول
+        let pendingPurchaseSupplierSelect = false;
+        function quickAddPurchaseSupplier(name) {
+            document.getElementById('purchaseSupplierResults').style.display = 'none';
+            openSupplierModal(null);
+            pendingPurchaseSupplierSelect = true;
+            document.getElementById('supplierName').value = name;
+            document.getElementById('supplierCode').value = makeAutoCoder(suppliers.map(s => s.code), 'V')();
+            setTimeout(() => { const ph = document.getElementById('supplierPhone'); if (ph) ph.focus(); }, 150);
         }
 
         function openSearchDropdown(searchId, hiddenId, dropdownId, items, onSelect) {
@@ -6991,6 +7473,7 @@
                 <td><input type="number" class="form-control total-field" readonly style="background:#f8f9fa;font-weight:700;color:var(--primary)"></td>
                 <td><button class="btn btn-danger btn-icon btn-sm btn-delete-row" onclick="removeInvoiceRow(this)"><i class="fas fa-times"></i></button></td>`;
             tbody.appendChild(row);
+            enhanceSelectWithSearch(row.querySelector('select'), { fixed: true, placeholder: 'ابحث بالاسم أو الكود...', onPicked: onInvoiceRowProductPicked });
         }
 
         function updateInvoiceRow(select) {
@@ -7035,7 +7518,7 @@
 
         function calculateGrandTotal() {
             let grandTotal = 0;
-            document.querySelectorAll('.total-field').forEach(t => grandTotal += parseFloat(t.value) || 0);
+            document.querySelectorAll('#invoiceItemsBody .total-field').forEach(t => grandTotal += parseFloat(t.value) || 0);
             document.getElementById('invoiceGrandTotal').textContent = grandTotal.toFixed(2) + ' ر.س';
         }
 
@@ -7049,13 +7532,14 @@
             const customerCode = document.getElementById('invoiceCustomer').value;
             const salesmanCode = document.getElementById('invoiceSalesman').value;
             if (!customerCode) { showToast('الرجاء اختيار العميل', 'error'); return; }
-            const items = []; let hasItems = false; let stockError = false;
+            const items = []; let hasItems = false; let stockError = false; let badQty = false;
             document.querySelectorAll('#invoiceItemsBody tr').forEach(row => {
                 const select = row.querySelector('select');
                 if (select.value) {
                     hasItems = true;
                     const product = products.find(p => p.code === select.value);
                     const qty = parseFloat(row.querySelector('.qty-field').value) || 0;
+                    if (qty <= 0) badQty = true;
                     const stock = parseFloat(row.querySelector('.stock-field').value) || 0;
                     if (qty > stock) { stockError = true; }
                     const unitSelect = row.querySelector('.unit-field');
@@ -7070,6 +7554,7 @@
                 }
             });
             if (!hasItems) { showToast('الرجاء إضافة أصناف للفاتورة', 'error'); return; }
+            if (badQty) { showToast('الكمية لازم تكون أكبر من صفر في كل الأصناف', 'error'); return; }
             if (stockError) { showToast('بعض الأصناف تتجاوز المخزون المتاح!', 'error'); return; }
 
             const paymentMethod = document.getElementById('paymentMethod').value;
@@ -7141,6 +7626,7 @@
             document.getElementById('invoiceItemsBody').innerHTML = '';
             document.getElementById('invoiceGrandTotal').textContent = '0 ر.س';
             addInvoiceRow();
+            clearInvoiceDraft('sale');
         }
 
         function printInvoice() { window.print(); }
@@ -7150,6 +7636,7 @@
             document.getElementById('purchaseInvoiceDate').textContent = new Date().toLocaleDateString('ar-SA');
             document.getElementById('purchaseInvoiceNumber').textContent = getNextDocNumber(purchaseInvoices).toString().padStart(4, '0');
             addPurchaseRow();
+            showInvoiceDraftBanner('purchase');
         }
 
         function addPurchaseRow() {
@@ -7162,10 +7649,11 @@
                 <td><select class="form-control" onchange="updatePurchaseRow(this)" style="min-width:200px"><option value="">اختر الصنف...</option>${options}</select></td>
                 <td><input type="text" class="form-control unit-field" readonly style="background:#f8f9fa"></td>
                 <td><input type="number" class="form-control qty-field" value="1" min="1" onchange="calculatePurchaseRow(this)"></td>
-                <td><input type="number" class="form-control cost-field" onchange="calculatePurchaseRow(this)"></td>
+                <td><input type="number" class="form-control cost-field" min="0" step="any" onchange="calculatePurchaseRow(this)"><div class="cost-hint" style="font-size:11px;color:var(--text-light);margin-top:3px;"></div></td>
                 <td><input type="number" class="form-control total-field" readonly style="background:#f8f9fa;font-weight:700;color:var(--teal)"></td>
                 <td><button class="btn btn-danger btn-icon btn-sm btn-delete-row" onclick="removePurchaseRow(this)"><i class="fas fa-times"></i></button></td>`;
             tbody.appendChild(row);
+            enhanceSelectWithSearch(row.querySelector('select'), { fixed: true, placeholder: 'ابحث بالاسم أو الكود...', onPicked: onInvoiceRowProductPicked });
         }
 
         function updatePurchaseRow(select) {
@@ -7173,7 +7661,16 @@
             const option = select.options[select.selectedIndex];
             if (!option.value) return;
             row.querySelector('.unit-field').value = option.dataset.unit;
-            row.querySelector('.cost-field').value = option.dataset.cost || 0;
+            const costField = row.querySelector('.cost-field');
+            const hint = row.querySelector('.cost-hint');
+            const last = getLastPurchasePrice(option.value, document.getElementById('purchaseSupplier').value);
+            if (last) {
+                costField.value = last.cost;
+                if (hint) hint.textContent = last.sameSupplier ? 'آخر سعر من المورد ده' : `آخر سعر شراء (${last.supplier || 'مورد تاني'})`;
+            } else {
+                costField.value = option.dataset.cost || 0;
+                if (hint) hint.textContent = 'سعر التكلفة المسجل';
+            }
             calculatePurchaseRow(row.querySelector('.qty-field'));
         }
 
@@ -7200,7 +7697,12 @@
         function savePurchaseInvoice() {
             const supplierCode = document.getElementById('purchaseSupplier').value;
             if (!supplierCode) { showToast('الرجاء اختيار المورد', 'error'); return; }
-            const items = []; let hasItems = false;
+            const supplierInvoiceNo = document.getElementById('purchaseSupplierInvoice').value.trim();
+            if (supplierInvoiceNo) {
+                const dupInv = purchaseInvoices.find(inv => inv.supplierCode === supplierCode && normalizeArabicText(inv.supplierInvoice) === normalizeArabicText(supplierInvoiceNo));
+                if (dupInv && !confirm(`تنبيه: فاتورة المورد رقم "${supplierInvoiceNo}" اتسجلت قبل كده\nفي فاتورة الشراء #${dupInv.number} بتاريخ ${new Date(dupInv.date).toLocaleDateString('ar-EG')} بقيمة ${Number(dupInv.grandTotal || 0).toFixed(2)} ر.س\n\nلو سجلتها تاني المخزون هيتزود مرتين. متأكد إنك عايز تسجلها؟`)) return;
+            }
+            const items = []; let hasItems = false; let badQty = false, badCost = false, zeroCost = 0;
             document.querySelectorAll('#purchaseItemsBody tr').forEach(row => {
                 const select = row.querySelector('select');
                 if (select.value) {
@@ -7208,11 +7710,16 @@
                     const product = products.find(p => p.code === select.value);
                     const qty = parseFloat(row.querySelector('.qty-field').value) || 0;
                     const cost = parseFloat(row.querySelector('.cost-field').value) || 0;
+                    if (qty <= 0) badQty = true;
+                    if (cost < 0) badCost = true; else if (cost === 0) zeroCost++;
                     items.push({ productCode: select.value, productName: product.name, unit: row.querySelector('.unit-field').value,
                         qty: qty, cost: cost, total: qty * cost });
                 }
             });
             if (!hasItems) { showToast('الرجاء إضافة أصناف للفاتورة', 'error'); return; }
+            if (badQty) { showToast('الكمية لازم تكون أكبر من صفر في كل الأصناف', 'error'); return; }
+            if (badCost) { showToast('سعر الشراء مينفعش يكون بالسالب', 'error'); return; }
+            if (zeroCost > 0 && !confirm(`فيه ${zeroCost} صنف سعر شرائه صفر. ده هيقلل متوسط التكلفة ويبوّظ حساب الأرباح.\n\nمتأكد إنك عايز تكمل؟`)) return;
 
             const paymentMethod = document.getElementById('purchasePaymentMethod').value;
             const grandTotal = items.reduce((sum, item) => sum + item.total, 0);
@@ -7266,6 +7773,7 @@
             document.getElementById('purchaseItemsBody').innerHTML = '';
             document.getElementById('purchaseGrandTotal').textContent = '0 ر.س';
             addPurchaseRow();
+            clearInvoiceDraft('purchase');
         }
 
         function printPurchaseInvoice() { window.print(); }
@@ -9900,6 +10408,7 @@
                 name: ['اسم الصنف', 'الاسم', 'name', 'اسم المنتج', 'product name'],
                 unit: ['الوحدة', 'unit', 'وحدة البيع'],
                 category: ['القسم', 'الفئة', 'category', 'section'],
+                brand: ['الشركة', 'اسم الشركة', 'الماركة', 'brand', 'company'],
                 price: ['سعر البيع', 'السعر', 'price', 'sell price', 'selling price'],
                 cost: ['سعر التكلفة', 'التكلفة', 'cost', 'cost price'],
                 qty: ['الكمية الأولية', 'الكمية', 'qty', 'quantity', 'stock']
@@ -9917,6 +10426,7 @@
                 if (map.category === undefined) map.category = -1;
                 if (map.cost === undefined) map.cost = -1;
                 if (map.qty === undefined) map.qty = -1;
+                if (map.brand === undefined) map.brand = -1;
                 return map;
             }
             if (headers.length >= 5) {
@@ -9951,20 +10461,30 @@
                         const row = jsonData[i];
                         if (!row || row.length === 0) { skippedRows++; continue; }
                         const codeVal = row[headerMap.code]; const nameVal = row[headerMap.name]; const priceVal = row[headerMap.price];
-                        if (codeVal === undefined || codeVal === null || codeVal === '') { skippedRows++; continue; }
-                        if (nameVal === undefined || nameVal === null || nameVal === '') { skippedRows++; continue; }
+                        if (nameVal === undefined || nameVal === null || String(nameVal).trim() === '') { skippedRows++; continue; }
                         const price = parseFloat(priceVal);
                         if (isNaN(price) || price <= 0) { skippedRows++; continue; }
                         const product = {
-                            code: String(codeVal).trim(), name: String(nameVal).trim(),
+                            code: (codeVal === undefined || codeVal === null) ? '' : String(codeVal).trim(), name: String(nameVal).trim(),
                             unit: headerMap.unit >= 0 ? String(row[headerMap.unit] || 'كرتونة').trim() : 'كرتونة',
                             category: headerMap.category >= 0 ? String(row[headerMap.category] || '').trim() : '',
                             price: price,
                             cost: headerMap.cost >= 0 ? (parseFloat(row[headerMap.cost]) || 0) : 0,
-                            qty: headerMap.qty >= 0 ? (parseFloat(row[headerMap.qty]) || 0) : 0
+                            qty: headerMap.qty >= 0 ? (parseFloat(row[headerMap.qty]) || 0) : 0,
+                            brand: null, brandError: null, autoCode: false
                         };
+                        // الشركة: بتتربط بالاسم، والقسم بيتملّى لوحده من الشركة
+                        const brandRaw = headerMap.brand >= 0 ? String(row[headerMap.brand] || '').trim() : '';
+                        if (brandRaw) {
+                            const b = appBrands.find(x => normalizeArabicText(x.name) === normalizeArabicText(brandRaw));
+                            if (b) { product.brand = b.name; if (b.categoryName) product.category = b.categoryName; }
+                            else product.brandError = `الشركة "${brandRaw}" مش موجودة في الشركات`;
+                        }
                         excelProductsData.push(product);
                     }
+                    // الأصناف اللي من غير كود: النظام يكوّدها لوحده
+                    const nextProductCode = makeAutoCoder(products.map(p => p.code).concat(excelProductsData.map(p => p.code)), 'P');
+                    excelProductsData.forEach(p => { if (!p.code && !p.brandError) { p.code = nextProductCode(); p.autoCode = true; } });
                     if (excelProductsData.length === 0) { showToast('لم يتم العثور على بيانات صالحة في الملف', 'error'); return; }
                     showProductExcelPreview(skippedRows);
                 } catch (err) { console.error('Product excel parsing error:', err); showToast('حدث خطأ أثناء قراءة الملف: ' + err.message, 'error'); }
@@ -9976,19 +10496,22 @@
 
         function showProductExcelPreview(skippedCount) {
             const tbody = document.getElementById('productExcelPreviewTable');
-            let validCount = 0, duplicateCount = 0;
+            let validCount = 0, duplicateCount = 0, errorCount = 0;
             tbody.innerHTML = excelProductsData.map(p => {
-                const exists = products.some(existing => existing.code === p.code);
-                if (exists) duplicateCount++; else validCount++;
-                const issueBadge = exists
-                    ? '<span class="badge badge-danger"><i class="fas fa-exclamation-circle"></i> موجود (هيتحدث لو فعلت الخيار فوق)</span>'
+                const exists = !p.brandError && products.some(existing => existing.code === p.code);
+                if (p.brandError) errorCount++; else if (exists) duplicateCount++; else validCount++;
+                let issueBadge = p.brandError
+                    ? `<span class="badge badge-danger"><i class="fas fa-times-circle"></i> مش هيتسجل: ${escapeHtml(p.brandError)}</span>`
+                    : exists
+                    ? '<span class="badge badge-warning"><i class="fas fa-exclamation-circle"></i> موجود (هيتحدث لو فعلت الخيار فوق)</span>'
                     : '<span class="badge badge-success"><i class="fas fa-check-circle"></i> جديد</span>';
-                return `<tr style="${exists ? 'background:rgba(231,76,60,0.05);' : ''}"><td><code style="background:#f0f2f5;padding:2px 6px;border-radius:4px;font-size:12px;">${escapeHtml(p.code)}</code></td>
-                <td><strong>${escapeHtml(p.name)}</strong></td><td>${escapeHtml(p.unit)}</td><td>${p.category ? escapeHtml(p.category) : '<span style="color:#ccc;">-</span>'}</td>
+                if (p.autoCode) issueBadge += ' <span class="badge badge-info">كود تلقائي</span>';
+                return `<tr style="${p.brandError ? 'background:rgba(231,76,60,0.08);' : (exists ? 'background:rgba(243,156,18,0.05);' : '')}"><td><code style="background:#f0f2f5;padding:2px 6px;border-radius:4px;font-size:12px;">${escapeHtml(p.code || '-')}</code></td>
+                <td><strong>${escapeHtml(p.name)}</strong></td><td>${p.brand ? escapeHtml(p.brand) : '<span style="color:#ccc;">-</span>'}</td><td>${escapeHtml(p.unit)}</td><td>${p.category ? escapeHtml(p.category) : '<span style="color:#ccc;">-</span>'}</td>
                 <td>${p.price.toFixed(2)}</td><td>${p.cost.toFixed(2)}</td><td>${p.qty}</td><td>${issueBadge}</td></tr>`;
             }).join('');
             document.getElementById('productExcelPreviewCount').innerHTML = `${excelProductsData.length} صنف`;
-            document.getElementById('productExcelPreviewValid').innerHTML = `<span style="color:var(--accent);"><i class="fas fa-check"></i> ${validCount} جديد</span>${duplicateCount > 0 ? ` | <span style="color:var(--danger);"><i class="fas fa-times"></i> ${duplicateCount} موجود</span>` : ''}${skippedCount > 0 ? ` | <span style="color:var(--warning);"><i class="fas fa-filter"></i> ${skippedCount} صف تخطى</span>` : ''}`;
+            document.getElementById('productExcelPreviewValid').innerHTML = `<span style="color:var(--accent);"><i class="fas fa-check"></i> ${validCount} جديد</span>${duplicateCount > 0 ? ` | <span style="color:var(--danger);"><i class="fas fa-times"></i> ${duplicateCount} موجود</span>` : ''}${errorCount > 0 ? ` | <span style="color:var(--danger);font-weight:700;"><i class="fas fa-times"></i> ${errorCount} فيه غلط</span>` : ''}${skippedCount > 0 ? ` | <span style="color:var(--warning);"><i class="fas fa-filter"></i> ${skippedCount} صف تخطى</span>` : ''}`;
             document.getElementById('productExcelUpdateExisting').checked = false;
             openModal('productExcelPreviewModal');
         }
@@ -9996,12 +10519,15 @@
         function importExcelProducts() {
             const updateExisting = document.getElementById('productExcelUpdateExisting').checked;
             let added = 0, updated = 0, skipped = 0;
+            let errors = 0;
             excelProductsData.forEach(p => {
+                if (p.brandError || !p.code) { errors++; return; }
                 const idx = products.findIndex(existing => existing.code === p.code);
                 if (idx !== -1) {
                     if (!updateExisting) { skipped++; return; }
                     products[idx].name = p.name;
                     products[idx].unit = p.unit;
+                    if (p.brand) products[idx].brand = p.brand;
                     if (p.category) products[idx].category = p.category;
                     products[idx].price = p.price;
                     products[idx].cost = p.cost;
@@ -10009,7 +10535,7 @@
                     else inventory[p.code].cost = p.cost;
                     updated++;
                 } else {
-                    products.push({ code: p.code, name: p.name, unit: p.unit, category: p.category, price: p.price, cost: p.cost, minStock: 0, maxOrderQty: null, secondaryUnit: null, imageUrl: null, brand: null, showInApp: true, bestSeller: false, bestSellerOrder: 0 });
+                    products.push({ code: p.code, name: p.name, unit: p.unit, category: p.category, price: p.price, cost: p.cost, minStock: 0, maxOrderQty: null, secondaryUnit: null, imageUrl: null, brand: p.brand || null, showInApp: true, bestSeller: false, bestSellerOrder: 0 });
                     inventory[p.code] = { code: p.code, qty: p.qty, cost: p.cost, minStock: 0 };
                     if (p.qty > 0) addStockMovement(p.code, p.name, 'initial', p.qty, p.qty, 'استيراد Excel', 'رصيد أولي من ملف استيراد جماعي');
                     added++;
@@ -10025,6 +10551,7 @@
                 if (added > 0) msg += `تم إضافة ${added} صنف جديد`;
                 if (updated > 0) msg += (msg ? ' و' : 'تم ') + `تحديث ${updated} صنف`;
                 if (skipped > 0) msg += ` (تم تخطي ${skipped} موجود)`;
+                if (errors > 0) msg += ` — ${errors} صف فيه غلط متسجلش`;
                 showToast(msg);
             } else {
                 showToast('لم يتم استيراد أي صنف جديد. فعّل خيار "تحديث الأصناف الموجودة" لو عايز تحدثهم.', 'warning');
@@ -10033,13 +10560,13 @@
 
         function exportProductsToExcel() {
             if (products.length === 0) { showToast('لا يوجد أصناف لتصديرها', 'warning'); return; }
-            const templateData = [['كود الصنف', 'اسم الصنف', 'الوحدة', 'القسم', 'سعر البيع', 'سعر التكلفة', 'الكمية الأولية']];
+            const templateData = [['كود الصنف', 'اسم الصنف', 'الشركة', 'الوحدة', 'القسم', 'سعر البيع', 'سعر التكلفة', 'الكمية الأولية']];
             products.forEach(p => {
                 const qty = inventory[p.code] ? inventory[p.code].qty : 0;
-                templateData.push([p.code, p.name, p.unit || '', p.category || '', p.price || 0, p.cost || 0, qty]);
+                templateData.push([p.code, p.name, p.brand || '', p.unit || '', p.category || '', p.price || 0, p.cost || 0, qty]);
             });
             const ws = XLSX.utils.aoa_to_sheet(templateData);
-            ws['!cols'] = [{ wch: 12 }, { wch: 32 }, { wch: 12 }, { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 15 }];
+            ws['!cols'] = [{ wch: 12 }, { wch: 32 }, { wch: 20 }, { wch: 12 }, { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 15 }];
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'الأصناف');
             XLSX.writeFile(wb, 'أصناف_' + new Date().toISOString().slice(0, 10) + '.xlsx');
@@ -10048,18 +10575,189 @@
 
         function downloadProductTemplate() {
             const templateData = [
-                ['كود الصنف', 'اسم الصنف', 'الوحدة', 'القسم', 'سعر البيع', 'سعر التكلفة', 'الكمية الأولية'],
-                ['P001', 'هابي مكس كولا 235 مل', 'كرتونة', 'مياه غازية وعصائر', '85', '65', '50'],
-                ['P002', 'بسكويت شاي', 'كرتونة', 'بسكويت وحلويات', '120', '95', '30']
+                ['كود الصنف', 'اسم الصنف', 'الشركة', 'الوحدة', 'القسم', 'سعر البيع', 'سعر التكلفة', 'الكمية الأولية'],
+                ['', 'هابي مكس كولا 235 مل', (appBrands[0] && appBrands[0].name) || '', 'كرتونة', '', '85', '65', '50'],
+                ['', 'بسكويت شاي', (appBrands[1] && appBrands[1].name) || '', 'كرتونة', '', '120', '95', '30']
             ];
             const ws = XLSX.utils.aoa_to_sheet(templateData);
-            ws['!cols'] = [{ wch: 12 }, { wch: 32 }, { wch: 12 }, { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 15 }];
+            ws['!cols'] = [{ wch: 12 }, { wch: 32 }, { wch: 20 }, { wch: 12 }, { wch: 22 }, { wch: 12 }, { wch: 14 }, { wch: 15 }];
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'الأصناف');
             XLSX.writeFile(wb, 'نموذج_أصناف.xlsx');
             showToast('تم تحميل نموذج Excel');
         }
 
+
+        // ==================== الشركات (الماركات) من Excel ====================
+        // الرفع بيضيف ويعدّل بس (القسم والحالة)، ومفيش أي شركة بتتمسح. تغيير اسم الشركة بيفضل من جوه السيستم.
+        let excelBrandsData = [];
+
+        function brandStatusLabel(active) { return active !== false ? 'نشط' : 'متوقف'; }
+
+        function parseBrandStatus(v) {
+            const s = normalizeArabicText(v);
+            if (!s) return undefined;
+            if (['نشط', 'مفعل', 'شغال', 'active', 'yes', '1', 'true'].includes(s)) return true;
+            if (['متوقف', 'موقوف', 'غير نشط', 'وقف', 'inactive', 'no', '0', 'false'].includes(s)) return false;
+            return null;
+        }
+
+        function exportBrandsToExcel() {
+            if (appBrands.length === 0) { showToast('لا يوجد شركات لتصديرها', 'warning'); return; }
+            const rows = [['اسم الشركة', 'القسم', 'الحالة']];
+            appBrands.forEach(b => rows.push([b.name, b.categoryName || '', brandStatusLabel(b.active)]));
+            const ws = XLSX.utils.aoa_to_sheet(rows);
+            ws['!cols'] = [{ wch: 28 }, { wch: 26 }, { wch: 12 }];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'الشركات');
+            XLSX.writeFile(wb, 'شركات_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+            showToast('تم تصدير ' + appBrands.length + ' شركة — عدّل الملف وارفعه تاني');
+        }
+
+        function downloadBrandTemplate() {
+            const cat1 = (appCategories[0] && appCategories[0].name) || 'مياه غازية وعصائر';
+            const cat2 = (appCategories[1] && appCategories[1].name) || cat1;
+            const rows = [['اسم الشركة', 'القسم', 'الحالة'], ['شركة مثال 1', cat1, 'نشط'], ['شركة مثال 2', cat2, 'متوقف']];
+            const ws = XLSX.utils.aoa_to_sheet(rows);
+            ws['!cols'] = [{ wch: 28 }, { wch: 26 }, { wch: 12 }];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'الشركات');
+            XLSX.writeFile(wb, 'نموذج_شركات.xlsx');
+            showToast('تم تحميل نموذج Excel');
+        }
+
+        function detectBrandHeaders(headers) {
+            const possible = {
+                name: ['اسم الشركة', 'الشركة', 'اسم الماركة', 'الماركة', 'name', 'brand', 'company'],
+                category: ['القسم', 'القسم المرتبط', 'الفئة', 'category'],
+                status: ['الحالة', 'status']
+            };
+            const map = {};
+            for (const [key, list] of Object.entries(possible)) {
+                const normList = list.map(normalizeArabicText);
+                for (let i = 0; i < headers.length; i++) {
+                    const h = normalizeArabicText(headers[i]);
+                    if (h && normList.includes(h)) { map[key] = i; break; }
+                }
+            }
+            if (map.name === undefined) return null;
+            if (map.category === undefined) map.category = -1;
+            if (map.status === undefined) map.status = -1;
+            return map;
+        }
+
+        function handleBrandExcelUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+                    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: '' });
+                    let headerRowIndex = -1, map = null;
+                    for (let i = 0; i < Math.min(rows.length, 5); i++) {
+                        const m = rows[i] ? detectBrandHeaders(rows[i]) : null;
+                        if (m) { headerRowIndex = i; map = m; break; }
+                    }
+                    if (!map) { showToast('تنسيق الأعمدة غير صحيح. لازم يكون فيه عمود "اسم الشركة"', 'error'); return; }
+
+                    excelBrandsData = [];
+                    const seen = new Set();
+                    for (let i = headerRowIndex + 1; i < rows.length; i++) {
+                        const row = rows[i] || [];
+                        const name = String(row[map.name] || '').trim();
+                        if (!name) continue;
+                        const catRaw = map.category >= 0 ? String(row[map.category] || '').trim() : '';
+                        const statusRaw = map.status >= 0 ? String(row[map.status] || '').trim() : '';
+                        const entry = { rowNum: i + 1, name, categoryName: undefined, active: undefined, result: 'new', errors: [], changes: [], brandId: null, affectedProducts: 0 };
+                        const key = normalizeArabicText(name);
+                        if (seen.has(key)) entry.errors.push('الشركة مكررة في الشيت');
+                        seen.add(key);
+                        if (catRaw) {
+                            const cat = appCategories.find(c => normalizeArabicText(c.name) === normalizeArabicText(catRaw));
+                            if (cat) entry.categoryName = cat.name; else entry.errors.push(`القسم "${catRaw}" مش موجود`);
+                        }
+                        const st = parseBrandStatus(statusRaw);
+                        if (st === null) entry.errors.push('الحالة لازم تكون "نشط" أو "متوقف"'); else entry.active = st;
+
+                        const existing = appBrands.find(b => normalizeArabicText(b.name) === key);
+                        if (entry.errors.length) entry.result = 'error';
+                        else if (existing) {
+                            entry.brandId = existing.id;
+                            entry.name = existing.name;
+                            if (entry.categoryName !== undefined && entry.categoryName !== (existing.categoryName || '')) {
+                                entry.changes.push(`القسم: ${existing.categoryName || 'بدون'} ← ${entry.categoryName}`);
+                                entry.affectedProducts = products.filter(p => p.brand === existing.name).length;
+                            }
+                            if (entry.active !== undefined && entry.active !== (existing.active !== false)) {
+                                entry.changes.push(`الحالة: ${brandStatusLabel(existing.active)} ← ${brandStatusLabel(entry.active)}`);
+                            }
+                            entry.result = entry.changes.length ? 'update' : 'same';
+                        }
+                        excelBrandsData.push(entry);
+                    }
+                    if (excelBrandsData.length === 0) { showToast('مفيش شركات في الملف', 'error'); return; }
+                    showBrandExcelPreview();
+                } catch (err) { console.error('Brand excel parsing error:', err); showToast('حدث خطأ أثناء قراءة الملف: ' + err.message, 'error'); }
+            };
+            reader.onerror = function() { showToast('حدث خطأ أثناء قراءة الملف', 'error'); };
+            reader.readAsArrayBuffer(file);
+            event.target.value = '';
+        }
+
+        function showBrandExcelPreview() {
+            const counts = { new: 0, update: 0, same: 0, error: 0 };
+            let affected = 0;
+            const order = { error: 0, new: 1, update: 2, same: 3 };
+            const sorted = excelBrandsData.slice().sort((a, b) => order[a.result] - order[b.result]);
+            document.getElementById('brandExcelPreviewTable').innerHTML = sorted.map(e => {
+                counts[e.result]++;
+                affected += e.affectedProducts;
+                let badge, bg = '';
+                if (e.result === 'error') { badge = `<span class="badge badge-danger"><i class="fas fa-times-circle"></i> مش هتتسجل: ${escapeHtml(e.errors.join(' — '))}</span>`; bg = 'background:rgba(231,76,60,0.08);'; }
+                else if (e.result === 'new') badge = '<span class="badge badge-success"><i class="fas fa-plus-circle"></i> جديدة (من غير لوجو)</span>';
+                else if (e.result === 'update') badge = `<span class="badge badge-warning"><i class="fas fa-pen"></i> هتتعدل: ${escapeHtml(e.changes.join(' | '))}</span>` + (e.affectedProducts ? ` <span class="badge badge-info">${e.affectedProducts} صنف هيتغير قسمهم</span>` : '');
+                else badge = '<span class="badge" style="background:#f0f2f5;color:var(--text-light);">بدون تغيير</span>';
+                const cat = e.categoryName !== undefined ? e.categoryName : '<span style="color:#ccc;">-</span>';
+                const st = e.active !== undefined ? brandStatusLabel(e.active) : '<span style="color:#ccc;">-</span>';
+                return `<tr style="${bg}"><td>${e.rowNum}</td><td><strong>${escapeHtml(e.name)}</strong></td><td>${e.categoryName !== undefined ? escapeHtml(cat) : cat}</td><td>${st}</td><td>${badge}</td></tr>`;
+            }).join('');
+            document.getElementById('brandExcelPreviewSummary').innerHTML =
+                `<span style="color:var(--accent);"><i class="fas fa-plus"></i> ${counts.new} جديدة</span>`
+                + ` | <span style="color:var(--warning);"><i class="fas fa-pen"></i> ${counts.update} هتتعدل</span>`
+                + ` | <span style="color:var(--text-light);">${counts.same} بدون تغيير</span>`
+                + (counts.error ? ` | <span style="color:var(--danger);font-weight:700;"><i class="fas fa-times"></i> ${counts.error} فيها غلط</span>` : '')
+                + (affected ? `<div style="margin-top:6px;color:var(--info);"><i class="fas fa-info-circle"></i> ${affected} صنف تابعين لشركات اتغير قسمها، وقسمهم هيتحدث معاها</div>` : '');
+            document.getElementById('brandExcelConfirmBtn').disabled = (counts.new + counts.update) === 0;
+            openModal('brandExcelPreviewModal');
+        }
+
+        function importExcelBrands() {
+            let added = 0, updated = 0, productsMoved = 0;
+            excelBrandsData.forEach(e => {
+                if (e.result === 'new') {
+                    appBrands.push({ id: 'brand_' + Date.now() + '_' + added, name: e.name, categoryName: e.categoryName || '', active: e.active !== undefined ? e.active : true, logoUrl: null });
+                    added++;
+                } else if (e.result === 'update') {
+                    const b = appBrands.find(x => x.id === e.brandId);
+                    if (!b) return;
+                    if (e.categoryName !== undefined && e.categoryName !== (b.categoryName || '')) {
+                        b.categoryName = e.categoryName;
+                        products.forEach(p => { if (p.brand === b.name && p.category !== e.categoryName) { p.category = e.categoryName; productsMoved++; } });
+                    }
+                    if (e.active !== undefined) b.active = e.active;
+                    updated++;
+                }
+            });
+            localStorage.setItem('appBrands', JSON.stringify(appBrands));
+            if (productsMoved > 0) localStorage.setItem('products', JSON.stringify(products));
+            logAction('استيراد شركات من Excel', `تم إضافة ${added} شركة وتعديل ${updated} شركة` + (productsMoved ? ` وتحديث قسم ${productsMoved} صنف` : ''));
+            renderAppBrands();
+            if (productsMoved > 0) renderProducts();
+            closeModal('brandExcelPreviewModal');
+            excelBrandsData = [];
+            showToast(`تم إضافة ${added} شركة وتعديل ${updated} شركة` + (productsMoved ? ` (واتحدث قسم ${productsMoved} صنف)` : ''));
+        }
 
         function openDeleteAllCustomersModal() {
             if (customers.length === 0) { showToast('لا يوجد عملاء لمسحهم', 'warning'); return; }
@@ -10125,7 +10823,7 @@
                 <div style="margin-bottom:15px;padding:15px;background:rgba(39,174,96,0.08);border-radius:10px;border-right:4px solid var(--accent);">
                     <p style="margin:0;font-size:14px;color:var(--text);">
                         <i class="fas fa-info-circle" style="color:var(--accent);"></i>
-                        <strong>تعليمات:</strong> أعمدة الملف: <strong>كود الصنف</strong> | <strong>اسم الصنف</strong> | <strong>الوحدة</strong> | <strong>القسم</strong> | <strong>سعر البيع</strong> | <strong>سعر التكلفة</strong> | <strong>الكمية الأولية</strong> (اختياري)
+                        <strong>تعليمات:</strong> أعمدة الملف: <strong>كود الصنف</strong> (سيبه فاضي للصنف الجديد والنظام يكوّده) | <strong>اسم الصنف</strong> | <strong>الشركة</strong> (القسم بيتملّى منها لوحده) | <strong>الوحدة</strong> | <strong>القسم</strong> | <strong>سعر البيع</strong> | <strong>سعر التكلفة</strong> | <strong>الكمية الأولية</strong> (اختياري)
                     </p>
                 </div>
                 <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
@@ -10134,12 +10832,12 @@
                 </div>
                 <div style="margin:0 0 10px;">
                     <label style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;">
-                        <input type="checkbox" id="productExcelUpdateExisting"> تحديث الأصناف الموجودة بالفعل (السعر والتكلفة) بدل تخطيها
+                        <input type="checkbox" id="productExcelUpdateExisting"> تحديث الأصناف الموجودة بالفعل (الاسم، الشركة، السعر والتكلفة) بدل تخطيها
                     </label>
                 </div>
                 <div class="table-container" style="max-height:350px;overflow-y:auto;">
                     <table>
-                        <thead><tr><th>كود الصنف</th><th>اسم الصنف</th><th>الوحدة</th><th>القسم</th><th>سعر البيع</th><th>سعر التكلفة</th><th>الكمية</th><th>الحالة</th></tr></thead>
+                        <thead><tr><th>كود الصنف</th><th>اسم الصنف</th><th>الشركة</th><th>الوحدة</th><th>القسم</th><th>سعر البيع</th><th>سعر التكلفة</th><th>الكمية</th><th>الحالة</th></tr></thead>
                         <tbody id="productExcelPreviewTable"></tbody>
                     </table>
                 </div>
@@ -10147,6 +10845,35 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal('productExcelPreviewModal')">إلغاء</button>
                 <button class="btn btn-success" onclick="importExcelProducts()"><i class="fas fa-save"></i> استيراد الأصناف</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Brand (Company) Excel Preview Modal -->
+    <div class="modal-overlay" id="brandExcelPreviewModal">
+        <div class="modal" style="max-width:900px;">
+            <div class="modal-header">
+                <h3 class="modal-title"><i class="fas fa-file-excel" style="color:var(--accent);"></i> مراجعة الشركات قبل الحفظ</h3>
+                <button class="modal-close" onclick="closeModal('brandExcelPreviewModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom:15px;padding:15px;background:rgba(39,174,96,0.08);border-radius:10px;border-right:4px solid var(--accent);">
+                    <p style="margin:0;font-size:14px;color:var(--text);">
+                        <i class="fas fa-info-circle" style="color:var(--accent);"></i>
+                        <strong>تعليمات:</strong> أعمدة الملف: <strong>اسم الشركة</strong> | <strong>القسم</strong> (لازم يكون موجود في الأقسام) | <strong>الحالة</strong> (نشط / متوقف). الشركات الجديدة بتتضاف من غير لوجو، ومفيش أي شركة بتتمسح. تغيير اسم الشركة من جوه السيستم.
+                    </p>
+                </div>
+                <div id="brandExcelPreviewSummary" style="margin-bottom:10px;font-size:13px;"></div>
+                <div class="table-container" style="max-height:350px;overflow-y:auto;">
+                    <table>
+                        <thead><tr><th>الصف</th><th>اسم الشركة</th><th>القسم</th><th>الحالة</th><th>النتيجة</th></tr></thead>
+                        <tbody id="brandExcelPreviewTable"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('brandExcelPreviewModal')">إلغاء</button>
+                <button class="btn btn-success" id="brandExcelConfirmBtn" onclick="importExcelBrands()"><i class="fas fa-save"></i> تأكيد وحفظ</button>
             </div>
         </div>
     </div>
