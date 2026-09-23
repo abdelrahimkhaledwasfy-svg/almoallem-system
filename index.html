@@ -10525,8 +10525,8 @@
                         if (!row || row.length === 0) { skippedRows++; continue; }
                         const codeVal = row[headerMap.code]; const nameVal = row[headerMap.name]; const priceVal = row[headerMap.price];
                         if (nameVal === undefined || nameVal === null || String(nameVal).trim() === '') { skippedRows++; continue; }
-                        const price = parseFloat(priceVal);
-                        if (isNaN(price) || price <= 0) { skippedRows++; continue; }
+                        const price = (priceVal === undefined || priceVal === null || String(priceVal).trim() === '') ? 0 : parseFloat(priceVal);
+                        if (isNaN(price) || price < 0) { skippedRows++; continue; }
                         const product = {
                             code: (codeVal === undefined || codeVal === null) ? '' : String(codeVal).trim(), name: String(nameVal).trim(),
                             unit: headerMap.unit >= 0 ? String(row[headerMap.unit] || 'كرتونة').trim() : 'كرتونة',
@@ -10534,10 +10534,12 @@
                             price: price,
                             cost: headerMap.cost >= 0 ? (parseFloat(row[headerMap.cost]) || 0) : 0,
                             qty: headerMap.qty >= 0 ? (parseFloat(row[headerMap.qty]) || 0) : 0,
-                            brand: null, brandError: null, autoCode: false
+                            brand: null, brandError: null, autoCode: false, brandRaw: '', sheetCategory: ''
                         };
+                        product.sheetCategory = product.category;
                         // الشركة: بتتربط بالاسم، والقسم بيتملّى لوحده من الشركة
                         const brandRaw = headerMap.brand >= 0 ? String(row[headerMap.brand] || '').trim() : '';
+                        product.brandRaw = brandRaw;
                         if (brandRaw) {
                             const b = appBrands.find(x => normalizeArabicText(x.name) === normalizeArabicText(brandRaw));
                             if (b) { product.brand = b.name; if (b.categoryName) product.category = b.categoryName; }
@@ -10557,7 +10559,9 @@
             event.target.value = '';
         }
 
+        let lastProductExcelSkipped = 0;
         function showProductExcelPreview(skippedCount) {
+            if (skippedCount === undefined) skippedCount = lastProductExcelSkipped; else lastProductExcelSkipped = skippedCount;
             const tbody = document.getElementById('productExcelPreviewTable');
             let validCount = 0, duplicateCount = 0, errorCount = 0;
             tbody.innerHTML = excelProductsData.map(p => {
@@ -10569,18 +10573,71 @@
                     ? '<span class="badge badge-warning"><i class="fas fa-exclamation-circle"></i> موجود (هيتحدث لو فعلت الخيار فوق)</span>'
                     : '<span class="badge badge-success"><i class="fas fa-check-circle"></i> جديد</span>';
                 if (p.autoCode) issueBadge += ' <span class="badge badge-info">كود تلقائي</span>';
+                if (!p.brandError && !(p.price > 0)) issueBadge += ' <span class="badge badge-warning">سعره صفر</span>';
                 return `<tr style="${p.brandError ? 'background:rgba(231,76,60,0.08);' : (exists ? 'background:rgba(243,156,18,0.05);' : '')}"><td><code style="background:#f0f2f5;padding:2px 6px;border-radius:4px;font-size:12px;">${escapeHtml(p.code || '-')}</code></td>
                 <td><strong>${escapeHtml(p.name)}</strong></td><td>${p.brand ? escapeHtml(p.brand) : '<span style="color:#ccc;">-</span>'}</td><td>${escapeHtml(p.unit)}</td><td>${p.category ? escapeHtml(p.category) : '<span style="color:#ccc;">-</span>'}</td>
                 <td>${p.price.toFixed(2)}</td><td>${p.cost.toFixed(2)}</td><td>${p.qty}</td><td>${issueBadge}</td></tr>`;
             }).join('');
             document.getElementById('productExcelPreviewCount').innerHTML = `${excelProductsData.length} صنف`;
             document.getElementById('productExcelPreviewValid').innerHTML = `<span style="color:var(--accent);"><i class="fas fa-check"></i> ${validCount} جديد</span>${duplicateCount > 0 ? ` | <span style="color:var(--danger);"><i class="fas fa-times"></i> ${duplicateCount} موجود</span>` : ''}${errorCount > 0 ? ` | <span style="color:var(--danger);font-weight:700;"><i class="fas fa-times"></i> ${errorCount} فيه غلط</span>` : ''}${skippedCount > 0 ? ` | <span style="color:var(--warning);"><i class="fas fa-filter"></i> ${skippedCount} صف تخطى</span>` : ''}`;
-            document.getElementById('productExcelUpdateExisting').checked = false;
+            // الملف كله أصناف موجودة (غالبًا شيت متصدّر واتعدل): التحديث يبقى متعلّم عليه من الأول
+            document.getElementById('productExcelUpdateExisting').checked = (validCount === 0 && duplicateCount > 0);
+            // الشركات اللي مكتوبة في الشيت ومش موجودة في الشركات
+            const missing = {};
+            excelProductsData.forEach(p => { if (p.brandError && p.brandRaw) { const k = normalizeArabicText(p.brandRaw); (missing[k] = missing[k] || { name: p.brandRaw, count: 0 }).count++; } });
+            const missingList = Object.values(missing);
+            const box = document.getElementById('productExcelMissingBrands');
+            if (missingList.length) {
+                box.innerHTML = `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;"><div style="flex:1;min-width:220px;"><strong style="color:var(--danger);"><i class="fas fa-exclamation-triangle"></i> فيه ${missingList.length} شركة مكتوبة في الشيت ومش موجودة في الشركات</strong> (${missingList.reduce((s, m) => s + m.count, 0)} صنف مش هيتسجلوا بسببها):<div style="font-size:13px;margin-top:4px;color:var(--text);">${missingList.map(m => escapeHtml(m.name) + ' (' + m.count + ')').join('، ')}</div></div><button class="btn btn-primary btn-sm" onclick="addMissingBrandsFromProductExcel()"><i class="fas fa-plus"></i> أضف الشركات الناقصة</button></div>`;
+                box.style.display = 'block';
+            } else { box.style.display = 'none'; box.innerHTML = ''; }
             openModal('productExcelPreviewModal');
         }
 
+        function addMissingBrandsFromProductExcel() {
+            const groups = {};
+            excelProductsData.forEach(p => {
+                if (!p.brandError || !p.brandRaw) return;
+                const k = normalizeArabicText(p.brandRaw);
+                const g = groups[k] || (groups[k] = { name: p.brandRaw, cats: {} });
+                const cat = appCategories.find(c => normalizeArabicText(c.name) === normalizeArabicText(p.sheetCategory));
+                if (cat) g.cats[cat.name] = (g.cats[cat.name] || 0) + 1;
+            });
+            const list = Object.values(groups);
+            if (!list.length) return;
+            if (!confirm(`هيتضاف ${list.length} شركة جديدة في الشركات (إدارة الأبليكشن)، وقسم كل شركة هيتاخد من عمود القسم في الشيت.\nالشركات هتتضاف من غير لوجو، وتقدر تحط اللوجو بعدين.\n\nتكمل؟`)) return;
+            let i = 0;
+            list.forEach(g => {
+                if (appBrands.some(b => normalizeArabicText(b.name) === normalizeArabicText(g.name))) return;
+                const topCat = Object.keys(g.cats).sort((a, b) => g.cats[b] - g.cats[a])[0] || '';
+                appBrands.push({ id: 'brand_' + Date.now() + '_' + (i++), name: g.name, categoryName: topCat, active: true, logoUrl: null });
+            });
+            localStorage.setItem('appBrands', JSON.stringify(appBrands));
+            logAction('إضافة شركات من شيت الأصناف', `تم إضافة ${i} شركة: ${list.map(g => g.name).join('، ')}`);
+            renderAppBrands();
+            // نربط الأصناف اللي كانت مرفوضة بالشركات الجديدة
+            excelProductsData.forEach(p => {
+                if (!p.brandError) return;
+                const b = appBrands.find(x => normalizeArabicText(x.name) === normalizeArabicText(p.brandRaw));
+                if (!b) return;
+                p.brand = b.name; p.brandError = null;
+                p.category = b.categoryName || p.sheetCategory;
+            });
+            const nextCode = makeAutoCoder(products.map(p => p.code).concat(excelProductsData.map(p => p.code)), 'P');
+            excelProductsData.forEach(p => { if (!p.code && !p.brandError) { p.code = nextCode(); p.autoCode = true; } });
+            showToast(`تم إضافة ${i} شركة، والأصناف بتاعتها اتربطت`);
+            showProductExcelPreview();
+        }
+
         function importExcelProducts() {
-            const updateExisting = document.getElementById('productExcelUpdateExisting').checked;
+            let updateExisting = document.getElementById('productExcelUpdateExisting').checked;
+            if (!updateExisting) {
+                const existingCount = excelProductsData.filter(p => !p.brandError && p.code && products.some(x => x.code === p.code)).length;
+                if (existingCount > 0 && confirm(`فيه ${existingCount} صنف في الشيت موجودين بالفعل في السيستم.\nتحب تحدّث بياناتهم (الاسم، الشركة، القسم، السعر والتكلفة)؟\n\nموافق = حدّثهم    إلغاء = سيبهم زي ما هم`)) {
+                    updateExisting = true;
+                    document.getElementById('productExcelUpdateExisting').checked = true;
+                }
+            }
             let added = 0, updated = 0, skipped = 0;
             let errors = 0;
             excelProductsData.forEach(p => {
@@ -10893,9 +10950,10 @@
                     <span id="productExcelPreviewCount" style="font-weight:700;color:var(--primary);">0 صنف</span>
                     <span id="productExcelPreviewValid" style="font-size:13px;color:var(--text-light);"></span>
                 </div>
+                <div id="productExcelMissingBrands" style="display:none;margin-bottom:12px;padding:12px 15px;background:rgba(231,76,60,0.06);border-radius:10px;border-right:4px solid var(--danger);"></div>
                 <div style="margin:0 0 10px;">
                     <label style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;">
-                        <input type="checkbox" id="productExcelUpdateExisting"> تحديث الأصناف الموجودة بالفعل (الاسم، الشركة، السعر والتكلفة) بدل تخطيها
+                        <input type="checkbox" id="productExcelUpdateExisting"> تحديث الأصناف الموجودة بالفعل (الاسم، الشركة، السعر والتكلفة) بدل تخطيها <span style="font-weight:400;color:var(--text-light);">— المخزون بتاعهم مش هيتغير</span>
                     </label>
                 </div>
                 <div class="table-container" style="max-height:350px;overflow-y:auto;">
