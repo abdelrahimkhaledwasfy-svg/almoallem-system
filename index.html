@@ -215,6 +215,8 @@
         .modal-close:hover { color: var(--danger); transform: rotate(90deg); }
         .modal-body { padding: 25px; } .modal-footer { padding: 20px 25px; border-top: 2px solid var(--bg); display: flex; justify-content: flex-end; gap: 10px; }
         .search-box { position: relative; margin-bottom: 20px; }
+        .sticky-search { position: sticky; top: 0; z-index: 50; background: var(--card-bg); padding: 10px 0; margin-bottom: 12px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .sticky-search .search-box { flex: 1; min-width: 220px; margin-bottom: 0; }
         .search-box input { width: 100%; padding: 12px 45px 12px 15px; border: 2px solid var(--border); border-radius: 10px; font-family: 'Tajawal', sans-serif; font-size: 14px; transition: var(--transition); }
         .search-box input:focus { border-color: var(--brand-red); outline: none; }
         .search-box i { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); color: var(--text-light); }
@@ -1421,6 +1423,12 @@
                         <button class="btn btn-secondary btn-sm" onclick="downloadBrandTemplate()"><i class="fas fa-download"></i> تحميل نموذج فارغ</button>
                         <input type="file" id="brandExcelFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleBrandExcelUpload(event)">
                     </div></div>
+                <div class="sticky-search">
+                    <div class="search-box"><i class="fas fa-search"></i><input type="text" id="appBrandSearch" placeholder="ابحث باسم الشركة..." oninput="filterAppBrands()" autocomplete="off"></div>
+                    <select class="form-control" id="appBrandCategoryFilter" style="width:auto;min-width:170px;" onchange="filterAppBrands()"><option value="">كل الأقسام</option></select>
+                    <select class="form-control" id="appBrandStatusFilter" style="width:auto;" onchange="filterAppBrands()"><option value="">الكل</option><option value="active">المفعّلة</option><option value="inactive">الموقوفة</option><option value="nologo">من غير لوجو</option></select>
+                    <span id="appBrandSearchCount" style="font-size:13px;color:var(--text-light);white-space:nowrap;"></span>
+                </div>
                 <div class="table-container">
                     <table><thead><tr><th>الشعار</th><th>اسم الشركة</th><th>القسم المرتبط</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="appBrandsTable"></tbody></table>
                 </div>
@@ -1542,7 +1550,11 @@
                         <input type="file" id="productExcelFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleProductExcelUpload(event)">
                     </div>
                 </div>
-                <div class="search-box"><i class="fas fa-search"></i><input type="text" id="productSearch" placeholder="بحث في الأصناف..." oninput="filterProducts()"></div>
+                <div class="sticky-search">
+                    <div class="search-box"><i class="fas fa-search"></i><input type="text" id="productSearch" placeholder="ابحث باسم الصنف أو الكود أو الشركة..." oninput="filterProducts()" autocomplete="off"></div>
+                    <select class="form-control" id="productBrandFilter" style="width:auto;min-width:170px;" onchange="filterProducts()"><option value="">كل الشركات</option></select>
+                    <span id="productSearchCount" style="font-size:13px;color:var(--text-light);white-space:nowrap;"></span>
+                </div>
                 <div class="table-container">
                     <table><thead><tr><th>كود الصنف</th><th>اسم الصنف</th><th>الوحدة</th><th>القسم</th><th>سعر البيع</th><th>سعر التكلفة</th><th>الربح المتوقع</th><th>الإجراءات</th></tr></thead><tbody id="productsTable"></tbody></table>
                 </div>
@@ -5375,7 +5387,7 @@
                 return;
             }
             tbody.innerHTML = appBrands.map(b => `
-                <tr>
+                <tr data-brand-id="${escapeHtml(String(b.id))}">
                     <td>${b.logoUrl ? `<img src="${b.logoUrl}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;">` : '-'}</td>
                     <td><strong>${b.name}</strong></td>
                     <td>${b.categoryName || '-'}</td>
@@ -5383,6 +5395,32 @@
                     <td><button class="btn btn-primary btn-icon btn-sm" onclick='openAppBrandModal(${JSON.stringify(b).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
                     <button class="btn btn-danger btn-icon btn-sm" onclick="deleteAppBrand('${b.id}')"><i class="fas fa-trash"></i></button></td>
                 </tr>`).join('');
+            filterAppBrands();
+        }
+
+        function filterAppBrands() {
+            const catSel = document.getElementById('appBrandCategoryFilter');
+            if (catSel) {
+                const cur = catSel.value;
+                catSel.innerHTML = '<option value="">كل الأقسام</option>' + appCategories.map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('') + '<option value="__none">من غير قسم</option>';
+                catSel.value = Array.from(catSel.options).some(o => o.value === cur) ? cur : '';
+            }
+            const tokens = normalizeArabicText((document.getElementById('appBrandSearch') || {}).value || '').split(' ').filter(Boolean);
+            const cat = catSel ? catSel.value : '';
+            const status = (document.getElementById('appBrandStatusFilter') || {}).value || '';
+            let shown = 0, total = 0;
+            document.querySelectorAll('#appBrandsTable tr[data-brand-id]').forEach(row => {
+                const b = appBrands.find(x => String(x.id) === row.getAttribute('data-brand-id'));
+                if (!b) return;
+                total++;
+                const ok = tokens.every(t => normalizeArabicText(b.name).includes(t))
+                    && (!cat || (cat === '__none' ? !b.categoryName : b.categoryName === cat))
+                    && (!status || (status === 'active' ? b.active !== false : status === 'inactive' ? b.active === false : !b.logoUrl));
+                row.style.display = ok ? '' : 'none';
+                if (ok) shown++;
+            });
+            const countEl = document.getElementById('appBrandSearchCount');
+            if (countEl) countEl.textContent = (tokens.length || cat || status) ? `${shown} من ${total} شركة` : `${total} شركة`;
         }
 
         // ==================== أكواد التفعيل ====================
@@ -6067,21 +6105,41 @@
             tbody.innerHTML = products.map(p => {
                 const profit = p.price - (p.cost || 0);
                 const margin = p.cost > 0 ? ((profit / p.price) * 100).toFixed(1) : 0;
-                return `<tr><td><span class="badge badge-primary">${p.code}</span></td><td>${p.imageUrl ? `<img src="${p.imageUrl}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-left:8px;">` : ''}<strong>${p.name}</strong>${p.showInApp === false ? ' <i class="fas fa-mobile-alt" style="color:var(--text-light);" title="مخفي من الأبليكشن"></i><i class="fas fa-slash" style="color:#c0392b;margin-right:-14px;font-size:10px;"></i>' : ''}${p.bestSeller ? ' <i class="fas fa-star" style="color:#d4a017;" title="ضمن الأكثر طلبًا بالأبليكشن"></i>' : ''}</td><td>${p.unit}${p.secondaryUnit ? ' / ' + p.secondaryUnit.name : ''}</td><td>${p.category || '-'}</td>
+                return `<tr data-code="${escapeHtml(String(p.code))}" data-brand="${escapeHtml(p.brand || '')}"><td><span class="badge badge-primary">${p.code}</span></td><td>${p.imageUrl ? `<img src="${p.imageUrl}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-left:8px;">` : ''}<strong>${p.name}</strong>${p.showInApp === false ? ' <i class="fas fa-mobile-alt" style="color:var(--text-light);" title="مخفي من الأبليكشن"></i><i class="fas fa-slash" style="color:#c0392b;margin-right:-14px;font-size:10px;"></i>' : ''}${p.bestSeller ? ' <i class="fas fa-star" style="color:#d4a017;" title="ضمن الأكثر طلبًا بالأبليكشن"></i>' : ''}${p.brand ? `<div style="font-size:12px;color:var(--text-light);margin-top:2px;">${escapeHtml(p.brand)}</div>` : ''}</td><td>${p.unit}${p.secondaryUnit ? ' / ' + p.secondaryUnit.name : ''}</td><td>${p.category || '-'}</td>
                 <td><strong style="color:var(--accent);">${p.price.toFixed(2)} ر.س</strong></td>
                 <td><span class="cost-highlight">${(p.cost || 0).toFixed(2)} ر.س</span></td>
                 <td><span class="profit-highlight">${profit.toFixed(2)} ر.س</span> <span class="margin-badge ${margin >= 30 ? 'high' : (margin >= 15 ? 'medium' : 'low')}">${margin}%</span></td>
                 <td><button class="btn btn-primary btn-icon btn-sm" onclick='openProductModal(${JSON.stringify(p).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
                 <button class="btn btn-danger btn-icon btn-sm" onclick="deleteProduct('${p.code}')"><i class="fas fa-trash"></i></button></td></tr>`;
             }).join('');
+            refreshProductBrandFilter();
+            filterProducts();
+        }
+
+        function refreshProductBrandFilter() {
+            const sel = document.getElementById('productBrandFilter');
+            if (!sel) return;
+            const current = sel.value;
+            const names = Array.from(new Set(appBrands.map(b => b.name).concat(products.map(p => p.brand).filter(Boolean)))).sort((a, b) => a.localeCompare(b, 'ar'));
+            sel.innerHTML = '<option value="">كل الشركات</option>' + names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('') + '<option value="__none">أصناف بدون شركة</option>';
+            sel.value = Array.from(sel.options).some(o => o.value === current) ? current : '';
         }
 
         function filterProducts() {
-            const term = document.getElementById('productSearch').value.toLowerCase();
-            document.querySelectorAll('#productsTable tr').forEach(row => {
-                if (row.querySelector('.empty-state')) return;
-                row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none';
+            const tokens = normalizeArabicText((document.getElementById('productSearch') || {}).value || '').split(' ').filter(Boolean);
+            const brandSel = document.getElementById('productBrandFilter');
+            const brand = brandSel ? brandSel.value : '';
+            let shown = 0, total = 0;
+            document.querySelectorAll('#productsTable tr[data-code]').forEach(row => {
+                total++;
+                const hay = normalizeArabicText(row.textContent);
+                const rowBrand = row.getAttribute('data-brand') || '';
+                const ok = tokens.every(t => hay.includes(t)) && (!brand || (brand === '__none' ? !rowBrand : rowBrand === brand));
+                row.style.display = ok ? '' : 'none';
+                if (ok) shown++;
             });
+            const countEl = document.getElementById('productSearchCount');
+            if (countEl) countEl.textContent = (tokens.length || brand) ? `${shown} من ${total} صنف` : `${total} صنف`;
         }
 
         // ==================== INVENTORY ====================
@@ -7177,6 +7235,11 @@
             const render = () => {
                 const q = normalizeArabicText(input.value);
                 const tokens = q.split(' ').filter(Boolean);
+                if (opts.requireQuery && !tokens.length) {
+                    dd.innerHTML = `<div class="searchable-option-hint" style="text-align:right;"><i class="fas fa-search"></i> ${escapeHtml(opts.emptyHint || 'اكتب للبحث...')}</div>`;
+                    place(); dd.style.display = 'block';
+                    return;
+                }
                 let items = Array.from(select.options).filter(o => o.value).map(o => ({
                     value: o.value, text: o.textContent.trim(),
                     group: o.parentNode && o.parentNode.tagName === 'OPTGROUP' ? o.parentNode.label : ''
@@ -7473,7 +7536,7 @@
                 <td><input type="number" class="form-control total-field" readonly style="background:#f8f9fa;font-weight:700;color:var(--primary)"></td>
                 <td><button class="btn btn-danger btn-icon btn-sm btn-delete-row" onclick="removeInvoiceRow(this)"><i class="fas fa-times"></i></button></td>`;
             tbody.appendChild(row);
-            enhanceSelectWithSearch(row.querySelector('select'), { fixed: true, placeholder: 'ابحث بالاسم أو الكود...', onPicked: onInvoiceRowProductPicked });
+            enhanceSelectWithSearch(row.querySelector('select'), { fixed: true, requireQuery: true, placeholder: '🔍 اكتب اسم الصنف أو الكود...', emptyHint: 'اكتب جزء من اسم الصنف أو كوده، والنتايج هتظهر هنا', onPicked: onInvoiceRowProductPicked });
         }
 
         function updateInvoiceRow(select) {
@@ -7653,7 +7716,7 @@
                 <td><input type="number" class="form-control total-field" readonly style="background:#f8f9fa;font-weight:700;color:var(--teal)"></td>
                 <td><button class="btn btn-danger btn-icon btn-sm btn-delete-row" onclick="removePurchaseRow(this)"><i class="fas fa-times"></i></button></td>`;
             tbody.appendChild(row);
-            enhanceSelectWithSearch(row.querySelector('select'), { fixed: true, placeholder: 'ابحث بالاسم أو الكود...', onPicked: onInvoiceRowProductPicked });
+            enhanceSelectWithSearch(row.querySelector('select'), { fixed: true, requireQuery: true, placeholder: '🔍 اكتب اسم الصنف أو الكود...', emptyHint: 'اكتب جزء من اسم الصنف أو كوده، والنتايج هتظهر هنا', onPicked: onInvoiceRowProductPicked });
         }
 
         function updatePurchaseRow(select) {
