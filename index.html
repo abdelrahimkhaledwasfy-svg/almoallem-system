@@ -215,6 +215,37 @@
         .modal-close:hover { color: var(--danger); transform: rotate(90deg); }
         .modal-body { padding: 25px; } .modal-footer { padding: 20px 25px; border-top: 2px solid var(--bg); display: flex; justify-content: flex-end; gap: 10px; }
         .search-box { position: relative; margin-bottom: 20px; }
+
+        /* ===== داشبورد مشرف المبيعات ===== */
+        .sv { --sv-teal:#0F6E56; }
+        .sv-head { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+        .sv-live { font-size:12px; background:#E1F5EE; color:#085041; padding:4px 12px; border-radius:20px; display:inline-flex; align-items:center; gap:6px; }
+        .sv-live .dot { width:8px; height:8px; border-radius:50%; background:#1D9E75; animation: svPulse 1.6s infinite; }
+        @keyframes svPulse { 0%{opacity:1} 50%{opacity:.3} 100%{opacity:1} }
+        .sv-hero { background:#E1F5EE; border-radius:18px; padding:20px 24px; display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:22px; align-items:center; margin-bottom:14px; }
+        .sv-hero-num { font-size:52px; font-weight:800; color:#04342C; line-height:1.15; }
+        .sv-track { height:16px; background:#9FE1CB; border-radius:8px; overflow:hidden; margin:8px 0; }
+        .sv-track > div { height:16px; background:#0F6E56; border-radius:8px; transition: width .6s; }
+        .sv-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:14px; }
+        .sv-kpi { border-radius:14px; padding:14px 16px; }
+        .sv-kpi .l { font-size:13px; } .sv-kpi .v { font-size:28px; font-weight:800; margin:2px 0; } .sv-kpi .s { font-size:12px; }
+        .sv-card { background:var(--card-bg); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px 18px; margin-bottom:14px; }
+        .sv-ct { font-weight:700; font-size:15px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
+        .sv-g2 { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; }
+        .sv-g2 > .sv-card { margin-bottom:0; } .sv-g2 { margin-bottom:14px; }
+        .sv-rep { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:14px; padding:4px 0; }
+        .sv-bar { height:10px; background:#f0f2f5; border-radius:5px; overflow:hidden; margin:4px 0 10px; }
+        .sv-bar > div { height:10px; border-radius:5px; transition: width .6s; }
+        .sv-stages { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; }
+        .sv-stage { border-radius:12px; padding:12px 8px; text-align:center; } .sv-stage .n { font-size:26px; font-weight:800; } .sv-stage .t { font-size:12px; }
+        .sv-alerts { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:10px; }
+        .sv-alert { border-radius:10px; padding:10px 12px; font-size:13px; display:flex; gap:8px; align-items:flex-start; }
+        .sv-muted { font-size:12px; color:var(--text-light); }
+        .sv-target-editor { background:#f8f9fa; border-radius:12px; padding:14px; margin-top:10px; }
+        .sv-target-editor input { width:140px; }
+        body.sv-tv .sidebar, body.sv-tv .top-bar, body.sv-tv #mobileSidebarBackdrop { display:none !important; }
+        body.sv-tv .main-content { margin-right:0 !important; padding:18px !important; }
+        @media (max-width: 900px) { .sv-hero, .sv-g2 { grid-template-columns:1fr; } .sv-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } .sv-stages { grid-template-columns:repeat(3,minmax(0,1fr)); } .sv-hero-num { font-size:40px; } }
         .sticky-search { position: sticky; top: 0; z-index: 50; background: var(--card-bg); padding: 10px 0; margin-bottom: 12px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
         .sticky-search .search-box { flex: 1; min-width: 220px; margin-bottom: 0; }
         .search-box input { width: 100%; padding: 12px 45px 12px 15px; border: 2px solid var(--border); border-radius: 10px; font-family: 'Tajawal', sans-serif; font-size: 14px; transition: var(--transition); }
@@ -433,6 +464,7 @@
             <li class="nav-item" data-section="sales-returns"><a class="nav-link" href="javascript:void(0)" onclick="showSection('sales-returns')"><i class="fas fa-undo"></i><span class="menu-text">مرتجعات البيع</span></a></li>
             <li class="nav-item" data-section="purchase-returns"><a class="nav-link" href="javascript:void(0)" onclick="showSection('purchase-returns')"><i class="fas fa-reply"></i><span class="menu-text">مرتجعات الشراء</span></a></li>
             <li class="nav-item" data-section="collections"><a class="nav-link" href="javascript:void(0)" onclick="showSection('collections')"><i class="fas fa-hand-holding-usd"></i><span class="menu-text">متابعة التحصيلات</span></a></li>
+            <li class="nav-item" data-section="sales-supervisor"><a class="nav-link" href="javascript:void(0)" onclick="showSection('sales-supervisor')"><i class="fas fa-satellite-dish"></i><span class="menu-text">داشبورد مشرف المبيعات</span></a></li>
             <li class="nav-item" data-section="sales-tracking"><a class="nav-link" href="javascript:void(0)" onclick="showSection('sales-tracking')"><i class="fas fa-tachometer-alt"></i><span class="menu-text">لوحة متابعة المبيعات</span></a></li>
             <li class="nav-item" data-section="smart-analytics"><a class="nav-link" href="javascript:void(0)" onclick="showSection('smart-analytics')"><i class="fas fa-brain"></i><span class="menu-text">التحليلات الذكية</span></a></li>
             <li class="nav-item" data-section="treasury"><a class="nav-link" href="javascript:void(0)" onclick="showSection('treasury')"><i class="fas fa-coins"></i><span class="menu-text">الخزنة اليومية</span></a></li>
@@ -885,6 +917,94 @@
         </section>
 
         <!-- Sales Tracking Dashboard Section -->
+        <section id="sales-supervisor-section" class="section">
+          <div class="sv">
+            <div class="sv-head">
+                <span class="sv-live"><span class="dot"></span> مباشر · <span id="svDayLabel"></span> · آخر تحديث <span id="svUpdated">-</span></span>
+                <button class="btn btn-secondary btn-sm" onclick="toggleSupervisorTvMode()" id="svTvBtn"><i class="fas fa-tv"></i> وضع الشاشة الكبيرة</button>
+            </div>
+
+            <div class="sv-hero">
+                <div>
+                    <div style="font-size:14px;color:#085041;">مبيعات يوم البيع الحالي</div>
+                    <div class="sv-hero-num" id="svTodaySales">0</div>
+                    <div style="font-size:14px;color:#0F6E56;" id="svTodayCompare"></div>
+                </div>
+                <div>
+                    <div style="display:flex;justify-content:space-between;font-size:13px;color:#085041;"><span>تارجت النهارده</span><span id="svDayPct" style="font-weight:700;"></span></div>
+                    <div class="sv-track"><div id="svDayBar" style="width:0%"></div></div>
+                    <div style="font-size:13px;color:#0F6E56;" id="svDayTxt"></div>
+                </div>
+            </div>
+
+            <div class="sv-kpis">
+                <div class="sv-kpi" style="background:#E6F1FB;"><div class="l" style="color:#185FA5;"><i class="fas fa-file-invoice"></i> الفواتير</div><div class="v" style="color:#042C53;" id="svInvCount">0</div><div class="s" style="color:#185FA5;" id="svInvAvg"></div></div>
+                <div class="sv-kpi" style="background:#EEEDFE;"><div class="l" style="color:#534AB7;"><i class="fas fa-users"></i> عملاء اشتروا</div><div class="v" style="color:#26215C;" id="svCustCount">0</div><div class="s" style="color:#534AB7;" id="svCustNew"></div></div>
+                <div class="sv-kpi" style="background:#FAEEDA;"><div class="l" style="color:#854F0B;"><i class="fas fa-mobile-alt"></i> طلبات الأبليكشن</div><div class="v" style="color:#412402;" id="svAppCount">0</div><div class="s" style="color:#854F0B;" id="svAppValue"></div></div>
+                <div class="sv-kpi" style="background:#FAECE7;"><div class="l" style="color:#993C1D;"><i class="fas fa-undo"></i> المرتجعات</div><div class="v" style="color:#4A1B0C;" id="svRetValue">0</div><div class="s" style="color:#993C1D;" id="svRetPct"></div></div>
+            </div>
+
+            <div class="sv-card">
+                <div class="sv-ct"><span><i class="fas fa-chart-area" style="color:#1D9E75;"></i> المبيعات ساعة بساعة</span>
+                    <span class="sv-muted" style="display:flex;gap:14px;"><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#1baf7a;"></span> النهارده</span><span><span style="display:inline-block;width:14px;border-top:2px dashed #888780;vertical-align:middle;"></span> متوسط آخر 4 أسابيع</span></span></div>
+                <div style="position:relative;height:240px;"><canvas id="svHourlyChart"></canvas></div>
+            </div>
+
+            <div class="sv-card">
+                <div class="sv-ct"><span><i class="fas fa-bullseye" style="color:#534AB7;"></i> المناديب والتارجت الشهري</span>
+                    <button class="btn btn-primary btn-sm" id="svEditTargetsBtn" onclick="openSupervisorTargets()"><i class="fas fa-edit"></i> تعديل التارجت</button></div>
+                <div id="svReps"></div>
+                <div class="sv-target-editor" id="svTargetEditor" style="display:none;">
+                    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+                        <strong>تارجت شهر:</strong>
+                        <select class="form-control" id="svTargetMonth" style="width:auto;" onchange="fillSupervisorTargetInputs()"></select>
+                        <span class="sv-muted">اكتب المبلغ لكل مندوب، وسيب الخانة فاضية لو مفيش تارجت</span>
+                    </div>
+                    <div id="svTargetRows"></div>
+                    <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap;">
+                        <button class="btn btn-success btn-sm" onclick="saveSupervisorTargets()"><i class="fas fa-save"></i> حفظ التارجت</button>
+                        <button class="btn btn-secondary btn-sm" onclick="closeSupervisorTargets()">إلغاء</button>
+                        <span id="svTargetErr" style="color:var(--danger);font-size:13px;"></span>
+                    </div>
+                </div>
+                <div class="sv-muted" id="svMonthNote" style="margin-top:6px;"></div>
+            </div>
+
+            <div class="sv-card">
+                <div class="sv-ct"><span><i class="fas fa-shopping-basket" style="color:#BA7517;"></i> طلبات الأبليكشن دلوقتي</span><span id="svLateBadge"></span></div>
+                <div class="sv-stages">
+                    <div class="sv-stage" style="background:#E6F1FB;"><div class="n" style="color:#042C53;" id="svStPending">0</div><div class="t" style="color:#185FA5;">جديد</div></div>
+                    <div class="sv-stage" style="background:#FAEEDA;"><div class="n" style="color:#412402;" id="svStPreparing">0</div><div class="t" style="color:#854F0B;">قيد التجهيز</div></div>
+                    <div class="sv-stage" style="background:#EEEDFE;"><div class="n" style="color:#26215C;" id="svStReady">0</div><div class="t" style="color:#534AB7;">خرج للتسليم</div></div>
+                    <div class="sv-stage" style="background:#E1F5EE;"><div class="n" style="color:#04342C;" id="svStDelivered">0</div><div class="t" style="color:#0F6E56;">تم التسليم النهارده</div></div>
+                    <div class="sv-stage" style="background:#FAECE7;"><div class="n" style="color:#4A1B0C;" id="svStReturned">0</div><div class="t" style="color:#993C1D;">مرتجع / ملغي النهارده</div></div>
+                </div>
+            </div>
+
+            <div class="sv-g2">
+                <div class="sv-card"><div class="sv-ct"><span><i class="fas fa-tags" style="color:#185FA5;"></i> الشركات: الشهر ده واللي فات</span></div>
+                    <div class="sv-muted" style="display:flex;gap:14px;margin-bottom:6px;"><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#2a78d6;"></span> من أول الشهر لحد النهارده</span><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#B5D4F4;"></span> نفس الفترة الشهر اللي فات</span></div>
+                    <div style="position:relative;height:280px;"><canvas id="svBrandsChart"></canvas></div></div>
+                <div class="sv-card"><div class="sv-ct"><span><i class="fas fa-fire" style="color:#D85A30;"></i> أكتر الأصناف مبيعًا النهارده</span></div>
+                    <div style="position:relative;height:300px;"><canvas id="svProductsChart"></canvas></div></div>
+            </div>
+
+            <div class="sv-g2">
+                <div class="sv-card"><div class="sv-ct"><span><i class="fas fa-map-marker-alt" style="color:#185FA5;"></i> مبيعات الأحياء النهارده</span></div>
+                    <div style="position:relative;height:240px;"><canvas id="svAreasChart"></canvas></div></div>
+                <div class="sv-card"><div class="sv-ct"><span><i class="fas fa-bed" style="color:#BA7517;"></i> العملاء النايمين</span><span class="sv-muted">اشتروا قبل كده ومشتروش من 14 يوم</span></div>
+                    <div style="font-size:44px;font-weight:800;line-height:1.1;" id="svDormantTotal">0</div>
+                    <div class="sv-muted" id="svDormantSub"></div>
+                    <div id="svDormantList" style="margin-top:10px;"></div></div>
+            </div>
+
+            <div class="sv-card">
+                <div class="sv-ct"><span><i class="fas fa-bell" style="color:#E24B4A;"></i> تنبيهات النهارده</span></div>
+                <div class="sv-alerts" id="svAlerts"></div>
+            </div>
+          </div>
+        </section>
+
         <section id="sales-tracking-section" class="section">
             <div class="stats-grid">
                 <div class="stat-card sales"><div class="stat-icon"><i class="fas fa-calendar-day"></i></div><div class="stat-value" id="trackTodaySales">0 ر.س</div><div class="stat-label">مبيعات اليوم</div></div>
@@ -2294,6 +2414,7 @@
                         <option value="accountant">محاسب</option>
                         <option value="warehouse_keeper">أمين مخزن</option>
                         <option value="salesman">مندوب</option>
+                        <option value="sales_supervisor">مشرف مبيعات (داشبورد المتابعة بس)</option>
                     </select>
                 </div>
                 <div class="form-group"><label class="form-label">الحالة</label>
@@ -2398,6 +2519,8 @@
         // تسليم بتضم كذا حي بيع مع بعض، عشان تقارير التجهيز والتسليم تتقسم على أساسها
         let deliveryZones = JSON.parse(localStorage.getItem('deliveryZones')) || [];
         let neighborhoodZoneMap = JSON.parse(localStorage.getItem('neighborhoodZoneMap')) || {};
+        // تارجت المناديب الشهري: { 'YYYY-MM': { كود المندوب: المبلغ } } — بيتحدد من داشبورد مشرف المبيعات
+        let salesTargets = JSON.parse(localStorage.getItem('salesTargets')) || {};
         let currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
 
         const ROLES = {
@@ -2405,8 +2528,14 @@
             sales_manager: { label: 'مدير مبيعات', sections: ['dashboard', 'customer-orders', 'app-management', 'invoice', 'invoices', 'sales-returns', 'collections', 'sales-tracking', 'smart-analytics', 'profit', 'profit-target', 'customers', 'salesmen', 'reports'] },
             accountant: { label: 'محاسب', sections: ['dashboard', 'invoices', 'purchase-invoice', 'purchase-returns', 'collections', 'treasury', 'expenses', 'profit', 'profit-target', 'products', 'customers', 'suppliers', 'reports'] },
             warehouse_keeper: { label: 'أمين مخزن', sections: ['dashboard', 'customer-orders', 'purchase-invoice', 'purchase-returns', 'inventory', 'products', 'suppliers'] },
-            salesman: { label: 'مندوب', sections: ['dashboard', 'invoice', 'invoices', 'sales-returns', 'customers'] }
+            salesman: { label: 'مندوب', sections: ['dashboard', 'invoice', 'invoices', 'sales-returns', 'customers'] },
+            // مشرف المبيعات: بيشوف داشبورد المتابعة بس (عرض فقط)، والحاجة الوحيدة اللي بيسجلها هي التارجت
+            sales_supervisor: { label: 'مشرف مبيعات', sections: ['sales-supervisor'], home: 'sales-supervisor' }
         };
+        function getHomeSection() {
+            const r = currentUser && ROLES[currentUser.role];
+            return (r && r.home) || 'dashboard';
+        }
         let editingProduct = null;
         let editingCustomer = null;
         let editingSupplier = null;
@@ -2440,7 +2569,7 @@
         // منهم ميضربش تعديل تاني حصل في نفس اللحظة تقريبًا. شوف startInvoiceRecordsListener وأخواتها.
         const CLOUD_SYNCED_KEYS = new Set([
             'salesmen', 'expenses', 'treasury', 'salesReturns',
-            'purchaseReturns', 'supplierAdjustments', 'users', 'appCategories', 'appBrands', 'activationCodes', 'requireActivationCode', 'loyaltySettings', 'appBanners', 'appOffers', 'appCities', 'appRegions', 'appNeighborhoods', 'appNotifications', 'deliveryZones', 'neighborhoodZoneMap'
+            'purchaseReturns', 'supplierAdjustments', 'users', 'appCategories', 'appBrands', 'activationCodes', 'requireActivationCode', 'loyaltySettings', 'appBanners', 'appOffers', 'appCities', 'appRegions', 'appNeighborhoods', 'appNotifications', 'deliveryZones', 'neighborhoodZoneMap', 'salesTargets'
         ]);
         // المنتجات والعملاء والموردين والمخزون اتنقلوا لمزامنة "فرق" (diff) لكل عنصر لوحده -
         // بدل ما ينضموا لملف storeData/main الضخم زي باقي المفاتيح فوق. شوف SPLIT_COLLECTION_KEYS تحت.
@@ -2713,7 +2842,7 @@
                 salesmen,
                 expenses, treasury, salesReturns, purchaseReturns, supplierAdjustments,
                 users, appCategories, appBrands, activationCodes, requireActivationCode, loyaltySettings, appBanners, appOffers,
-                appCities, appRegions, appNeighborhoods, appNotifications, deliveryZones, neighborhoodZoneMap,
+                appCities, appRegions, appNeighborhoods, appNotifications, deliveryZones, neighborhoodZoneMap, salesTargets,
                 updatedAt: Date.now(),
                 updatedBy: DEVICE_ID
             };
@@ -2858,6 +2987,7 @@
                 appNotifications = data.appNotifications || [];
                 deliveryZones = data.deliveryZones || [];
                 neighborhoodZoneMap = data.neighborhoodZoneMap || {};
+                salesTargets = data.salesTargets || salesTargets;
 
                 localStorage.setItem('salesmen', JSON.stringify(salesmen));
                 localStorage.setItem('expenses', JSON.stringify(expenses));
@@ -2879,6 +3009,7 @@
                 localStorage.setItem('appNotifications', JSON.stringify(appNotifications));
                 localStorage.setItem('deliveryZones', JSON.stringify(deliveryZones));
                 localStorage.setItem('neighborhoodZoneMap', JSON.stringify(neighborhoodZoneMap));
+                localStorage.setItem('salesTargets', JSON.stringify(salesTargets));
                 applyingRemoteUpdate = false;
                 // دلوقتي عندنا فعليًا آخر نسخة مؤكدة من المخزون من السحابة، فنبعتها لمخزون الأبليكشن الحي بأمان
                 scheduleStockLevelsSync();
@@ -3556,7 +3687,7 @@
                     ratingHtml = `<div style="margin-top:4px;font-size:12px;color:#d4a017;${o.rating.comment ? 'cursor:help;' : ''}" ${o.rating.comment ? `title="${o.rating.comment.replace(/"/g, '&quot;')}"` : ''}>${starsStr}</div>`;
                 }
 
-                return `<tr class="${rowClass}"><td>${cb}</td><td><span class="badge badge-primary">${o.id.slice(-6)}</span></td><td>${o.customerName || o.customerCode || '-'}<br><span style="font-size:11px;color:var(--text-light);">${o.phone || o.customerCode || ''}</span></td>
+                return `<tr class="${rowClass}"><td>${cb}</td><td><span class="badge badge-primary">${o.id.slice(-6)}</span></td><td>${o.customerName || o.customerCode || '-'}<br><span style="font-size:11px;color:var(--text-light);">${o.phone || o.customerCode || ''}</span><br>${o.repCode ? `<span class="badge" style="background:#EEEDFE;color:#3C3489;margin-top:4px;"><i class="fas fa-user-tie"></i> من المندوب: ${escapeHtml(o.repName || o.repCode)}</span>` : `<span class="badge" style="background:#E1F5EE;color:#085041;margin-top:4px;"><i class="fas fa-mobile-alt"></i> من العميل</span>`}</td>
                 <td style="max-width:280px;">${itemsSummary}</td>
                 <td style="max-width:180px;font-size:12px;">${addressInfo}<br><span class="badge badge-info" style="margin-top:4px;">${deliveryLabel}</span></td>
                 <td><strong style="color:var(--accent);">${(o.total || 0).toFixed(2)} ر.س</strong>${o.discountFromPoints > 0 ? `<br><span style="font-size:10px;color:var(--text-light);">(خصم نقاط: ${o.discountFromPoints.toFixed(2)})</span>` : ''}</td>
@@ -3951,7 +4082,7 @@
                     id: Date.now(), number: getNextDocNumber(invoices.filter(i => i.type === 'sale')).toString().padStart(4, '0'),
                     type: 'sale', date: new Date().toISOString(),
                     customerCode: order.customerCode || '', customerName: order.customerName || '',
-                    salesmanCode: '', salesmanName: '',
+                    salesmanCode: order.repCode || '', salesmanName: order.repName || '',
                     paymentMethod: 'دفع عند الاستلام',
                     notes: 'طلب وارد من أبليكشن العملاء #' + order.id.slice(-6) + (appliedDiscount > 0 ? ` (خصم نقاط ولاء: ${appliedDiscount.toFixed(2)} ر.س)` : ''),
                     items: order.items, grandTotal: grandTotal,
@@ -4349,7 +4480,7 @@
                 applyRolePermissions();
                 updateUserBar();
                 logAction('تسجيل دخول', `قام المستخدم ${user.fullName} بتسجيل الدخول`);
-                showSection('dashboard');
+                showSection(getHomeSection());
             };
             const showLoginError = function(msg) {
                 if (loginBtn) loginBtn.disabled = false;
@@ -4485,6 +4616,10 @@
                 li.style.display = canAccessSection(section) ? '' : 'none';
             });
             applyDashboardRoleFilters();
+            // لو القسم المفتوح دلوقتي مش مسموح للدور ده (زي الواجهة الرئيسية لمشرف المبيعات)، روح لصفحته
+            const activeSec = document.querySelector('.section.active');
+            const activeName = activeSec ? activeSec.id.replace(/-section$/, '') : '';
+            if (!canAccessSection(activeName)) { try { showSection(getHomeSection()); } catch (e) { console.error(e); } }
         }
 
         function logAction(type, details) {
@@ -4901,6 +5036,7 @@
             try { renderSmartAnalytics(); } catch(e) { console.error('renderSmartAnalytics error:', e); }
             try { renderUsers(); } catch(e) { console.error('renderUsers error:', e); }
             try { renderAuditLog(); } catch(e) { console.error('renderAuditLog error:', e); }
+            try { renderSupervisorDashboard(); } catch(e) { console.error('renderSupervisorDashboard error:', e); }
         }
 
         // ==================== SIDEBAR & NAVIGATION ====================
@@ -4986,7 +5122,7 @@
                 'customers': 'قاعدة العملاء', 'suppliers': 'قاعدة الموردين', 'salesmen': 'قاعدة المناديب',
                 'reports': 'التقارير والتجميع', 'backup': 'النسخ الاحتياطي',
                 'sales-returns': 'مرتجعات البيع', 'purchase-returns': 'مرتجعات الشراء',
-                'collections': 'متابعة التحصيلات', 'sales-tracking': 'لوحة متابعة المبيعات', 'smart-analytics': 'التحليلات الذكية',
+                'collections': 'متابعة التحصيلات', 'sales-tracking': 'لوحة متابعة المبيعات', 'sales-supervisor': 'داشبورد مشرف المبيعات', 'smart-analytics': 'التحليلات الذكية',
                 'users': 'المستخدمون والصلاحيات', 'audit-log': 'سجل العمليات'
             };
             document.getElementById('pageTitle').textContent = titles[sectionName] || sectionName;
@@ -7448,6 +7584,390 @@
                     try { const d = collectInvoiceDraft(kind); if (d) _origLocalStorageSetItem(INVOICE_DRAFT_KEYS[kind], JSON.stringify(d)); } catch (e) {}
                 });
             });
+        })();
+
+
+        // ==================== داشبورد مشرف المبيعات (عرض فقط + التارجت) ====================
+        const svCharts = {};
+        let svTimer = null;
+        const svFmt = n => Math.round(n || 0).toLocaleString('en-US');
+        const svMonthKey = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+        const svMonthLabel = key => { const [y, m] = key.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' }); };
+        const svHourLabel = h => (h % 12 || 12) + (h < 12 ? 'ص' : 'م');
+        function svSalesDayStart(ref) {
+            const now = ref ? new Date(ref) : new Date();
+            const s = new Date(now); s.setHours(9, 0, 0, 0);
+            if (now < s) s.setDate(s.getDate() - 1);
+            return s;
+        }
+        function svItemValue(it) { return Number(it.total != null ? it.total : (it.price || 0) * (it.qty || 0)) || 0; }
+        function svAgo(ms) { const m = Math.max(0, Math.round((Date.now() - ms) / 60000)); return m < 60 ? `من ${m} د` : `من ${Math.floor(m / 60)} س`; }
+        function svTargetsFor(key) { return (salesTargets && salesTargets[key]) || {}; }
+        // فواتير طلبات الأبليكشن بتتحسب للمندوب المسؤول عن العميل
+        let svCustRep = {}, svOrderRep = {};
+        // مين عمل الطلب: المندوب من الماستر بتاعه (مكتوب على الفاتورة أو على الطلب نفسه للفواتير القديمة)
+        function svPlacedByRep(i) {
+            if (i.salesmanCode) return i.salesmanCode;
+            if (i.sourceOrderId && svOrderRep[i.sourceOrderId]) return svOrderRep[i.sourceOrderId];
+            return '';
+        }
+        // لمين يتحسب: للمندوب اللي عمله، ولو العميل طلب بنفسه يتحسب لمندوبه المسؤول
+        function svRepOf(i) {
+            const by = svPlacedByRep(i);
+            if (by) return by;
+            if (i.sourceOrderId) return svCustRep[i.customerCode] || '';
+            return '';
+        }
+
+        function renderSupervisorDashboard() {
+            const sec = document.getElementById('sales-supervisor-section');
+            if (!sec || !sec.classList.contains('active')) return;
+            try { svRender(); } catch (e) { console.error('supervisor dashboard error:', e); }
+        }
+
+        function svRender() {
+            const now = new Date();
+            const dayStart = svSalesDayStart(now).getTime();
+            const dayEnd = dayStart + 86400000;
+            const nowMs = now.getTime();
+            const sales = invoices.filter(i => i.type === 'sale');
+            svCustRep = {}; customers.forEach(c => { if (c.salesmanCode) svCustRep[c.code] = c.salesmanCode; });
+            svOrderRep = {}; customerOrders.forEach(o => { if (o.repCode) svOrderRep[o.id] = o.repCode; });
+            const t = i => new Date(i.date).getTime();
+            const today = sales.filter(i => { const x = t(i); return x >= dayStart && x < dayEnd; });
+            const sum = arr => arr.reduce((s, i) => s + (Number(i.grandTotal) || 0), 0);
+            const todaySales = sum(today);
+
+            document.getElementById('svDayLabel').textContent = 'يوم البيع من ' + new Date(dayStart).toLocaleString('ar-EG', { weekday: 'long', hour: 'numeric' });
+            document.getElementById('svUpdated').textContent = now.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit' });
+
+            // ---- الهيرو: مبيعات اليوم ومقارنة بنفس الوقت الأسبوع اللي فات ----
+            document.getElementById('svTodaySales').textContent = svFmt(todaySales);
+            const lwStart = dayStart - 7 * 86400000, lwNow = nowMs - 7 * 86400000;
+            const lastWeek = sum(sales.filter(i => { const x = t(i); return x >= lwStart && x < lwNow; }));
+            const cmp = document.getElementById('svTodayCompare');
+            if (lastWeek > 0) {
+                const p = Math.round((todaySales - lastWeek) / lastWeek * 100);
+                cmp.innerHTML = p >= 0 ? `<i class="fas fa-arrow-trend-up"></i> أعلى من نفس الوقت الأسبوع اللي فات بـ ${p}%` : `<i class="fas fa-arrow-trend-down"></i> أقل من نفس الوقت الأسبوع اللي فات بـ ${Math.abs(p)}%`;
+                cmp.style.color = p >= 0 ? '#0F6E56' : '#A32D2D';
+            } else { cmp.textContent = 'مفيش بيانات للمقارنة بالأسبوع اللي فات'; cmp.style.color = '#0F6E56'; }
+
+            // ---- الشهر والتارجت ----
+            const mStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+            const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+            const dayOfMonth = now.getDate();
+            const monthKey = svMonthKey(now);
+            const targets = svTargetsFor(monthKey);
+            const monthSales = sales.filter(i => t(i) >= mStart);
+            const monthTotal = sum(monthSales);
+            const targetTotal = Object.values(targets).reduce((s, v) => s + (Number(v) || 0), 0);
+            const daysLeft = daysInMonth - dayOfMonth + 1;
+            const pctEl = document.getElementById('svDayPct'), barEl = document.getElementById('svDayBar'), txtEl = document.getElementById('svDayTxt');
+            if (targetTotal > 0) {
+                const beforeToday = monthTotal - sum(monthSales.filter(i => t(i) >= dayStart));
+                const dayTarget = Math.max(0, (targetTotal - beforeToday) / daysLeft);
+                const dp = dayTarget > 0 ? Math.round(todaySales / dayTarget * 100) : 100;
+                pctEl.textContent = dp + '%';
+                barEl.style.width = Math.min(dp, 100) + '%';
+                txtEl.textContent = dayTarget <= 0 ? 'تارجت الشهر اتحقق بالفعل' : (todaySales >= dayTarget ? `عدّينا تارجت النهارده (${svFmt(dayTarget)})` : `فاضل ${svFmt(dayTarget - todaySales)} على تارجت النهارده (${svFmt(dayTarget)})`);
+            } else {
+                pctEl.textContent = '';
+                barEl.style.width = '0%';
+                txtEl.textContent = 'لسه مفيش تارجت للشهر ده، حطه من "تعديل التارجت" تحت';
+            }
+
+            // ---- الكروت ----
+            document.getElementById('svInvCount').textContent = svFmt(today.length);
+            document.getElementById('svInvAvg').textContent = today.length ? 'متوسط الفاتورة ' + svFmt(todaySales / today.length) : 'لسه مفيش فواتير';
+            const todayCustomers = new Set(today.map(i => i.customerCode).filter(Boolean));
+            const firstBuy = {};
+            sales.forEach(i => { if (!i.customerCode) return; const x = t(i); if (!(i.customerCode in firstBuy) || x < firstBuy[i.customerCode]) firstBuy[i.customerCode] = x; });
+            const newBuyers = Array.from(todayCustomers).filter(c => firstBuy[c] >= dayStart).length;
+            document.getElementById('svCustCount').textContent = svFmt(todayCustomers.size);
+            document.getElementById('svCustNew').textContent = newBuyers ? `منهم ${newBuyers} بيشتروا لأول مرة` : 'مفيش عملاء جداد النهارده';
+            const ordersToday = customerOrders.filter(o => (o.createdAt || 0) >= dayStart && (o.createdAt || 0) < dayEnd);
+            const orderValue = o => Number(o.total || (o.items || []).reduce((s, it) => s + svItemValue(it), 0)) || 0;
+            const liveOrders = ordersToday.filter(o => o.status !== 'rejected');
+            document.getElementById('svAppCount').textContent = svFmt(liveOrders.length);
+            document.getElementById('svAppValue').textContent = 'بقيمة ' + svFmt(liveOrders.reduce((s, o) => s + orderValue(o), 0));
+            const retToday = (salesReturns || []).filter(r => { const x = new Date(r.date).getTime(); return x >= dayStart && x < dayEnd; });
+            const retVal = retToday.reduce((s, r) => s + (Number(r.grandTotal) || 0), 0);
+            document.getElementById('svRetValue').textContent = svFmt(retVal);
+            document.getElementById('svRetPct').textContent = todaySales > 0 ? ((retVal / todaySales) * 100).toFixed(1) + '% من المبيعات' : (retToday.length ? retToday.length + ' مرتجع' : 'مفيش مرتجعات');
+
+            svRenderHourly(sales, dayStart, nowMs);
+            svRenderReps(sales, today, monthSales, targets, daysInMonth, dayOfMonth, monthKey, targetTotal, monthTotal);
+            svRenderOrders(dayStart, dayEnd, nowMs);
+            svRenderBrands(sales, now, mStart);
+            svRenderProducts(today);
+            svRenderAreas(today);
+            svRenderDormant(sales, nowMs);
+            svRenderAlerts(sales, today, retToday, ordersToday, monthSales, targets, dayStart, nowMs);
+        }
+
+        function svChart(id, config) {
+            if (typeof Chart === 'undefined') return null;
+            const c = svCharts[id];
+            if (c) {
+                c.data.labels = config.data.labels;
+                config.data.datasets.forEach((ds, k) => { if (c.data.datasets[k]) { c.data.datasets[k].data = ds.data; if (ds.backgroundColor) c.data.datasets[k].backgroundColor = ds.backgroundColor; } });
+                c.update('none');
+                return c;
+            }
+            const el = document.getElementById(id);
+            if (!el) return null;
+            svCharts[id] = new Chart(el, config);
+            return svCharts[id];
+        }
+        const svGrid = '#eceae4';
+        const svHBar = (labels, datasets, fmtTip) => ({
+            type: 'bar', data: { labels, datasets },
+            options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { rtl: true, callbacks: { label: fmtTip } } },
+                scales: { x: { reverse: true, grid: { color: svGrid }, ticks: { callback: v => v >= 1000 ? Math.round(v / 1000) + 'k' : v } }, y: { position: 'right', grid: { display: false }, ticks: { font: { size: 12 } } } } }
+        });
+
+        function svRenderHourly(sales, dayStart, nowMs) {
+            const hours = []; for (let k = 0; k < 24; k++) hours.push((9 + k) % 24);
+            const today = new Array(24).fill(0), avg = new Array(24).fill(0);
+            const curIdx = Math.floor((nowMs - dayStart) / 3600000);
+            const histStart = dayStart - 28 * 86400000;
+            sales.forEach(i => {
+                const x = new Date(i.date).getTime();
+                if (x >= dayStart && x < dayStart + 86400000) today[Math.floor((x - dayStart) / 3600000)] += Number(i.grandTotal) || 0;
+                else if (x >= histStart && x < dayStart) {
+                    const offset = ((x - dayStart) % 86400000 + 86400000) % 86400000;
+                    avg[Math.floor(offset / 3600000)] += (Number(i.grandTotal) || 0) / 28;
+                }
+            });
+            const todayData = today.map((v, k) => k <= curIdx ? Math.round(v) : null);
+            svChart('svHourlyChart', {
+                type: 'line',
+                data: { labels: hours.map(svHourLabel), datasets: [
+                    { label: 'النهارده', data: todayData, borderColor: '#1baf7a', backgroundColor: 'rgba(27,175,122,0.14)', fill: true, tension: 0.35, borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 5 },
+                    { label: 'المتوسط', data: avg.map(Math.round), borderColor: '#888780', borderDash: [5, 4], borderWidth: 2, pointRadius: 0, tension: 0.35, fill: false }
+                ] },
+                options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+                    plugins: { legend: { display: false }, tooltip: { rtl: true, callbacks: { label: c => c.dataset.label + ': ' + svFmt(c.raw) } } },
+                    scales: { x: { reverse: true, grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } }, y: { position: 'right', grid: { color: svGrid }, ticks: { callback: v => svFmt(v) } } } }
+            });
+        }
+
+        function svRenderReps(sales, today, monthSales, targets, daysInMonth, dayOfMonth, monthKey, targetTotal, monthTotal) {
+            const rows = [];
+            const bySm = (arr, code) => arr.filter(i => svRepOf(i) === code);
+            const tot = arr => arr.reduce((a, i) => a + (Number(i.grandTotal) || 0), 0);
+            salesmen.forEach(s => {
+                const mArr = bySm(monthSales, s.code);
+                const m = tot(mArr);
+                const td = bySm(today, s.code);
+                const tg = Number(targets[s.code]) || 0;
+                if (s.status === 'غير نشط' && !m && !tg) return;
+                rows.push({ name: s.name, month: m, today: tot(td), cust: new Set(td.map(i => i.customerCode)).size, target: tg,
+                    selfToday: tot(td.filter(i => !svPlacedByRep(i) && i.sourceOrderId)) });
+            });
+            // طلبات أبليكشن لعملاء ملهمش مندوب مسؤول
+            const appToday = today.filter(i => !svRepOf(i) && i.sourceOrderId);
+            const appMonth = monthSales.filter(i => !svRepOf(i) && i.sourceOrderId);
+            const allTodayVal = tot(today);
+            const repOwnToday = tot(today.filter(i => svPlacedByRep(i)));
+            rows.sort((a, b) => b.today - a.today || b.month - a.month);
+            const color = p => p >= 80 ? '#1D9E75' : p >= 55 ? '#EF9F27' : '#E24B4A';
+            const medal = k => k === 0 ? '🥇' : k === 1 ? '🥈' : k === 2 ? '🥉' : `<span class="sv-muted">${k + 1}.</span>`;
+            let html = rows.map((r, k) => {
+                const p = r.target > 0 ? Math.round(r.month / r.target * 100) : null;
+                const proj = r.target > 0 && dayOfMonth > 0 ? Math.round(r.month / dayOfMonth * daysInMonth / r.target * 100) : null;
+                return `<div class="sv-rep"><span style="font-weight:700;">${medal(k)} ${escapeHtml(r.name)}</span>
+                    <span class="sv-muted">النهارده <b style="color:var(--text);">${svFmt(r.today)}</b>${r.today ? ` <span style="color:#534AB7;">(بنفسه ${svFmt(r.today - r.selfToday)} · عملاؤه طلبوا ${svFmt(r.selfToday)})</span>` : ''} · ${r.cust} عميل · الشهر ${svFmt(r.month)}${r.target ? ` من ${svFmt(r.target)} · <b style="color:${color(p)};">${p}%</b> · متوقع ${proj}%` : ' · من غير تارجت'}</span></div>
+                    <div class="sv-bar"><div style="width:${p != null ? Math.min(p, 100) : 0}%;background:${p != null ? color(p) : '#ccc'};"></div></div>`;
+            }).join('');
+            if (appToday.length || appMonth.length) {
+                html += `<div class="sv-rep" style="border-top:1px dashed #e0e0e0;margin-top:4px;padding-top:8px;"><span><i class="fas fa-mobile-alt" style="color:#BA7517;"></i> أبليكشن لعملاء من غير مندوب</span><span class="sv-muted">النهارده <b style="color:var(--text);">${svFmt(appToday.reduce((a, i) => a + (Number(i.grandTotal) || 0), 0))}</b> · الشهر ${svFmt(appMonth.reduce((a, i) => a + (Number(i.grandTotal) || 0), 0))}</span></div>`;
+            }
+            if (allTodayVal > 0) {
+                const pRep = Math.round(repOwnToday / allTodayVal * 100);
+                html = `<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;font-size:13px;flex-wrap:wrap;"><span>مبيعات النهارده:</span>
+                    <div style="flex:1;min-width:160px;height:12px;border-radius:6px;overflow:hidden;display:flex;background:#E1F5EE;"><div style="width:${pRep}%;background:#534AB7;"></div></div>
+                    <span style="color:#534AB7;font-weight:700;">${pRep}% المناديب طلبوها</span><span class="sv-muted">· ${100 - pRep}% العملاء طلبوها بنفسهم</span></div>` + html;
+            }
+            document.getElementById('svReps').innerHTML = html || '<div class="sv-muted">مفيش مناديب متسجلين</div>';
+            const repsMonth = rows.reduce((a, r) => a + r.month, 0);
+            document.getElementById('svMonthNote').textContent = targetTotal > 0
+                ? `تارجت ${svMonthLabel(monthKey)}: ${svFmt(targetTotal)} · المناديب حققوا ${svFmt(repsMonth)} (${Math.round(repsMonth / targetTotal * 100)}%) · إجمالي مبيعات الشهر ${svFmt(monthTotal)} · فاضل ${daysInMonth - dayOfMonth + 1} يوم`
+                : `إجمالي مبيعات ${svMonthLabel(monthKey)} لحد دلوقتي ${svFmt(monthTotal)}`;
+        }
+
+        function svRenderOrders(dayStart, dayEnd, nowMs) {
+            const cnt = st => customerOrders.filter(o => o.status === st).length;
+            const inDay = o => (o.createdAt || 0) >= dayStart && (o.createdAt || 0) < dayEnd;
+            document.getElementById('svStPending').textContent = cnt('pending');
+            document.getElementById('svStPreparing').textContent = cnt('preparing');
+            document.getElementById('svStReady').textContent = cnt('ready');
+            document.getElementById('svStDelivered').textContent = customerOrders.filter(o => o.status === 'delivered' && inDay(o)).length;
+            document.getElementById('svStReturned').textContent = customerOrders.filter(o => (o.status === 'returned' || o.status === 'rejected') && inDay(o)).length;
+            const late = customerOrders.filter(o => o.status === 'pending' && o.createdAt && nowMs - o.createdAt > 2 * 3600000).length;
+            document.getElementById('svLateBadge').innerHTML = late ? `<span class="badge badge-danger" style="font-size:13px;"><i class="fas fa-clock"></i> ${late} طلب جديد مستني أكتر من ساعتين</span>` : '<span class="badge badge-success">مفيش طلبات متأخرة</span>';
+        }
+
+        function svRenderBrands(sales, now, mStart) {
+            const pm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const pmStart = pm.getTime();
+            const pmDays = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+            const pmEnd = new Date(pm.getFullYear(), pm.getMonth(), Math.min(now.getDate(), pmDays), now.getHours(), now.getMinutes()).getTime();
+            const brandOf = {}; products.forEach(p => { brandOf[p.code] = p.brand || 'بدون شركة'; });
+            const cur = {}, prev = {};
+            sales.forEach(i => {
+                const x = new Date(i.date).getTime();
+                const bucket = x >= mStart ? cur : (x >= pmStart && x < pmEnd ? prev : null);
+                if (!bucket) return;
+                (i.items || []).forEach(it => { const b = brandOf[it.productCode] || 'بدون شركة'; bucket[b] = (bucket[b] || 0) + svItemValue(it); });
+            });
+            const top = Object.keys(cur).sort((a, b) => cur[b] - cur[a]).slice(0, 7);
+            svChart('svBrandsChart', svHBar(top, [
+                { label: 'الشهر ده', data: top.map(b => Math.round(cur[b])), backgroundColor: '#2a78d6', borderRadius: 4, barThickness: 11 },
+                { label: 'نفس الفترة الشهر اللي فات', data: top.map(b => Math.round(prev[b] || 0)), backgroundColor: '#B5D4F4', borderRadius: 4, barThickness: 11 }
+            ], c => c.dataset.label + ': ' + svFmt(c.raw)));
+        }
+
+        function svRenderProducts(today) {
+            const agg = {};
+            today.forEach(i => (i.items || []).forEach(it => {
+                const k = it.productCode || it.productName;
+                const a = agg[k] || (agg[k] = { name: it.productName || k, qty: 0, unit: it.unit || '', value: 0 });
+                a.qty += Number(it.qty) || 0; a.value += svItemValue(it);
+            }));
+            const top = Object.values(agg).sort((a, b) => b.value - a.value).slice(0, 8);
+            const cols = top.map((_, k) => k === 0 ? '#1baf7a' : k < 3 ? '#5DCAA5' : '#9FE1CB');
+            svChart('svProductsChart', svHBar(top.map(p => p.name.length > 28 ? p.name.slice(0, 27) + '…' : p.name),
+                [{ label: 'القيمة', data: top.map(p => Math.round(p.value)), backgroundColor: cols, borderRadius: 4, barThickness: 16 }],
+                c => { const p = top[c.dataIndex]; return p ? `${svFmt(p.value)} · ${svFmt(p.qty)} ${p.unit}` : ''; }));
+        }
+
+        function svRenderAreas(today) {
+            const custMap = {}; customers.forEach(c => { custMap[c.code] = c; });
+            const agg = {};
+            today.forEach(i => { const c = custMap[i.customerCode]; const n = (c && c.neighborhood) || 'غير محدد'; agg[n] = (agg[n] || 0) + (Number(i.grandTotal) || 0); });
+            const top = Object.keys(agg).sort((a, b) => agg[b] - agg[a]).slice(0, 8);
+            svChart('svAreasChart', {
+                type: 'bar',
+                data: { labels: top, datasets: [{ label: 'المبيعات', data: top.map(n => Math.round(agg[n])), backgroundColor: '#2a78d6', borderRadius: 4, barThickness: 24 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { rtl: true, callbacks: { label: c => svFmt(c.raw) } } },
+                    scales: { x: { reverse: true, grid: { display: false } }, y: { position: 'right', grid: { color: svGrid }, ticks: { callback: v => v >= 1000 ? Math.round(v / 1000) + 'k' : v } } } }
+            });
+        }
+
+        function svRenderDormant(sales, nowMs) {
+            const last = {};
+            sales.forEach(i => { if (!i.customerCode) return; const x = new Date(i.date).getTime(); if (!last[i.customerCode] || x > last[i.customerCode]) last[i.customerCode] = x; });
+            const cutoff = nowMs - 14 * 86400000;
+            const smName = {}; salesmen.forEach(s => { smName[s.code] = s.name; });
+            const groups = {}; let total = 0, everBought = 0;
+            customers.forEach(c => {
+                if (!last[c.code]) return;
+                everBought++;
+                if (last[c.code] >= cutoff) return;
+                total++;
+                const k = smName[c.salesmanCode] || 'من غير مندوب';
+                groups[k] = (groups[k] || 0) + 1;
+            });
+            document.getElementById('svDormantTotal').textContent = svFmt(total) + ' عميل';
+            document.getElementById('svDormantSub').textContent = `من ${svFmt(everBought)} عميل اشتروا قبل كده`;
+            const list = Object.keys(groups).sort((a, b) => groups[b] - groups[a]);
+            const max = Math.max(1, ...list.map(k => groups[k]));
+            document.getElementById('svDormantList').innerHTML = list.map(k => `<div class="sv-rep"><span>${escapeHtml(k)}</span><span style="display:flex;align-items:center;gap:8px;"><span style="display:inline-block;width:${Math.round(groups[k] / max * 120)}px;height:9px;border-radius:5px;background:${groups[k] / max > 0.66 ? '#E24B4A' : '#EF9F27'};"></span><b>${groups[k]}</b></span></div>`).join('') || '<div class="sv-muted">كل العملاء نشطين</div>';
+        }
+
+        function svRenderAlerts(sales, today, retToday, ordersToday, monthSales, targets, dayStart, nowMs) {
+            const alerts = [];
+            const hist = sales.filter(i => { const x = new Date(i.date).getTime(); return x >= nowMs - 30 * 86400000 && x < dayStart; });
+            const avgInv = hist.length ? hist.reduce((s, i) => s + (Number(i.grandTotal) || 0), 0) / hist.length : 0;
+            if (avgInv > 0) today.forEach(i => { if ((Number(i.grandTotal) || 0) >= avgInv * 3) alerts.push({ at: new Date(i.date).getTime(), kind: 'info', icon: 'fa-file-invoice-dollar', text: `فاتورة كبيرة ${svFmt(i.grandTotal)} · ${escapeHtml(i.customerName || '')}` }); });
+            retToday.forEach(r => alerts.push({ at: new Date(r.date).getTime(), kind: 'warn', icon: 'fa-undo', text: `مرتجع ${svFmt(r.grandTotal)} · ${escapeHtml(r.customerName || '')}` }));
+            ordersToday.filter(o => o.status === 'rejected' || o.status === 'returned').forEach(o => alerts.push({ at: o.createdAt, kind: 'bad', icon: 'fa-times-circle', text: `طلب أبليكشن ${o.status === 'rejected' ? 'اتلغى' : 'رجع'} · ${escapeHtml(o.customerName || o.shopName || '')}` }));
+            const late = customerOrders.filter(o => o.status === 'pending' && o.createdAt && nowMs - o.createdAt > 2 * 3600000);
+            if (late.length) alerts.push({ at: nowMs, kind: 'bad', icon: 'fa-clock', text: `${late.length} طلب جديد مستني أكتر من ساعتين` });
+            const openNeed = {};
+            customerOrders.filter(o => ['pending', 'preparing'].includes(o.status)).forEach(o => (o.items || []).forEach(it => { if (it.productCode) openNeed[it.productCode] = it.productName || it.productCode; }));
+            Object.keys(openNeed).forEach(code => { const inv = inventory[code]; if (inv && (Number(inv.qty) || 0) <= 0) alerts.push({ at: nowMs - 1, kind: 'bad', icon: 'fa-box-open', text: `${escapeHtml(openNeed[code])} خلص من المخزن وعليه طلبات` }); });
+            salesmen.forEach(s => {
+                const tg = Number(targets[s.code]) || 0; if (!tg) return;
+                const m = monthSales.filter(i => svRepOf(i) === s.code).reduce((a, i) => a + (Number(i.grandTotal) || 0), 0);
+                if (m >= tg) alerts.push({ at: nowMs - 2, kind: 'good', icon: 'fa-trophy', text: `${escapeHtml(s.name)} حقق تارجت الشهر (${Math.round(m / tg * 100)}%)` });
+            });
+            const style = { info: 'background:#E6F1FB;color:#0C447C;', warn: 'background:#FAEEDA;color:#633806;', bad: 'background:#FCEBEB;color:#791F1F;', good: 'background:#EAF3DE;color:#27500A;' };
+            alerts.sort((a, b) => b.at - a.at);
+            document.getElementById('svAlerts').innerHTML = alerts.slice(0, 12).map(a => `<div class="sv-alert" style="${style[a.kind]}"><i class="fas ${a.icon}" style="margin-top:2px;"></i><span style="flex:1;">${a.text}</span><span style="font-size:11px;opacity:.8;white-space:nowrap;">${a.at >= nowMs - 5 ? 'دلوقتي' : svAgo(a.at)}</span></div>`).join('')
+                || '<div class="sv-muted">مفيش تنبيهات النهارده</div>';
+        }
+
+        // ---- التارجت: الحاجة الوحيدة اللي بتتسجل من الداشبورد ----
+        function openSupervisorTargets() {
+            const sel = document.getElementById('svTargetMonth');
+            const now = new Date();
+            const cur = svMonthKey(now), next = svMonthKey(new Date(now.getFullYear(), now.getMonth() + 1, 1));
+            sel.innerHTML = `<option value="${cur}">${svMonthLabel(cur)} (الحالي)</option><option value="${next}">${svMonthLabel(next)} (الجاي)</option>`;
+            fillSupervisorTargetInputs();
+            document.getElementById('svTargetEditor').style.display = 'block';
+            document.getElementById('svEditTargetsBtn').style.display = 'none';
+        }
+        function fillSupervisorTargetInputs() {
+            const key = document.getElementById('svTargetMonth').value;
+            const tg = svTargetsFor(key);
+            const list = salesmen.filter(s => s.status !== 'غير نشط' || tg[s.code]);
+            document.getElementById('svTargetErr').textContent = '';
+            document.getElementById('svTargetRows').innerHTML = list.length ? list.map(s => `<div class="sv-rep"><span>${escapeHtml(s.name)} <span class="sv-muted">(${escapeHtml(s.code)})</span></span><input type="number" min="0" step="1000" class="form-control sv-target-input" data-code="${escapeHtml(s.code)}" value="${tg[s.code] || ''}" placeholder="مفيش تارجت"></div>`).join('') : '<div class="sv-muted">مفيش مناديب متسجلين في قاعدة المناديب</div>';
+        }
+        function closeSupervisorTargets() {
+            document.getElementById('svTargetEditor').style.display = 'none';
+            document.getElementById('svEditTargetsBtn').style.display = '';
+        }
+        function saveSupervisorTargets() {
+            const key = document.getElementById('svTargetMonth').value;
+            const errEl = document.getElementById('svTargetErr');
+            const next = {};
+            let bad = false;
+            document.querySelectorAll('#svTargetRows .sv-target-input').forEach(inp => {
+                const raw = String(inp.value).trim();
+                if (!raw) return;
+                const v = Number(raw);
+                if (!(v >= 0) || !isFinite(v)) { bad = true; inp.style.borderColor = 'var(--danger)'; return; }
+                inp.style.borderColor = '';
+                if (v > 0) next[inp.getAttribute('data-code')] = Math.round(v);
+            });
+            if (bad) { errEl.textContent = 'فيه مبلغ مش مظبوط، اكتب رقم أكبر من صفر أو سيب الخانة فاضية'; return; }
+            salesTargets = Object.assign({}, salesTargets, { [key]: next });
+            localStorage.setItem('salesTargets', JSON.stringify(salesTargets));
+            const total = Object.values(next).reduce((s, v) => s + v, 0);
+            logAction('تحديد تارجت المناديب', `تارجت ${svMonthLabel(key)}: ${Object.keys(next).length} مندوب بإجمالي ${svFmt(total)}`);
+            closeSupervisorTargets();
+            showToast('تم حفظ التارجت');
+            renderSupervisorDashboard();
+        }
+
+        function toggleSupervisorTvMode() {
+            const on = !document.body.classList.contains('sv-tv');
+            document.body.classList.toggle('sv-tv', on);
+            document.getElementById('svTvBtn').innerHTML = on ? '<i class="fas fa-compress"></i> خروج من الشاشة الكبيرة' : '<i class="fas fa-tv"></i> وضع الشاشة الكبيرة';
+            try {
+                if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+                if (!on && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+            } catch (e) {}
+            Object.values(svCharts).forEach(c => { try { c.resize(); } catch (e) {} });
+        }
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement && document.body.classList.contains('sv-tv')) toggleSupervisorTvMode();
+        });
+
+        (function() {
+            const origShow = showSection;
+            showSection = function(name) {
+                const r = origShow.apply(this, arguments);
+                if (name === 'sales-supervisor') { renderSupervisorDashboard(); setTimeout(() => Object.values(svCharts).forEach(c => { try { c.resize(); } catch (e) {} }), 50); }
+                else if (document.body.classList.contains('sv-tv')) toggleSupervisorTvMode();
+                return r;
+            };
+            // تحديث لحظي: كل 10 ثواني وهو مفتوح
+            svTimer = setInterval(renderSupervisorDashboard, 10000);
         })();
 
         // إضافة مورد جديد من جوه فاتورة الشراء، وبعد الحفظ بيتختار في الفاتورة على طول
