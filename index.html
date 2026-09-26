@@ -2365,13 +2365,32 @@
                 <div class="form-group"><label class="form-label">نوع المندوب</label>
                     <select class="form-control" id="salesmanRepType">
                         <option value="sales">مندوب مبيعات (زيارات + طلب للتاجر)</option>
-                        <option value="delivery">مندوب تسليم (تسليم الفواتير الجاهزة)</option>
+                        <option value="delivery">مندوب تسليم (تسليم الطلبات الخارجة للتسليم)</option>
                     </select>
+                </div>
+                <div class="form-group" id="salesmanZonesGroup" style="display:none;">
+                    <label class="form-label">مناطق التسليم بتاعته</label>
+                    <div id="salesmanZonesList" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+                    <div style="font-size:12px;color:var(--text-light);margin-top:6px;">الطلبات اللي عملاؤها في أحياء المناطق دي هتظهر عنده هو. ولو منطقة مفيش حد ماسكها، طلباتها بتظهر لكل مناديب التسليم.</div>
                 </div>
                 <div class="form-group"><label class="form-label">يوزر الدخول</label><input type="text" class="form-control" id="salesmanRepUsername" placeholder="مثال: rep_ahmed" dir="ltr" style="text-align:left;"></div>
                 <div class="form-group"><label class="form-label">كلمة السر (اتركها فاضية لو مش عايز تغيرها)</label><input type="password" class="form-control" id="salesmanRepPassword" placeholder="كلمة سر جديدة..." dir="ltr" style="text-align:left;"></div>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('salesmanModal')">إلغاء</button><button class="btn btn-success" onclick="saveSalesman()">حفظ</button></div>
+        </div>
+    </div>
+
+    <!-- Delivery Assign Modal -->
+    <div class="modal-overlay" id="deliveryAssignModal">
+        <div class="modal" style="max-width:440px;">
+            <div class="modal-header"><h3 class="modal-title"><i class="fas fa-truck"></i> مندوب التسليم للطلب ده</h3><button class="modal-close" onclick="closeModal('deliveryAssignModal')">&times;</button></div>
+            <div class="modal-body">
+                <input type="hidden" id="deliveryAssignOrderId">
+                <div id="deliveryAssignInfo" style="font-size:13px;color:var(--text-light);margin-bottom:12px;"></div>
+                <div class="form-group"><label class="form-label">مين يسلّمه؟</label><select class="form-control" id="deliveryAssignSelect"></select></div>
+                <div style="font-size:12px;color:var(--text-light);">لو اخترت مندوب، الطلب هيظهر عنده هو بس. ولو رجعته "تلقائي"، هيتوزع حسب منطقة التسليم.</div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('deliveryAssignModal')">إلغاء</button><button class="btn btn-success" onclick="saveDeliveryAssign()"><i class="fas fa-save"></i> حفظ</button></div>
         </div>
     </div>
 
@@ -3660,6 +3679,7 @@
                          <button class="row-actions-btn" onclick="toggleRowActionsMenu(this)">الإجراء <i class="fas fa-caret-down"></i></button>
                          <div class="row-actions-menu">
                            <button class="success" onclick="markOrderReady('${o.id}')"><i class="fas fa-truck"></i> تم التجهيز وخرج للتسليم</button>
+                           <button onclick="openDeliveryAssignModal('${o.id}')"><i class="fas fa-user-edit"></i> تغيير مندوب التسليم</button>
                            <button onclick="cancelPreparingOrder('${o.id}')"><i class="fas fa-undo"></i> إلغاء التجهيز</button>
                            <button class="danger" onclick="rejectOrder('${o.id}')"><i class="fas fa-times"></i> رفض الطلب</button>
                          </div>
@@ -3670,6 +3690,7 @@
                          <button class="row-actions-btn" onclick="toggleRowActionsMenu(this)">الإجراء <i class="fas fa-caret-down"></i></button>
                          <div class="row-actions-menu">
                            <button class="success" onclick="fulfillOrder('${o.id}')"><i class="fas fa-check-double"></i> تم التسليم</button>
+                           <button onclick="openDeliveryAssignModal('${o.id}')"><i class="fas fa-user-edit"></i> تغيير مندوب التسليم</button>
                            <button class="danger" onclick="returnOrder('${o.id}')"><i class="fas fa-undo"></i> فشل التسليم / مرتجع</button>
                          </div>
                        </div>`;
@@ -3696,7 +3717,7 @@
 
                 return `<tr class="${rowClass}"><td>${cb}</td><td><span class="badge badge-primary">${o.id.slice(-6)}</span></td><td>${o.customerName || o.customerCode || '-'}<br><span style="font-size:11px;color:var(--text-light);">${o.phone || o.customerCode || ''}</span><br>${o.repCode ? `<span class="badge" style="background:#EEEDFE;color:#3C3489;margin-top:4px;"><i class="fas fa-user-tie"></i> من المندوب: ${escapeHtml(o.repName || o.repCode)}</span>` : `<span class="badge" style="background:#E1F5EE;color:#085041;margin-top:4px;"><i class="fas fa-mobile-alt"></i> من العميل</span>`}</td>
                 <td style="max-width:280px;">${itemsSummary}</td>
-                <td style="max-width:180px;font-size:12px;">${addressInfo}<br><span class="badge badge-info" style="margin-top:4px;">${deliveryLabel}</span></td>
+                <td style="max-width:200px;font-size:12px;">${addressInfo}<br><span class="badge badge-info" style="margin-top:4px;">${deliveryLabel}</span>${deliveryAssignmentHtml(o)}</td>
                 <td><strong style="color:var(--accent);">${(o.total || 0).toFixed(2)} ر.س</strong>${o.discountFromPoints > 0 ? `<br><span style="font-size:10px;color:var(--text-light);">(خصم نقاط: ${o.discountFromPoints.toFixed(2)})</span>` : ''}</td>
                 <td>${time}</td><td><span class="badge ${st.cls}">${st.label}</span>${ratingHtml}</td>
                 <td>${actions}</td></tr>`;
@@ -6806,6 +6827,16 @@
             document.getElementById('salesmanArea').value = salesman ? salesman.area : '';
             document.getElementById('salesmanStatus').value = salesman ? salesman.status : 'نشط';
             document.getElementById('salesmanRepType').value = salesman ? (salesman.repType || 'sales') : 'sales';
+            const zIds = salesman && Array.isArray(salesman.deliveryZoneIds) ? salesman.deliveryZoneIds : [];
+            document.getElementById('salesmanZonesList').innerHTML = deliveryZones.length
+                ? deliveryZones.map(z => {
+                    const others = salesmen.filter(s => s.repType === 'delivery' && (!salesman || s.code !== salesman.code) && (s.deliveryZoneIds || []).includes(z.id)).map(s => s.name);
+                    return `<label style="display:flex;align-items:center;gap:6px;background:#f8f9fa;border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;"><input type="checkbox" class="salesman-zone-cb" value="${escapeHtml(z.id)}" ${zIds.includes(z.id) ? 'checked' : ''}> ${escapeHtml(z.name)}${others.length ? ` <span style="font-size:11px;color:var(--text-light);">(مع ${escapeHtml(others.join('، '))})</span>` : ''}</label>`;
+                }).join('')
+                : '<span style="font-size:13px;color:var(--text-light);">لسه مفيش مناطق تسليم. ضيفها من إدارة الأبليكشن ← مناطق التسليم.</span>';
+            const toggleZones = () => { document.getElementById('salesmanZonesGroup').style.display = document.getElementById('salesmanRepType').value === 'delivery' ? '' : 'none'; };
+            document.getElementById('salesmanRepType').onchange = toggleZones;
+            toggleZones();
             document.getElementById('salesmanRepUsername').value = salesman ? (salesman.repUsername || '') : '';
             document.getElementById('salesmanRepPassword').value = '';
             openModal('salesmanModal');
@@ -6826,7 +6857,8 @@
             }
             let repPasswordHash = editingSalesman ? editingSalesman.repPasswordHash : undefined;
             if (repPasswordInput) repPasswordHash = await hashRepPassword(repPasswordInput);
-            const record = { code, name, phone, area, status, repType, repUsername: repUsername || '', repPasswordHash: repPasswordHash || '' };
+            const deliveryZoneIds = repType === 'delivery' ? Array.from(document.querySelectorAll('#salesmanZonesList .salesman-zone-cb:checked')).map(cb => cb.value) : [];
+            const record = { code, name, phone, area, status, repType, repUsername: repUsername || '', repPasswordHash: repPasswordHash || '', deliveryZoneIds };
             if (editingSalesman) {
                 const idx = salesmen.findIndex(s => s.code === editingSalesman.code);
                 if (idx !== -1) salesmen[idx] = record;
@@ -8090,6 +8122,52 @@
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'فواتير شراء قديمة');
             XLSX.writeFile(wb, 'فواتير_شراء_قديمة_ناقصة.xlsx');
+        }
+
+
+        // ==================== توزيع الطلبات على مناديب التسليم ====================
+        // الأساس: منطقة التسليم (كل مندوب ليه مناطق في قاعدة المناديب). والاستثناء: أمين المخزن يحدد مندوب لطلب معيّن.
+        function getDeliveryReps() { return salesmen.filter(s => s.repType === 'delivery' && s.status !== 'غير نشط'); }
+        function getOrderDeliveryAssignment(o) {
+            if (o.assignedDeliveryRep && o.assignedDeliveryRep.code) return { manual: true, reps: [o.assignedDeliveryRep] };
+            const zoneId = neighborhoodZoneMap[o.neighborhood];
+            const reps = zoneId ? getDeliveryReps().filter(s => (s.deliveryZoneIds || []).includes(zoneId)) : [];
+            return { manual: false, zoneId, reps };
+        }
+        function deliveryAssignmentHtml(o) {
+            if (!['pending', 'preparing', 'ready'].includes(o.status)) return '';
+            if (o.repDelivery) return `<br><span class="badge badge-success" style="margin-top:4px;"><i class="fas fa-check"></i> سلّمه ${escapeHtml(o.repDelivery.name || '')}</span>`;
+            const a = getOrderDeliveryAssignment(o);
+            if (a.manual) return `<br><span class="badge" style="margin-top:4px;background:#EEEDFE;color:#3C3489;"><i class="fas fa-truck"></i> ${escapeHtml(a.reps[0].name || a.reps[0].code)} (متحدد يدوي)</span>`;
+            if (a.reps.length) return `<br><span class="badge" style="margin-top:4px;background:#E1F5EE;color:#085041;"><i class="fas fa-truck"></i> ${escapeHtml(a.reps.map(r => r.name).join(' / '))} · ${escapeHtml(getOrderZoneName(o))}</span>`;
+            return `<br><span class="badge badge-warning" style="margin-top:4px;"><i class="fas fa-exclamation-triangle"></i> من غير مندوب تسليم — ظاهر للكل</span>`;
+        }
+        function openDeliveryAssignModal(orderId) {
+            const o = customerOrders.find(x => x.id === orderId);
+            if (!o) return;
+            const a = getOrderDeliveryAssignment(o);
+            const autoText = (() => { const z = neighborhoodZoneMap[o.neighborhood]; const reps = z ? getDeliveryReps().filter(s => (s.deliveryZoneIds || []).includes(z)) : []; return reps.length ? `تلقائي حسب المنطقة (${reps.map(r => r.name).join(' / ')})` : 'تلقائي (المنطقة ملهاش مندوب، هيظهر للكل)'; })();
+            document.getElementById('deliveryAssignOrderId').value = orderId;
+            document.getElementById('deliveryAssignInfo').textContent = `${o.customerName || ''} — ${o.neighborhood || 'من غير حي'} — ${getOrderZoneName(o)}`;
+            const sel = document.getElementById('deliveryAssignSelect');
+            sel.innerHTML = `<option value="">${escapeHtml(autoText)}</option>` + getDeliveryReps().map(s => `<option value="${escapeHtml(s.code)}">${escapeHtml(s.name)}</option>`).join('');
+            sel.value = a.manual ? a.reps[0].code : '';
+            openModal('deliveryAssignModal');
+        }
+        function saveDeliveryAssign() {
+            const orderId = document.getElementById('deliveryAssignOrderId').value;
+            const code = document.getElementById('deliveryAssignSelect').value;
+            const rep = code ? salesmen.find(s => s.code === code) : null;
+            if (!db) { showToast('لا يوجد اتصال بالسحابة', 'error'); return; }
+            const value = rep ? { code: rep.code, name: rep.name, by: currentUser ? (currentUser.fullName || currentUser.username || '') : '', at: Date.now() } : null;
+            db.collection('customerOrders').doc(orderId).update({ assignedDeliveryRep: value }).then(function() {
+                const o = customerOrders.find(x => x.id === orderId);
+                if (o) o.assignedDeliveryRep = value;
+                logAction('تحديد مندوب تسليم لطلب', `الطلب #${orderId.slice(-6)}: ${rep ? rep.name : 'تلقائي حسب المنطقة'}`);
+                closeModal('deliveryAssignModal');
+                renderCustomerOrders();
+                showToast(rep ? `الطلب هيظهر عند ${rep.name} بس` : 'الطلب رجع يتوزع تلقائي حسب المنطقة');
+            }).catch(function(e) { console.error(e); showToast('تعذر الحفظ', 'error'); });
         }
 
         // إضافة مورد جديد من جوه فاتورة الشراء، وبعد الحفظ بيتختار في الفاتورة على طول
