@@ -246,6 +246,10 @@
         body.sv-tv .sidebar, body.sv-tv .top-bar, body.sv-tv #mobileSidebarBackdrop { display:none !important; }
         body.sv-tv .main-content { margin-right:0 !important; padding:18px !important; }
         @media (max-width: 900px) { .sv-hero, .sv-g2 { grid-template-columns:1fr; } .sv-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } .sv-stages { grid-template-columns:repeat(3,minmax(0,1fr)); } .sv-hero-num { font-size:40px; } }
+        /* الصلاحيات جوه الشاشات */
+        body.not-admin .admin-only, body.no-profit .profit-only { display: none !important; }
+        body.no-profit table.hide-col-7 th:nth-child(7), body.no-profit table.hide-col-7 td:nth-child(7),
+        body.no-profit table.hide-col-4 th:nth-child(4), body.no-profit table.hide-col-4 td:nth-child(4) { display: none; }
         .sticky-search { position: sticky; top: 0; z-index: 50; background: var(--card-bg); padding: 10px 0; margin-bottom: 12px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
         .sticky-search .search-box { flex: 1; min-width: 220px; margin-bottom: 0; }
         .search-box input { width: 100%; padding: 12px 45px 12px 15px; border: 2px solid var(--border); border-radius: 10px; font-family: 'Tajawal', sans-serif; font-size: 14px; transition: var(--transition); }
@@ -434,7 +438,7 @@
             <div class="form-group" style="text-align:right;"><label class="form-label">اسم المستخدم</label><input type="text" class="form-control" id="loginUsername" placeholder="اسم المستخدم" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')document.getElementById('loginPassword').focus()"></div>
             <div class="form-group" style="text-align:right;"><label class="form-label">كلمة المرور</label><input type="password" class="form-control" id="loginPassword" placeholder="كلمة المرور" onkeydown="if(event.key==='Enter')attemptLogin()"></div>
             <div id="loginError" style="color:var(--danger);font-size:13px;margin-bottom:10px;display:none;"></div>
-            <button class="btn btn-primary" style="width:100%;padding:12px;" onclick="attemptLogin()"><i class="fas fa-sign-in-alt"></i> دخول</button>
+            <button class="btn btn-primary" id="loginSubmitBtn" style="width:100%;padding:12px;" onclick="attemptLogin()"><i class="fas fa-sign-in-alt"></i> دخول</button>
             <p style="font-size:11px;color:var(--text-light);margin-top:20px;">بيانات الدخول الافتراضية: admin / admin123</p>
             <a href="javascript:void(0)" onclick="debugShowLoginState()" style="font-size:11px;color:var(--info);display:block;margin-top:8px;">تعذّر الدخول؟ اضغط هنا لعرض تفاصيل تشخيصية</a>
         </div>
@@ -460,6 +464,7 @@
             <li class="nav-item" data-section="app-management"><a class="nav-link" href="javascript:void(0)" onclick="showSection('app-management')"><i class="fas fa-mobile-alt"></i><span class="menu-text">إدارة الأبليكشن</span></a></li>
             <li class="nav-item" data-section="invoice"><a class="nav-link" href="javascript:void(0)" onclick="showSection('invoice')"><i class="fas fa-file-invoice"></i><span class="menu-text">فاتورة بيع جديدة</span></a></li>
             <li class="nav-item" data-section="purchase-invoice"><a class="nav-link" href="javascript:void(0)" onclick="showSection('purchase-invoice')"><i class="fas fa-cart-plus"></i><span class="menu-text">فاتورة شراء جديدة</span></a></li>
+            <li class="nav-item" data-section="purchase-approvals"><a class="nav-link" href="javascript:void(0)" onclick="showSection('purchase-approvals')"><i class="fas fa-clipboard-check"></i><span class="menu-text">المراجعة والاعتماد</span> <span id="purchaseApprovalsBadge" class="badge badge-danger" style="display:none;margin-right:6px;">0</span></a></li>
             <li class="nav-item" data-section="invoices"><a class="nav-link" href="javascript:void(0)" onclick="showSection('invoices')"><i class="fas fa-list-alt"></i><span class="menu-text">سجل الفواتير</span></a></li>
             <li class="nav-item" data-section="sales-returns"><a class="nav-link" href="javascript:void(0)" onclick="showSection('sales-returns')"><i class="fas fa-undo"></i><span class="menu-text">مرتجعات البيع</span></a></li>
             <li class="nav-item" data-section="purchase-returns"><a class="nav-link" href="javascript:void(0)" onclick="showSection('purchase-returns')"><i class="fas fa-reply"></i><span class="menu-text">مرتجعات الشراء</span></a></li>
@@ -513,6 +518,7 @@
 
         <!-- Dashboard Section -->
         <section id="dashboard-section" class="section active">
+            <div id="purchaseApprovalAlert" style="display:none;cursor:pointer;margin-bottom:14px;padding:14px 18px;border-radius:12px;font-size:14px;" onclick="showSection('purchase-approvals')"></div>
             <div class="date-filter" style="margin-bottom:15px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                 <label style="font-weight:600;"><i class="fas fa-calendar-alt"></i> فترة عرض الإحصائيات:</label>
                 <select class="form-control" id="dashboardPeriodSelect" style="max-width:220px;" onchange="updateDashboardStats()"></select>
@@ -746,6 +752,11 @@
 
         <!-- Purchase Invoice Section -->
         <section id="purchase-invoice-section" class="section">
+            <div id="purchaseDraftEditBanner" class="no-print" style="display:none;margin-bottom:12px;padding:12px 15px;background:rgba(243,156,18,0.1);border-radius:10px;border-right:4px solid var(--warning);align-items:center;gap:10px;flex-wrap:wrap;">
+                <i class="fas fa-pen" style="color:var(--warning);"></i><span id="purchaseDraftEditText" style="flex:1;min-width:200px;font-size:14px;"></span>
+                <button class="btn btn-secondary btn-sm" onclick="cancelPurchaseDraftEdit()">إلغاء التعديل</button>
+            </div>
+            <div id="myPurchaseDraftsPanel" class="no-print"></div>
             <div id="purchaseDraftBanner" class="no-print" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding:12px 15px;background:rgba(52,152,219,0.08);border-radius:10px;border-right:4px solid var(--info);">
                 <i class="fas fa-file-signature" style="color:var(--info);"></i>
                 <span id="purchaseDraftText" style="flex:1;min-width:200px;font-size:14px;"></span>
@@ -779,6 +790,7 @@
                     <div class="invoice-detail-group"><label>رقم فاتورة المورد</label><input type="text" class="form-control" id="purchaseSupplierInvoice" placeholder="رقم الفاتورة الأصلية..."></div>
                     <div class="invoice-detail-group"><label>طريقة الدفع</label><select class="form-control" id="purchasePaymentMethod" onchange="handlePurchasePaymentChange()"><option value="نقدي">نقدي</option><option value="آجل">آجل</option><option value="تحويل بنكي">تحويل بنكي</option></select></div>
                     <div class="invoice-detail-group"><label>ملاحظات</label><input type="text" class="form-control" id="purchaseNotes" placeholder="أي ملاحظات إضافية..."></div>
+                    <div class="invoice-detail-group"><label>صورة فاتورة المورد (اختياري)</label><input type="file" class="form-control" id="purchaseAttachment" accept="image/*"><div id="purchaseAttachmentExisting" style="font-size:12px;margin-top:4px;"></div></div>
                 </div>
                 <div class="invoice-detail-group" id="supplierBalanceInfo" style="display:none;margin-bottom:15px;padding:10px 15px;background:rgba(243,156,18,0.1);border-radius:8px;border-right:3px solid var(--warning);">
                     <span style="font-weight:600;color:var(--warning);"><i class="fas fa-info-circle"></i> رصيد المورد الحالي: <span id="supplierCurrentBalance">0</span> ر.س</span>
@@ -792,7 +804,7 @@
                 <div style="text-align:center;margin-bottom:20px;"><button class="btn btn-teal" onclick="addPurchaseRow()"><i class="fas fa-plus"></i> إضافة صنف</button></div>
                 <div class="invoice-total"><span class="invoice-total-label">الإجمالي الكلي:</span><span class="invoice-total-value" id="purchaseGrandTotal">0 ر.س</span></div>
                 <div class="invoice-actions">
-                    <button class="btn btn-success" onclick="savePurchaseInvoice()"><i class="fas fa-save"></i> حفظ فاتورة الشراء</button>
+                    <button class="btn btn-success" id="purchaseSaveBtn" onclick="savePurchaseInvoice()"><i class="fas fa-paper-plane"></i> حفظ وإرسال للمراجعة</button>
                     <button class="btn btn-primary" onclick="printPurchaseInvoice()"><i class="fas fa-print"></i> طباعة</button>
                     <button class="btn btn-warning" onclick="resetPurchaseInvoice()"><i class="fas fa-redo"></i> جديد</button>
                 </div>
@@ -857,6 +869,7 @@
 
         <!-- Purchase Returns Section -->
         <section id="purchase-returns-section" class="section">
+            <div id="myApprovalsPanelReturns" class="no-print"></div>
             <div class="inventory-alert no-print">
                 <i class="fas fa-info-circle"></i>
                 <span>عند حفظ مرتجع الشراء، يتم خصم الكميات المرتجعة تلقائياً من المخزون، وتعديل تكلفة المخزون وتحديث حساب المورد تلقائياً.</span>
@@ -878,7 +891,7 @@
                 </div>
                     <div class="invoice-total"><span class="invoice-total-label">إجمالي المرتجع:</span><span class="invoice-total-value" id="purchaseReturnGrandTotal">0 ر.س</span></div>
                     <div class="invoice-actions">
-                        <button class="btn btn-success" onclick="savePurchaseReturn()"><i class="fas fa-save"></i> حفظ المرتجع</button>
+                        <button class="btn btn-success" onclick="savePurchaseReturn()"><i class="fas fa-paper-plane"></i> إرسال المرتجع للاعتماد</button>
                         <button class="btn btn-warning" onclick="resetPurchaseReturnForm()"><i class="fas fa-redo"></i> إلغاء</button>
                     </div>
                 </div>
@@ -917,6 +930,14 @@
         </section>
 
         <!-- Sales Tracking Dashboard Section -->
+        <section id="purchase-approvals-section" class="section">
+            <div class="card">
+                <div class="card-header"><div class="card-title"><i class="fas fa-clipboard-check"></i> بانتظار المراجعة والاعتماد</div><span id="purchaseApprovalsSummary" style="font-size:13px;color:var(--text-light);"></span></div>
+                <p style="font-size:13px;color:var(--text-light);margin:0 0 12px;">فواتير الشراء ومرتجعات الشراء وتعديلات المخزون مش بيبقى ليها أي أثر غير لما تتعتمد هنا. ومحدش يقدر يعتمد حاجة هو اللي عاملها، إلا المدير.</p>
+                <div class="table-container"><table><thead><tr><th>النوع</th><th>من إمتى</th><th>المورد / الصنف</th><th>التفاصيل</th><th>عملها</th><th>الأصناف</th><th>القيمة</th><th>الحالة</th><th></th></tr></thead><tbody id="purchaseApprovalsTable"></tbody></table></div>
+            </div>
+        </section>
+
         <section id="sales-supervisor-section" class="section">
           <div class="sv">
             <div class="sv-head">
@@ -1197,6 +1218,7 @@
 
         <!-- Inventory Section -->
         <section id="inventory-section" class="section">
+            <div id="myApprovalsPanelInventory" class="no-print"></div>
             <div class="stats-grid">
                 <div class="stat-card inventory">
                     <div class="stat-icon"><i class="fas fa-warehouse"></i></div>
@@ -1663,10 +1685,10 @@
                 <div class="card-header" style="flex-wrap:wrap;gap:10px;">
                     <div class="card-title"><i class="fas fa-boxes"></i> قاعدة بيانات الأصناف</div>
                     <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                        <button class="btn btn-success btn-sm" onclick="openProductModal()"><i class="fas fa-plus"></i> إضافة صنف</button>
+                        <button class="btn btn-success btn-sm admin-only" onclick="openProductModal()"><i class="fas fa-plus"></i> إضافة صنف</button>
                         <button class="btn btn-info btn-sm" onclick="exportProductsToExcel()"><i class="fas fa-file-export"></i> تصدير الأصناف الحالية</button>
-                        <button class="btn btn-primary btn-sm" onclick="document.getElementById('productExcelFileInput').click()"><i class="fas fa-file-excel"></i> رفع ملف Excel</button>
-                        <button class="btn btn-secondary btn-sm" onclick="downloadProductTemplate()"><i class="fas fa-download"></i> تحميل نموذج فارغ</button>
+                        <button class="btn btn-primary btn-sm admin-only" onclick="document.getElementById('productExcelFileInput').click()"><i class="fas fa-file-excel"></i> رفع ملف Excel</button>
+                        <button class="btn btn-secondary btn-sm admin-only" onclick="downloadProductTemplate()"><i class="fas fa-download"></i> تحميل نموذج فارغ</button>
                         <input type="file" id="productExcelFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleProductExcelUpload(event)">
                     </div>
                 </div>
@@ -1676,7 +1698,7 @@
                     <span id="productSearchCount" style="font-size:13px;color:var(--text-light);white-space:nowrap;"></span>
                 </div>
                 <div class="table-container">
-                    <table><thead><tr><th>كود الصنف</th><th>اسم الصنف</th><th>الوحدة</th><th>القسم</th><th>سعر البيع</th><th>سعر التكلفة</th><th>الربح المتوقع</th><th>الإجراءات</th></tr></thead><tbody id="productsTable"></tbody></table>
+                    <table class="hide-col-7"><thead><tr><th>كود الصنف</th><th>اسم الصنف</th><th>الوحدة</th><th>القسم</th><th>سعر البيع</th><th>سعر التكلفة</th><th>الربح المتوقع</th><th>الإجراءات</th></tr></thead><tbody id="productsTable"></tbody></table>
                 </div>
             </div>
         </section>
@@ -1777,7 +1799,7 @@
             <div class="stats-grid">
                 <div class="stat-card sales"><div class="stat-icon"><i class="fas fa-coins"></i></div><div class="stat-value" id="reportTotalSales">0 ر.س</div><div class="stat-label">إجمالي قيمة المبيعات</div></div>
                 <div class="stat-card purchases"><div class="stat-icon"><i class="fas fa-cart-plus"></i></div><div class="stat-value" id="reportTotalPurchases">0 ر.س</div><div class="stat-label">إجمالي قيمة المشتريات</div></div>
-                <div class="stat-card profit"><div class="stat-icon"><i class="fas fa-chart-line"></i></div><div class="stat-value" id="reportTotalProfit">0 ر.س</div><div class="stat-label">إجمالي الربح</div></div>
+                <div class="stat-card profit profit-only"><div class="stat-icon"><i class="fas fa-chart-line"></i></div><div class="stat-value" id="reportTotalProfit">0 ر.س</div><div class="stat-label">إجمالي الربح</div></div>
                 <div class="stat-card invoices"><div class="stat-icon"><i class="fas fa-shopping-cart"></i></div><div class="stat-value" id="reportTotalQty">0</div><div class="stat-label">إجمالي الكمية المباعة</div></div>
             </div>
             <div class="card">
@@ -1817,7 +1839,7 @@
             </div>
 
             <!-- Profit Period Reports (Daily / Monthly / Yearly) -->
-            <div class="card">
+            <div class="card profit-only">
                 <div class="card-header">
                     <div class="card-title"><i class="fas fa-chart-line"></i> تقرير الأرباح حسب الفترة</div>
                     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
@@ -1837,7 +1859,7 @@
                 <div class="card-header"><div class="card-title"><i class="fas fa-users"></i> تقرير المبيعات حسب العميل</div>
                     <button class="btn btn-primary btn-sm" onclick="exportTableToExcel('customerSalesReportTable', 'المبيعات_حسب_العميل')"><i class="fas fa-file-excel"></i> تصدير</button>
                 </div>
-                <div class="table-container"><table><thead><tr><th>العميل</th><th>عدد الفواتير</th><th>إجمالي المبيعات</th><th>إجمالي الربح</th><th>الرصيد المستحق</th></tr></thead><tbody id="customerSalesReportTable"></tbody></table></div>
+                <div class="table-container"><table class="hide-col-4"><thead><tr><th>العميل</th><th>عدد الفواتير</th><th>إجمالي المبيعات</th><th>إجمالي الربح</th><th>الرصيد المستحق</th></tr></thead><tbody id="customerSalesReportTable"></tbody></table></div>
             </div>
 
             <!-- Top Selling Products -->
@@ -2071,7 +2093,7 @@
                 <div class="form-group"><label class="form-label">الكمية / القيمة الجديدة</label><input type="number" class="form-control" id="adjustQty" placeholder="0"></div>
                 <div class="form-group"><label class="form-label">السبب <span style="color:var(--danger);">*</span></label><input type="text" class="form-control" id="adjustReason" placeholder="سبب التعديل (إجباري)..."></div>
             </div>
-            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('stockAdjustmentModal')">إلغاء</button><button class="btn btn-purple" onclick="saveStockAdjustment()"><i class="fas fa-save"></i> تطبيق التعديل</button></div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('stockAdjustmentModal')">إلغاء</button><button class="btn btn-purple" onclick="saveStockAdjustment()"><i class="fas fa-paper-plane"></i> إرسال للاعتماد</button></div>
         </div>
     </div>
 
@@ -2394,6 +2416,45 @@
         </div>
     </div>
 
+    <!-- Purchase Review Modal -->
+    <div class="modal-overlay" id="purchaseReviewModal">
+        <div class="modal" style="max-width:860px;">
+            <div class="modal-header"><h3 class="modal-title"><i class="fas fa-clipboard-check"></i> مراجعة فاتورة شراء</h3><button class="modal-close" onclick="closeModal('purchaseReviewModal')">&times;</button></div>
+            <div class="modal-body">
+                <input type="hidden" id="purchaseReviewId">
+                <div id="purchaseReviewInfo" style="font-size:13px;line-height:1.9;margin-bottom:10px;"></div>
+                <div class="table-container"><table><thead><tr><th>الصنف</th><th>الوحدة</th><th>الكمية</th><th>سعر الشراء</th><th>الإجمالي</th></tr></thead><tbody id="purchaseReviewItems"></tbody></table></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:15px;"><span class="sv-muted">لو فيه سعر غلط صلحه هنا. الكميات بيصلحها أمين المخزن.</span><strong>الإجمالي: <span id="purchaseReviewTotal">0</span> ر.س</strong></div>
+                <div class="form-group" style="margin-top:12px;"><label class="form-label">ملاحظة / سبب الرجوع</label><input type="text" class="form-control" id="purchaseReviewNote" placeholder="مطلوب لو هترجّعها أو تلغيها"></div>
+                <div id="purchaseReviewSelfNote" style="display:none;color:var(--danger);font-size:13px;margin-top:6px;"><i class="fas fa-lock"></i> مينفعش تعتمد فاتورة إنت اللي عاملها. لازم محاسب تاني أو المدير.</div>
+            </div>
+            <div class="modal-footer" style="flex-wrap:wrap;gap:8px;">
+                <button class="btn btn-secondary" onclick="closeModal('purchaseReviewModal')">إغلاق</button>
+                <button class="btn btn-danger" onclick="cancelPurchaseDraft()"><i class="fas fa-ban"></i> إلغاء الفاتورة</button>
+                <button class="btn btn-warning" onclick="returnPurchaseDraft()"><i class="fas fa-undo"></i> رجوع لأمين المخزن</button>
+                <button class="btn btn-success" id="purchaseApproveBtn" onclick="approvePurchaseDraft()"><i class="fas fa-check-double"></i> اعتماد</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generic Approval Review Modal (مرتجع شراء / تعديل مخزون) -->
+    <div class="modal-overlay" id="approvalReviewModal">
+        <div class="modal" style="max-width:720px;">
+            <div class="modal-header"><h3 class="modal-title"><i class="fas fa-clipboard-check"></i> <span id="approvalReviewTitle">مراجعة</span></h3><button class="modal-close" onclick="closeModal('approvalReviewModal')">&times;</button></div>
+            <div class="modal-body">
+                <input type="hidden" id="approvalReviewId">
+                <div id="approvalReviewBody"></div>
+                <div class="form-group" style="margin-top:12px;"><label class="form-label">سبب الرفض (لو هترفض)</label><input type="text" class="form-control" id="approvalReviewNote"></div>
+                <div id="approvalReviewSelfNote" style="display:none;color:var(--danger);font-size:13px;"><i class="fas fa-lock"></i> مينفعش تعتمد طلب إنت اللي عامله. لازم محاسب تاني أو المدير.</div>
+            </div>
+            <div class="modal-footer" style="gap:8px;">
+                <button class="btn btn-secondary" onclick="closeModal('approvalReviewModal')">إغلاق</button>
+                <button class="btn btn-danger" onclick="rejectGenericDraft()"><i class="fas fa-times"></i> رفض</button>
+                <button class="btn btn-success" id="approvalApproveBtn" onclick="approveGenericDraft()"><i class="fas fa-check-double"></i> اعتماد</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Expense Modal -->
     <div class="modal-overlay" id="expenseModal">
         <div class="modal">
@@ -2435,10 +2496,8 @@
                 <div class="form-group"><label class="form-label">الدور الوظيفي</label>
                     <select class="form-control" id="userRole">
                         <option value="admin">مدير النظام</option>
-                        <option value="sales_manager">مدير مبيعات</option>
                         <option value="accountant">محاسب</option>
                         <option value="warehouse_keeper">أمين مخزن</option>
-                        <option value="salesman">مندوب</option>
                         <option value="sales_supervisor">مشرف مبيعات (داشبورد المتابعة بس)</option>
                     </select>
                 </div>
@@ -2550,10 +2609,9 @@
 
         const ROLES = {
             admin: { label: 'مدير النظام', sections: ['*'] },
-            sales_manager: { label: 'مدير مبيعات', sections: ['dashboard', 'customer-orders', 'app-management', 'invoice', 'invoices', 'sales-returns', 'collections', 'sales-tracking', 'smart-analytics', 'profit', 'profit-target', 'customers', 'salesmen', 'reports'] },
-            accountant: { label: 'محاسب', sections: ['dashboard', 'invoices', 'purchase-invoice', 'purchase-returns', 'collections', 'treasury', 'expenses', 'profit', 'profit-target', 'products', 'customers', 'suppliers', 'reports'] },
+            // المحاسب: من غير الربحية خالص، وبيشوف المخزون (وأي تعديل مخزون منه بيحتاج اعتماد المدير)
+            accountant: { label: 'محاسب', sections: ['dashboard', 'invoices', 'purchase-invoice', 'purchase-approvals', 'purchase-returns', 'collections', 'treasury', 'expenses', 'inventory', 'products', 'suppliers', 'reports'] },
             warehouse_keeper: { label: 'أمين مخزن', sections: ['dashboard', 'customer-orders', 'purchase-invoice', 'purchase-returns', 'inventory', 'products', 'suppliers'] },
-            salesman: { label: 'مندوب', sections: ['dashboard', 'invoice', 'invoices', 'sales-returns', 'customers'] },
             // مشرف المبيعات: بيشوف داشبورد المتابعة بس (عرض فقط)، والحاجة الوحيدة اللي بيسجلها هي التارجت
             sales_supervisor: { label: 'مشرف مبيعات', sections: ['sales-supervisor'], home: 'sales-supervisor' }
         };
@@ -2778,6 +2836,7 @@
                 migrateLegacyRecordsIfNeeded().finally(function() {
                     startInvoiceRecordsListener();
                     startPurchaseInvoiceRecordsListener();
+                    try { startPurchaseDraftsListener(); } catch (e) { console.error(e); }
                     startStockMovementRecordsListener();
                     startAuditLogRecordsListener();
                     startCustomerVisitRecordsListener();
@@ -4608,27 +4667,27 @@
 
         // كل دور بيشوف بس الكروت والودجات المرتبطة بمهامه في الداشبورد الرئيسية
         const DASHBOARD_CARD_ACCESS = {
-            sales: ['admin', 'sales_manager', 'accountant', 'salesman'],
+            sales: ['admin', 'accountant'],
             purchases: ['admin', 'accountant', 'warehouse_keeper'],
-            profit: ['admin', 'sales_manager', 'accountant'],
+            profit: ['admin'],
             expenses: ['admin', 'accountant'],
             treasury: ['admin', 'accountant'],
-            credit: ['admin', 'sales_manager', 'accountant', 'salesman'],
+            credit: ['admin', 'accountant'],
             suppliers: ['admin', 'accountant', 'warehouse_keeper'],
             inventory: ['admin', 'accountant', 'warehouse_keeper'],
-            invoices: ['admin', 'sales_manager', 'accountant', 'salesman'],
+            invoices: ['admin', 'accountant'],
             products: ['admin', 'accountant', 'warehouse_keeper'],
-            customers: ['admin', 'sales_manager', 'accountant', 'salesman'],
-            salesmen: ['admin', 'sales_manager'],
-            performance: ['admin', 'sales_manager', 'accountant'],
-            salesChart: ['admin', 'sales_manager', 'accountant', 'salesman'],
-            topProducts: ['admin', 'sales_manager', 'accountant', 'salesman'],
-            topCustomers: ['admin', 'sales_manager', 'accountant', 'salesman'],
-            topDebts: ['admin', 'sales_manager', 'accountant'],
-            paymentSummary: ['admin', 'sales_manager', 'accountant'],
+            customers: ['admin'],
+            salesmen: ['admin'],
+            performance: ['admin'],
+            salesChart: ['admin', 'accountant'],
+            topProducts: ['admin', 'accountant'],
+            topCustomers: ['admin'],
+            topDebts: ['admin', 'accountant'],
+            paymentSummary: ['admin', 'accountant'],
             lowStock: ['admin', 'accountant', 'warehouse_keeper'],
             stockout: ['admin', 'accountant', 'warehouse_keeper'],
-            recentInvoices: ['admin', 'sales_manager', 'accountant', 'salesman']
+            recentInvoices: ['admin', 'accountant']
         };
 
         function applyDashboardRoleFilters() {
@@ -4647,6 +4706,14 @@
 
         function applyRolePermissions() {
             if (!currentUser) return;
+            if (!ROLES[currentUser.role]) {
+                alert('الدور بتاعك (' + currentUser.role + ') اتلغى من السيستم. كلّم المدير يدّيك صلاحية جديدة.');
+                logoutUser();
+                return;
+            }
+            const isAdminRole = String(currentUser.role).toLowerCase() === 'admin';
+            document.body.classList.toggle('not-admin', !isAdminRole);
+            document.body.classList.toggle('no-profit', !isAdminRole);
             document.querySelectorAll('.nav-item[data-section]').forEach(li => {
                 const section = li.getAttribute('data-section');
                 li.style.display = canAccessSection(section) ? '' : 'none';
@@ -4679,7 +4746,7 @@
             tbody.innerHTML = users.map(u => `<tr>
                 <td><strong>${u.username}</strong></td>
                 <td>${u.fullName}</td>
-                <td><span class="badge badge-primary">${ROLES[u.role] ? ROLES[u.role].label : u.role}</span></td>
+                <td>${ROLES[u.role] ? `<span class="badge badge-primary">${ROLES[u.role].label}</span>` : `<span class="badge badge-danger" title="الدور ده اتلغى، عدّل المستخدم واختار دور جديد">دور ملغي — غيّره</span>`}</td>
                 <td><span class="badge ${u.active ? 'badge-success' : 'badge-danger'}">${u.active ? 'نشط' : 'موقوف'}</span></td>
                 <td>${u.lastLogin ? new Date(u.lastLogin).toLocaleString('ar-SA') : 'لم يسجل الدخول بعد'}</td>
                 <td>
@@ -4726,7 +4793,7 @@
                 document.getElementById('userFullName').value = '';
                 document.getElementById('userUsername').value = '';
                 document.getElementById('userPassword').value = '';
-                document.getElementById('userRole').value = 'salesman';
+                document.getElementById('userRole').value = 'warehouse_keeper';
                 document.getElementById('userActive').value = 'true';
             }
             openModal('userModal');
@@ -5158,7 +5225,7 @@
                 'customers': 'قاعدة العملاء', 'suppliers': 'قاعدة الموردين', 'salesmen': 'قاعدة المناديب',
                 'reports': 'التقارير والتجميع', 'backup': 'النسخ الاحتياطي',
                 'sales-returns': 'مرتجعات البيع', 'purchase-returns': 'مرتجعات الشراء',
-                'collections': 'متابعة التحصيلات', 'sales-tracking': 'لوحة متابعة المبيعات', 'sales-supervisor': 'داشبورد مشرف المبيعات', 'smart-analytics': 'التحليلات الذكية',
+                'collections': 'متابعة التحصيلات', 'sales-tracking': 'لوحة متابعة المبيعات', 'sales-supervisor': 'داشبورد مشرف المبيعات', 'purchase-approvals': 'المراجعة والاعتماد', 'smart-analytics': 'التحليلات الذكية',
                 'users': 'المستخدمون والصلاحيات', 'audit-log': 'سجل العمليات'
             };
             document.getElementById('pageTitle').textContent = titles[sectionName] || sectionName;
@@ -5227,6 +5294,7 @@
         }
 
         function openProductModal(product = null) {
+            if (!currentUser || String(currentUser.role || '').toLowerCase() !== 'admin') { showToast('تعديل الأصناف والأسعار للمدير بس', 'error'); return; }
             editingProduct = product;
             document.getElementById('productCode').value = product ? product.code : makeAutoCoder(products.map(p => p.code), 'P')();
             lockCodeField('productCode', !!product);
@@ -6203,6 +6271,7 @@
         }
 
         function completeSaveProduct(imageUrl) {
+            if (!currentUser || String(currentUser.role || '').toLowerCase() !== 'admin') { showToast('تعديل الأصناف والأسعار للمدير بس', 'error'); return; }
             const code = editingProduct ? editingProduct.code : document.getElementById('productCode').value.trim();
             const name = document.getElementById('productName').value.trim();
             const unit = document.getElementById('productUnit').value.trim();
@@ -6257,6 +6326,7 @@
         }
 
         function deleteProduct(code) {
+            if (!currentUser || String(currentUser.role || '').toLowerCase() !== 'admin') { showToast('تعديل الأصناف والأسعار للمدير بس', 'error'); return; }
             if (confirm('هل أنت متأكد من حذف هذا الصنف؟ سيتم حذف بيانات المخزون أيضاً!')) {
                 const p = products.find(x => x.code === code);
                 products = products.filter(p => p.code !== code);
@@ -6281,8 +6351,8 @@
                 <td><strong style="color:var(--accent);">${p.price.toFixed(2)} ر.س</strong></td>
                 <td><span class="cost-highlight">${(p.cost || 0).toFixed(2)} ر.س</span></td>
                 <td><span class="profit-highlight">${profit.toFixed(2)} ر.س</span> <span class="margin-badge ${margin >= 30 ? 'high' : (margin >= 15 ? 'medium' : 'low')}">${margin}%</span></td>
-                <td><button class="btn btn-primary btn-icon btn-sm" onclick='openProductModal(${JSON.stringify(p).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
-                <button class="btn btn-danger btn-icon btn-sm" onclick="deleteProduct('${p.code}')"><i class="fas fa-trash"></i></button></td></tr>`;
+                <td><button class="btn btn-primary btn-icon btn-sm admin-only" onclick='openProductModal(${JSON.stringify(p).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
+                <button class="btn btn-danger btn-icon btn-sm admin-only" onclick="deleteProduct('${p.code}')"><i class="fas fa-trash"></i></button></td></tr>`;
             }).join('');
             refreshProductBrandFilter();
             filterProducts();
@@ -6403,12 +6473,11 @@
                 newQty = currentQty - qty; movementQty = -qty;
             } else if (type === 'set') { movementQty = qty - currentQty; newQty = qty; }
 
-            inventory[code].qty = newQty;
-            saveInventory();
-            addStockMovement(code, product.name, movementType, movementQty, newQty, 'تعديل يدوي', reason || 'تعديل مخزون يدوي');
-            renderInventory(); renderMovements(); renderLowStock(); updateDashboardStats();
-            closeModal('stockAdjustmentModal');
-            showToast('تم تعديل المخزون بنجاح');
+            submitApprovalRequest('stock_adjust', {
+                productCode: code, productName: product ? product.name : code, adjType: type, qty: qty,
+                qtyAtRequest: currentQty, requestedNewQty: newQty, delta: newQty - currentQty, reason: reason,
+                grandTotal: Math.abs(newQty - currentQty) * (inventory[code].cost || 0)
+            }, function() { closeModal('stockAdjustmentModal'); });
         }
 
         function renderMovements() {
@@ -6645,6 +6714,7 @@
 
         // ==================== SUPPLIERS ====================
         function openSupplierModal(supplier = null) {
+            if (supplier && String((currentUser && currentUser.role) || '').toLowerCase() === 'warehouse_keeper') { showToast('أمين المخزن يقدر يضيف مورد جديد بس. التعديل للمحاسب أو المدير', 'error'); return; }
             editingSupplier = supplier;
             pendingPurchaseSupplierSelect = false;
             document.getElementById('supplierCode').value = supplier ? supplier.code : makeAutoCoder(suppliers.map(s => s.code), 'V')();
@@ -6681,6 +6751,7 @@
         }
 
         function deleteSupplier(code) {
+            if (String((currentUser && currentUser.role) || '').toLowerCase() === 'warehouse_keeper') { showToast('حذف الموردين للمحاسب أو المدير', 'error'); return; }
             if (confirm('هل أنت متأكد من حذف هذا المورد؟')) {
                 const s = suppliers.find(x => x.code === code);
                 suppliers = suppliers.filter(s => s.code !== code);
@@ -6704,9 +6775,9 @@
                 else balanceText = '0.00 ر.س';
                 return `<tr><td><span class="badge badge-orange">${s.code}</span></td><td><strong>${s.name}</strong></td><td>${s.phone || '-'}</td><td>${s.address || '-'}</td>
                 <td><span class="customer-balance ${balanceClass}">${balanceText}</span></td>
-                <td><button class="btn btn-primary btn-icon btn-sm" onclick='openSupplierModal(${JSON.stringify(s).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
+                <td>${String((currentUser && currentUser.role) || '').toLowerCase() === 'warehouse_keeper' ? '' : `<button class="btn btn-primary btn-icon btn-sm" onclick='openSupplierModal(${JSON.stringify(s).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>`}
                 ${currentUser && String(currentUser.role || '').trim().toLowerCase() === 'admin' ? `<button class="btn btn-secondary btn-icon btn-sm" title="تعديل إجمالي المديونية" onclick="openSupplierAdjustmentModal('${s.code}')"><i class="fas fa-balance-scale"></i></button>` : ''}
-                <button class="btn btn-danger btn-icon btn-sm" onclick="deleteSupplier('${s.code}')"><i class="fas fa-trash"></i></button></td></tr>`;
+                ${String((currentUser && currentUser.role) || '').toLowerCase() === 'warehouse_keeper' ? '' : `<button class="btn btn-danger btn-icon btn-sm" onclick="deleteSupplier('${s.code}')"><i class="fas fa-trash"></i></button>`}</td></tr>`;
             }).join('');
             updateSupplierStatementSelect();
         }
@@ -8024,6 +8095,7 @@
         const repDeliveryAttempts = {};
         function processRepDeliveredOrders() {
             if (!db || !currentUser) return;
+            if (!['admin', 'accountant', 'warehouse_keeper'].includes(String(currentUser.role || '').trim().toLowerCase())) return;
             customerOrders.forEach(function(o) {
                 if (o.status !== 'ready' || !o.repDelivery) return;
                 const last = repDeliveryAttempts[o.id];
@@ -8168,6 +8240,409 @@
                 renderCustomerOrders();
                 showToast(rep ? `الطلب هيظهر عند ${rep.name} بس` : 'الطلب رجع يتوزع تلقائي حسب المنطقة');
             }).catch(function(e) { console.error(e); showToast('تعذر الحفظ', 'error'); });
+        }
+
+
+        // ==================== مراجعة واعتماد فواتير الشراء ====================
+        // أمين المخزن بيعمل الفاتورة ← بتروح "بانتظار المراجعة" (مفيش أي أثر) ← المحاسب/المدير يعتمد ← ساعتها بس
+        // المخزون يزيد، والتكلفة تتحدث، والفاتورة تتسجل على المورد، والخزنة تتخصم لو نقدي.
+        // الطلبات دي متخزنة في مجموعة لوحدها (purchaseDrafts) عشان متتحسبش في أي تقرير أو رصيد قبل الاعتماد.
+        let purchaseDrafts = [];
+        let editingPurchaseDraftId = null;
+        let purchaseSaveBusy = false;
+        let purchaseDraftsListenerStarted = false;
+        const pdUser = () => ({ username: currentUser ? (currentUser.username || '') : '', name: currentUser ? (currentUser.fullName || currentUser.username || '') : '', role: currentUser ? currentUser.role : '' });
+        const pdRole = () => String((currentUser && currentUser.role) || '').trim().toLowerCase();
+        function canApprovePurchases() { return pdRole() === 'admin' || pdRole() === 'accountant'; }
+        function isOwnPurchaseDraft(d) { return d && d.createdBy && currentUser && d.createdBy.username === currentUser.username; }
+        function pdAgo(ms) { const m = Math.max(0, Math.round((Date.now() - ms) / 60000)); return m < 60 ? `${m} دقيقة` : (m < 1440 ? `${Math.floor(m / 60)} ساعة` : `${Math.floor(m / 1440)} يوم`); }
+
+        function startPurchaseDraftsListener() {
+            if (!db || purchaseDraftsListenerStarted) return;
+            purchaseDraftsListenerStarted = true;
+            db.collection('purchaseDrafts').where('status', 'in', ['pending', 'returned']).onSnapshot(function(snap) {
+                purchaseDrafts = snap.docs.map(d => Object.assign({ id: d.id }, d.data())).sort((a, b) => (a.submittedAt || 0) - (b.submittedAt || 0));
+                renderPurchaseApprovals();
+            }, function(err) { console.error('purchase drafts listener error:', err); });
+            setInterval(renderPurchaseApprovals, 60000);
+        }
+
+        function submitPurchaseForReview(data) {
+            if (purchaseSaveBusy) return;
+            if (!db) { showToast('لازم يكون فيه إنترنت عشان الفاتورة تتبعت للمراجعة', 'error'); return; }
+            purchaseSaveBusy = true;
+            const btn = document.getElementById('purchaseSaveBtn'); if (btn) btn.disabled = true;
+            const done = () => { purchaseSaveBusy = false; if (btn) btn.disabled = false; };
+            const supplier = suppliers.find(s => s.code === data.supplierCode);
+            const editing = editingPurchaseDraftId ? purchaseDrafts.find(d => d.id === editingPurchaseDraftId) : null;
+            uploadImageIfProvided('purchaseAttachment', 'purchase_invoices/' + data.supplierCode, function(url) {
+                const now = Date.now();
+                const me = pdUser();
+                const id = editing ? editing.id : ('PD-' + now);
+                const doc = {
+                    status: 'pending', submittedAt: now,
+                    supplierCode: data.supplierCode, supplier: supplier ? supplier.name : data.supplierCode,
+                    supplierInvoice: document.getElementById('purchaseSupplierInvoice').value.trim(),
+                    paymentMethod: data.paymentMethod,
+                    notes: document.getElementById('purchaseNotes').value,
+                    items: data.items, grandTotal: data.grandTotal,
+                    attachmentUrl: url || (editing ? (editing.attachmentUrl || null) : null),
+                    createdBy: editing ? editing.createdBy : me,
+                    createdAt: editing ? editing.createdAt : now,
+                    returnReason: null,
+                    history: (editing ? (editing.history || []) : []).concat([{ action: editing ? 'اتبعتت تاني بعد التعديل' : 'اتعملت واتبعتت للمراجعة', by: me.name, at: now }])
+                };
+                db.collection('purchaseDrafts').doc(id).set(doc).then(function() {
+                    logAction(editing ? 'إعادة إرسال فاتورة شراء للمراجعة' : 'فاتورة شراء للمراجعة', `طلب ${id.slice(-6)} من المورد ${doc.supplier} بقيمة ${data.grandTotal.toFixed(2)} ر.س`);
+                    showToast(canApprovePurchases() ? 'الفاتورة اتحفظت وبانتظار الاعتماد من "مراجعة فواتير الشراء"' : 'الفاتورة اتبعتت للمحاسب للمراجعة. المخزون هيزيد بعد الاعتماد', 'success', 4500);
+                    resetPurchaseInvoice();
+                    done();
+                }).catch(function(e) { console.error(e); showToast('تعذر إرسال الفاتورة، جرب تاني', 'error'); done(); });
+            });
+            // لو رفع الصورة فشل، uploadImageIfProvided مش بيكمّل، فنفك القفل بعد دقيقة عشان يقدر يحاول تاني
+            setTimeout(function() { if (purchaseSaveBusy) done(); }, 60000);
+        }
+
+        function renderPurchaseApprovals() {
+            const pending = purchaseDrafts.filter(d => d.status === 'pending');
+            const oldest = pending.length ? Math.min(...pending.map(d => d.submittedAt || Date.now())) : 0;
+            const late = oldest && Date.now() - oldest > 3 * 3600000;
+            // الشارة في القائمة
+            const badge = document.getElementById('purchaseApprovalsBadge');
+            if (badge) { badge.textContent = pending.length; badge.style.display = pending.length ? '' : 'none'; }
+            // تنبيه الواجهة الرئيسية (للمدير والمحاسب)
+            const alertEl = document.getElementById('purchaseApprovalAlert');
+            if (alertEl) {
+                if (pending.length && canApprovePurchases()) {
+                    alertEl.style.display = 'block';
+                    alertEl.style.background = late ? 'rgba(231,76,60,0.1)' : 'rgba(243,156,18,0.12)';
+                    alertEl.style.borderRight = '4px solid ' + (late ? 'var(--danger)' : 'var(--warning)');
+                    alertEl.innerHTML = `<i class="fas fa-clipboard-check" style="color:${late ? 'var(--danger)' : 'var(--warning)'};"></i> <strong>${pending.length} طلب مستني مراجعة واعتماد</strong> — أقدمهم من ${pdAgo(oldest)}${late ? ' <strong style="color:var(--danger);">(البضاعة دي لسه مش بتتباع)</strong>' : ''} · <u>افتح المراجعة</u>`;
+                } else alertEl.style.display = 'none';
+            }
+            // جدول المراجعة
+            const tbody = document.getElementById('purchaseApprovalsTable');
+            if (tbody) {
+                const list = purchaseDrafts;
+                tbody.innerHTML = list.length ? list.map(d => {
+                    const waitLate = d.status === 'pending' && Date.now() - (d.submittedAt || 0) > 3 * 3600000;
+                    const st = d.status === 'pending' ? `<span class="badge ${waitLate ? 'badge-danger' : 'badge-warning'}">بانتظار المراجعة</span>` : `<span class="badge badge-info">رجعت لأمين المخزن</span><div style="font-size:11px;color:var(--text-light);">${escapeHtml(d.returnReason || '')}</div>`;
+                    const k = draftKind(d);
+                    const kindBadge = `<span class="badge" style="background:${k === 'purchase' ? '#E6F1FB;color:#0C447C' : k === 'purchase_return' ? '#FAEEDA;color:#633806' : '#EEEDFE;color:#3C3489'};">${APPROVAL_KIND_LABEL[k]}</span>`;
+                    const who = k === 'stock_adjust' ? escapeHtml(d.productName || '') : escapeHtml(d.supplier || '');
+                    const detail = k === 'stock_adjust' ? `${d.qtyAtRequest} ← ${d.requestedNewQty} (${d.delta > 0 ? '+' : ''}${d.delta}) · ${escapeHtml(d.reason || '')}`
+                        : k === 'purchase_return' ? `على فاتورة #${escapeHtml(String(d.originalInvoiceNumber || ''))}`
+                        : `${escapeHtml(d.supplierInvoice || '-')}${d.attachmentUrl ? ` <a href="${escapeHtml(d.attachmentUrl)}" target="_blank" title="صورة فاتورة المورد"><i class="fas fa-image"></i></a>` : ''}`;
+                    return `<tr><td>${kindBadge}</td><td style="${waitLate ? 'color:var(--danger);font-weight:700;' : ''}">${pdAgo(d.submittedAt || Date.now())}</td><td>${who}</td><td style="font-size:12px;">${detail}</td><td>${escapeHtml((d.createdBy && d.createdBy.name) || '-')}</td><td>${k === 'stock_adjust' ? 1 : (d.items || []).length}</td><td><strong>${Number(d.grandTotal || 0).toFixed(2)}</strong></td><td>${st}</td><td>${d.status === 'pending' && canApprovePurchases() ? `<button class="btn btn-primary btn-sm" onclick="openApprovalReview('${d.id}')"><i class="fas fa-search"></i> مراجعة</button>` : ''}</td></tr>`;
+                }).join('') : '<tr><td colspan="9" style="text-align:center;padding:25px;color:var(--text-light);">مفيش فواتير مستنية مراجعة 👍</td></tr>';
+                const sum = document.getElementById('purchaseApprovalsSummary');
+                if (sum) sum.textContent = `${pending.length} بانتظار المراجعة · ${list.length - pending.length} رجعت لأصحابها`;
+            }
+            // لوحة "فواتيري" في شاشة فاتورة الشراء
+            const panel = document.getElementById('myPurchaseDraftsPanel');
+            if (panel) {
+                const mine = purchaseDrafts.filter(d => isOwnPurchaseDraft(d) || pdRole() === 'admin');
+                const returned = mine.filter(d => d.status === 'returned' && draftKind(d) === 'purchase');
+                const rejectedOther = mine.filter(d => d.status === 'returned' && draftKind(d) !== 'purchase');
+                const waiting = mine.filter(d => d.status === 'pending');
+                let html = '';
+                if (returned.length) html += `<div style="margin-bottom:10px;padding:12px 15px;background:rgba(231,76,60,0.07);border-radius:10px;border-right:4px solid var(--danger);"><strong style="color:var(--danger);"><i class="fas fa-undo"></i> فواتير رجعتلك من المراجعة (${returned.length})</strong>` +
+                    returned.map(d => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:13px;"><span>${escapeHtml(d.supplier || '')} · ${Number(d.grandTotal || 0).toFixed(2)} ر.س · <span style="color:var(--danger);">السبب: ${escapeHtml(d.returnReason || '-')}</span></span><button class="btn btn-warning btn-sm" onclick="loadPurchaseDraftForEdit('${d.id}')"><i class="fas fa-pen"></i> افتح وعدّل</button></div>`).join('') + '</div>';
+                if (rejectedOther.length) html += `<div style="margin-bottom:10px;padding:12px 15px;background:rgba(231,76,60,0.07);border-radius:10px;border-right:4px solid var(--danger);font-size:13px;"><strong style="color:var(--danger);"><i class="fas fa-times-circle"></i> طلبات اترفضت</strong>` +
+                    rejectedOther.map(d => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;"><span>${APPROVAL_KIND_LABEL[draftKind(d)]}: ${escapeHtml(d.productName || d.supplier || '')} · <span style="color:var(--danger);">السبب: ${escapeHtml(d.returnReason || '-')}</span></span><button class="btn btn-secondary btn-sm" onclick="dismissReturnedDraft('${d.id}')">تمام</button></div>`).join('') + '</div>';
+                if (waiting.length) html += `<div style="margin-bottom:10px;padding:10px 15px;background:rgba(52,152,219,0.07);border-radius:10px;border-right:4px solid var(--info);font-size:13px;"><i class="fas fa-hourglass-half" style="color:var(--info);"></i> عندك ${waiting.length} طلب بانتظار الاعتماد: ${waiting.map(d => APPROVAL_KIND_LABEL[draftKind(d)] + ' ' + escapeHtml(d.productName || d.supplier || '')).join('، ')}</div>`;
+                panel.innerHTML = html;
+                ['myApprovalsPanelReturns', 'myApprovalsPanelInventory'].forEach(pid => { const p2 = document.getElementById(pid); if (p2) p2.innerHTML = html; });
+            }
+        }
+
+        function openPurchaseReview(id) {
+            const d = purchaseDrafts.find(x => x.id === id);
+            if (!d) return;
+            document.getElementById('purchaseReviewId').value = id;
+            document.getElementById('purchaseReviewNote').value = '';
+            const created = new Date(d.createdAt || d.submittedAt || Date.now()).toLocaleString('ar-EG');
+            document.getElementById('purchaseReviewInfo').innerHTML =
+                `<strong>المورد:</strong> ${escapeHtml(d.supplier || '')} · <strong>فاتورة المورد:</strong> ${escapeHtml(d.supplierInvoice || '-')} · <strong>الدفع:</strong> ${escapeHtml(d.paymentMethod || '')}<br>` +
+                `<strong>عملها:</strong> ${escapeHtml((d.createdBy && d.createdBy.name) || '-')} · ${created}${d.notes ? ' · <strong>ملاحظات:</strong> ' + escapeHtml(d.notes) : ''}` +
+                (d.attachmentUrl ? `<br><a href="${escapeHtml(d.attachmentUrl)}" target="_blank" class="btn btn-info btn-sm" style="margin-top:6px;"><i class="fas fa-image"></i> افتح صورة فاتورة المورد</a>` : '<br><span style="color:var(--text-light);">مفيش صورة لفاتورة المورد</span>') +
+                ((d.history || []).length > 1 ? `<div style="font-size:12px;color:var(--text-light);margin-top:4px;">${(d.history || []).map(h => escapeHtml(h.action + ' — ' + h.by)).join(' ← ')}</div>` : '');
+            document.getElementById('purchaseReviewItems').innerHTML = (d.items || []).map((it, k) =>
+                `<tr><td>${escapeHtml(it.productName || it.productCode)}</td><td>${escapeHtml(it.unit || '')}</td><td>${it.qty}</td><td><input type="number" class="form-control pr-cost" data-k="${k}" min="0" step="any" value="${it.cost}" style="width:110px;" oninput="recalcPurchaseReview()"></td><td class="pr-total">${Number(it.total || 0).toFixed(2)}</td></tr>`).join('');
+            recalcPurchaseReview();
+            const self = isOwnPurchaseDraft(d) && pdRole() !== 'admin';
+            document.getElementById('purchaseReviewSelfNote').style.display = self ? 'block' : 'none';
+            document.getElementById('purchaseApproveBtn').disabled = self;
+            openModal('purchaseReviewModal');
+        }
+        function recalcPurchaseReview() {
+            const id = document.getElementById('purchaseReviewId').value;
+            const d = purchaseDrafts.find(x => x.id === id);
+            if (!d) return;
+            let total = 0;
+            document.querySelectorAll('#purchaseReviewItems tr').forEach((tr, k) => {
+                const cost = parseFloat(tr.querySelector('.pr-cost').value) || 0;
+                const t = cost * (Number(d.items[k].qty) || 0);
+                tr.querySelector('.pr-total').textContent = t.toFixed(2);
+                total += t;
+            });
+            document.getElementById('purchaseReviewTotal').textContent = total.toFixed(2);
+        }
+
+        function approvePurchaseDraft() {
+            const id = document.getElementById('purchaseReviewId').value;
+            const d = purchaseDrafts.find(x => x.id === id);
+            if (!d || !db) return;
+            if (!canApprovePurchases()) { showToast('الاعتماد للمحاسب أو المدير بس', 'error'); return; }
+            if (isOwnPurchaseDraft(d) && pdRole() !== 'admin') { showToast('مينفعش تعتمد فاتورة إنت اللي عاملها', 'error'); return; }
+            const costs = Array.from(document.querySelectorAll('#purchaseReviewItems .pr-cost')).map(inp => parseFloat(inp.value));
+            if (costs.some(c => isNaN(c) || c < 0)) { showToast('فيه سعر مش مظبوط', 'error'); return; }
+            const zero = costs.filter(c => c === 0).length;
+            if (zero && !confirm(`فيه ${zero} صنف سعره صفر. تعتمد برضه؟`)) return;
+            const priceChanges = [];
+            const items = d.items.map((it, k) => {
+                const cost = costs[k];
+                if (cost !== Number(it.cost)) priceChanges.push(`${it.productName}: ${it.cost} ← ${cost}`);
+                return Object.assign({}, it, { cost: cost, total: (Number(it.qty) || 0) * cost });
+            });
+            const grandTotal = items.reduce((s, it) => s + it.total, 0);
+            if (!confirm(`اعتماد فاتورة ${d.supplier} بإجمالي ${grandTotal.toFixed(2)} ر.س؟\n\nالمخزون هيزيد دلوقتي${(d.paymentMethod === 'نقدي' || d.paymentMethod === 'تحويل بنكي') ? '، والمبلغ هيتخصم من الخزنة' : '، والمبلغ هيتسجل على المورد'}.`)) return;
+            const btn = document.getElementById('purchaseApproveBtn'); btn.disabled = true;
+            const me = pdUser();
+            const ref = db.collection('purchaseDrafts').doc(id);
+            // معاملة ذرية: لو اتنين داسوا اعتماد في نفس اللحظة، واحد بس اللي بيعدّي
+            db.runTransaction(function(t) {
+                return t.get(ref).then(function(snap) {
+                    if (!snap.exists || snap.data().status !== 'pending') throw new Error('الفاتورة دي اتراجعت قبل كده');
+                    t.update(ref, { status: 'approved', approvedAt: Date.now(), approvedBy: me, items: items, grandTotal: grandTotal,
+                        history: (snap.data().history || []).concat([{ action: 'اتعتمدت' + (priceChanges.length ? ' (مع تعديل أسعار)' : ''), by: me.name, at: Date.now() }]) });
+                });
+            }).then(function() {
+                const inv = postApprovedPurchase(Object.assign({}, d, { items, grandTotal }), me, priceChanges);
+                ref.update({ approvedInvoiceNumber: inv.number, approvedInvoiceId: inv.id }).catch(() => {});
+                closeModal('purchaseReviewModal');
+                showToast(`اتعتمدت فاتورة الشراء #${inv.number} والمخزون زاد`);
+            }).catch(function(e) { console.error(e); showToast(e.message || 'تعذر الاعتماد', 'error'); })
+              .then(function() { btn.disabled = false; });
+        }
+
+        // نفس اللي كانت الفاتورة بتعمله زمان وقت الحفظ، بس دلوقتي بيحصل وقت الاعتماد
+        function postApprovedPurchase(d, approver, priceChanges) {
+            const number = getNextDocNumber(purchaseInvoices).toString().padStart(4, '0');
+            d.items.forEach(item => {
+                if (!inventory[item.productCode]) inventory[item.productCode] = { code: item.productCode, qty: 0, cost: item.cost, minStock: 0 };
+                const beforeQty = inventory[item.productCode].qty;
+                inventory[item.productCode].qty += item.qty;
+                if (beforeQty + item.qty > 0) {
+                    const oldValue = beforeQty * (inventory[item.productCode].cost || 0);
+                    inventory[item.productCode].cost = (oldValue + item.qty * item.cost) / (beforeQty + item.qty);
+                }
+                addStockMovement(item.productCode, item.productName, 'purchase', item.qty, inventory[item.productCode].qty, 'فاتورة شراء #' + number, 'إضافة مخزون (اعتمدها ' + approver.name + ')');
+            });
+            saveInventory();
+            if (d.paymentMethod === 'نقدي' || d.paymentMethod === 'تحويل بنكي') {
+                addTreasuryEntry('out', d.grandTotal, d.supplierCode, 'supplier', 'فاتورة شراء #' + number, d.paymentMethod, false);
+            }
+            const invoice = {
+                id: Date.now(), number: number, type: 'purchase',
+                date: new Date().toISOString(), supplierCode: d.supplierCode, supplier: d.supplier,
+                supplierInvoice: d.supplierInvoice || '', paymentMethod: d.paymentMethod, notes: d.notes || '',
+                items: d.items, grandTotal: d.grandTotal,
+                attachmentUrl: d.attachmentUrl || null, draftId: d.id,
+                createdBy: d.createdBy || null, approvedBy: approver, receivedAt: d.createdAt || null
+            };
+            purchaseInvoices.push(invoice);
+            localStorage.setItem('purchaseInvoices', JSON.stringify(purchaseInvoices));
+            if (db) db.collection('purchaseInvoiceRecords').doc(String(invoice.id)).set(invoice).catch(function(e) { console.error('purchase invoice sync failed:', e); showToast('تعذر رفع فاتورة الشراء للسحابة', 'error'); });
+            logAction('اعتماد فاتورة شراء', `فاتورة #${number} من ${d.supplier} بقيمة ${d.grandTotal.toFixed(2)} ر.س — عملها ${(d.createdBy && d.createdBy.name) || '-'} واعتمدها ${approver.name}` + (priceChanges && priceChanges.length ? ` — تعديل أسعار: ${priceChanges.join('، ')}` : ''));
+            try { updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderInventory(); renderMovements(); renderLowStock(); renderTreasury(); renderSuppliers(); } catch (e) { console.error(e); }
+            document.getElementById('purchaseInvoiceNumber').textContent = 'يتحدد بعد الاعتماد';
+            return invoice;
+        }
+
+        function returnPurchaseDraft() {
+            const id = document.getElementById('purchaseReviewId').value;
+            const reason = document.getElementById('purchaseReviewNote').value.trim();
+            if (!reason) { showToast('اكتب سبب الرجوع عشان أمين المخزن يعرف يصلح إيه', 'error'); return; }
+            const d = purchaseDrafts.find(x => x.id === id); if (!d || !db) return;
+            const me = pdUser();
+            db.collection('purchaseDrafts').doc(id).update({ status: 'returned', returnReason: reason, returnedBy: me, returnedAt: Date.now(),
+                history: (d.history || []).concat([{ action: 'رجعت للتعديل: ' + reason, by: me.name, at: Date.now() }]) })
+                .then(() => { logAction('رجوع فاتورة شراء للتعديل', `طلب ${id.slice(-6)} من ${d.supplier}: ${reason}`); closeModal('purchaseReviewModal'); showToast('الفاتورة رجعت لأمين المخزن'); })
+                .catch(e => { console.error(e); showToast('تعذر الحفظ', 'error'); });
+        }
+        function cancelPurchaseDraft() {
+            const id = document.getElementById('purchaseReviewId').value;
+            const reason = document.getElementById('purchaseReviewNote').value.trim();
+            if (!reason) { showToast('اكتب سبب الإلغاء', 'error'); return; }
+            const d = purchaseDrafts.find(x => x.id === id); if (!d || !db) return;
+            if (!confirm('إلغاء الفاتورة دي نهائيًا؟ مش هيحصل أي تأثير على المخزون أو المورد.')) return;
+            const me = pdUser();
+            db.collection('purchaseDrafts').doc(id).update({ status: 'cancelled', cancelReason: reason, cancelledBy: me, cancelledAt: Date.now(),
+                history: (d.history || []).concat([{ action: 'اتلغت: ' + reason, by: me.name, at: Date.now() }]) })
+                .then(() => { logAction('إلغاء فاتورة شراء قبل الاعتماد', `طلب ${id.slice(-6)} من ${d.supplier}: ${reason}`); closeModal('purchaseReviewModal'); showToast('الفاتورة اتلغت'); })
+                .catch(e => { console.error(e); showToast('تعذر الحفظ', 'error'); });
+        }
+
+        function loadPurchaseDraftForEdit(id) {
+            const d = purchaseDrafts.find(x => x.id === id);
+            if (!d) return;
+            resetPurchaseInvoice();
+            editingPurchaseDraftId = id;
+            const tbody = document.getElementById('purchaseItemsBody');
+            tbody.innerHTML = '';
+            (d.items || []).forEach(it => {
+                if (!products.find(p => p.code === it.productCode)) return;
+                addPurchaseRow();
+                const row = tbody.lastElementChild, sel = row.querySelector('select');
+                sel.value = it.productCode; syncEnhancedSelect(sel); updatePurchaseRow(sel);
+                row.querySelector('.qty-field').value = it.qty;
+                row.querySelector('.cost-field').value = it.cost;
+                calculatePurchaseRow(row.querySelector('.qty-field'));
+            });
+            if (!tbody.children.length) addPurchaseRow();
+            document.getElementById('purchaseSupplier').value = d.supplierCode;
+            document.getElementById('purchaseSupplierSearch').value = d.supplier || '';
+            document.getElementById('purchaseSupplierInvoice').value = d.supplierInvoice || '';
+            document.getElementById('purchasePaymentMethod').value = d.paymentMethod || 'نقدي';
+            document.getElementById('purchaseNotes').value = d.notes || '';
+            try { handlePurchasePaymentChange(); } catch (e) {}
+            document.getElementById('purchaseAttachmentExisting').innerHTML = d.attachmentUrl ? `<a href="${escapeHtml(d.attachmentUrl)}" target="_blank"><i class="fas fa-image"></i> الصورة الحالية</a> (لو اخترت صورة جديدة هتتغير)` : '';
+            const eb = document.getElementById('purchaseDraftEditBanner');
+            document.getElementById('purchaseDraftEditText').textContent = `بتعدّل فاتورة ${d.supplier} اللي رجعت من المراجعة — السبب: ${d.returnReason || '-'}. لما تحفظ هتتبعت للمراجعة تاني.`;
+            eb.style.display = 'flex';
+            showSection('purchase-invoice');
+        }
+        function cancelPurchaseDraftEdit() { resetPurchaseInvoice(); }
+
+
+        // ==================== طلبات اعتماد عامة: مرتجع شراء + تعديل مخزون ====================
+        const APPROVAL_KIND_LABEL = { purchase: 'فاتورة شراء', purchase_return: 'مرتجع شراء', stock_adjust: 'تعديل مخزون' };
+        const draftKind = d => d.kind || 'purchase';
+        function submitApprovalRequest(kind, data, onDone) {
+            if (!db) { showToast('لازم يكون فيه إنترنت عشان الطلب يتبعت للاعتماد', 'error'); return; }
+            if (submitApprovalRequest.busy) return;
+            submitApprovalRequest.busy = true;
+            const me = pdUser(), now = Date.now(), id = (kind === 'purchase_return' ? 'PR-' : 'SA-') + now;
+            const doc = Object.assign({}, data, { kind, status: 'pending', submittedAt: now, createdAt: now, createdBy: me, returnReason: null,
+                history: [{ action: 'اتعمل واتبعت للاعتماد', by: me.name, at: now }] });
+            db.collection('purchaseDrafts').doc(id).set(doc).then(function() {
+                logAction('طلب اعتماد: ' + APPROVAL_KIND_LABEL[kind], kind === 'stock_adjust'
+                    ? `${data.productName}: من ${data.qtyAtRequest} إلى ${data.requestedNewQty} — السبب: ${data.reason}`
+                    : `لفاتورة شراء #${data.originalInvoiceNumber} من ${data.supplier} بقيمة ${Number(data.grandTotal).toFixed(2)} ر.س`);
+                showToast('اتبعت للاعتماد. مفيش أي تغيير هيحصل غير بعد الموافقة', 'success', 4000);
+                if (onDone) onDone();
+            }).catch(function(e) { console.error(e); showToast('تعذر إرسال الطلب، جرب تاني', 'error'); })
+              .then(function() { submitApprovalRequest.busy = false; });
+        }
+
+        function openApprovalReview(id) {
+            const d = purchaseDrafts.find(x => x.id === id);
+            if (!d) return;
+            if (draftKind(d) === 'purchase') { openPurchaseReview(id); return; }
+            document.getElementById('approvalReviewId').value = id;
+            document.getElementById('approvalReviewNote').value = '';
+            document.getElementById('approvalReviewTitle').textContent = 'مراجعة ' + APPROVAL_KIND_LABEL[draftKind(d)];
+            const who = `<strong>عمله:</strong> ${escapeHtml((d.createdBy && d.createdBy.name) || '-')} · ${new Date(d.createdAt || d.submittedAt).toLocaleString('ar-EG')}`;
+            let html = '';
+            if (draftKind(d) === 'stock_adjust') {
+                const nowQty = inventory[d.productCode] ? (Number(inventory[d.productCode].qty) || 0) : 0;
+                const after = nowQty + Number(d.delta || 0);
+                const typeLabel = d.adjType === 'in' ? 'إضافة' : d.adjType === 'out' ? 'خصم' : 'جرد (تحديد الكمية)';
+                html = `<div style="font-size:14px;line-height:2;"><strong>الصنف:</strong> ${escapeHtml(d.productName)} (${escapeHtml(d.productCode)}) · <strong>النوع:</strong> ${typeLabel}<br>
+                    <strong>السبب:</strong> ${escapeHtml(d.reason || '-')}<br>${who}</div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:10px;">
+                    <div style="background:#f8f9fa;border-radius:10px;padding:10px;"><div style="font-size:12px;color:var(--text-light);">الكمية وقت الطلب</div><div style="font-size:20px;font-weight:800;">${d.qtyAtRequest}</div></div>
+                    <div style="background:#f8f9fa;border-radius:10px;padding:10px;"><div style="font-size:12px;color:var(--text-light);">الفرق المطلوب</div><div style="font-size:20px;font-weight:800;color:${d.delta >= 0 ? 'var(--accent)' : 'var(--danger)'};">${d.delta > 0 ? '+' : ''}${d.delta}</div></div>
+                    <div style="background:#f8f9fa;border-radius:10px;padding:10px;"><div style="font-size:12px;color:var(--text-light);">الكمية دلوقتي</div><div style="font-size:20px;font-weight:800;">${nowQty}</div></div>
+                    <div style="background:${after < 0 ? 'rgba(231,76,60,0.1)' : 'rgba(39,174,96,0.08)'};border-radius:10px;padding:10px;"><div style="font-size:12px;color:var(--text-light);">بعد الاعتماد</div><div style="font-size:20px;font-weight:800;">${after}</div></div></div>
+                    <div style="font-size:12px;color:var(--text-light);margin-top:8px;">الفرق بيتطبق على الكمية الحالية، عشان أي بيع حصل بعد الطلب يتحسب صح. قيمة الفرق تقريبًا ${Number(d.grandTotal || 0).toFixed(2)} ر.س</div>`;
+            } else {
+                html = `<div style="font-size:14px;line-height:2;"><strong>المورد:</strong> ${escapeHtml(d.supplier || '')} · <strong>على فاتورة شراء:</strong> #${escapeHtml(String(d.originalInvoiceNumber || ''))} · ${d.isCash ? 'المبلغ هيرجع للخزنة' : 'هيتخصم من حساب المورد'}<br>${who}${d.notes ? ' · <strong>ملاحظات:</strong> ' + escapeHtml(d.notes) : ''}</div>
+                    <div class="table-container" style="margin-top:8px;"><table><thead><tr><th>الصنف</th><th>الكمية</th><th>في المخزن دلوقتي</th><th>السعر</th><th>الإجمالي</th></tr></thead><tbody>${(d.items || []).map(it => {
+                        const avail = inventory[it.productCode] ? (Number(inventory[it.productCode].qty) || 0) : 0;
+                        return `<tr><td>${escapeHtml(it.productName)}</td><td>${it.qty}</td><td style="${avail < it.qty ? 'color:var(--danger);font-weight:700;' : ''}">${avail}</td><td>${Number(it.cost).toFixed(2)}</td><td>${Number(it.total).toFixed(2)}</td></tr>`; }).join('')}</tbody></table></div>
+                    <div style="text-align:left;font-weight:800;margin-top:8px;">الإجمالي: ${Number(d.grandTotal || 0).toFixed(2)} ر.س</div>`;
+            }
+            document.getElementById('approvalReviewBody').innerHTML = html;
+            const self = isOwnPurchaseDraft(d) && pdRole() !== 'admin';
+            document.getElementById('approvalReviewSelfNote').style.display = self ? 'block' : 'none';
+            document.getElementById('approvalApproveBtn').disabled = self;
+            openModal('approvalReviewModal');
+        }
+
+        function approveGenericDraft() {
+            const id = document.getElementById('approvalReviewId').value;
+            const d = purchaseDrafts.find(x => x.id === id);
+            if (!d || !db) return;
+            if (!canApprovePurchases()) { showToast('الاعتماد للمحاسب أو المدير بس', 'error'); return; }
+            if (isOwnPurchaseDraft(d) && pdRole() !== 'admin') { showToast('مينفعش تعتمد حاجة إنت اللي عاملها', 'error'); return; }
+            const kind = draftKind(d);
+            // نتأكد قبل الاعتماد إن المخزون يسمح
+            if (kind === 'stock_adjust') {
+                const nowQty = inventory[d.productCode] ? (Number(inventory[d.productCode].qty) || 0) : 0;
+                if (nowQty + Number(d.delta || 0) < 0) { showToast('الخصم أكبر من المخزون الحالي. رجّع الطلب يتعمل تاني', 'error'); return; }
+            } else {
+                const short = (d.items || []).find(it => (inventory[it.productCode] ? Number(inventory[it.productCode].qty) || 0 : 0) < it.qty);
+                if (short) { showToast(`${short.productName}: الموجود في المخزن أقل من كمية المرتجع`, 'error'); return; }
+            }
+            if (!confirm('تأكيد الاعتماد؟ التغيير هيتطبق دلوقتي على المخزون' + (kind === 'purchase_return' ? ' وحساب المورد/الخزنة' : '') + '.')) return;
+            const btn = document.getElementById('approvalApproveBtn'); btn.disabled = true;
+            const me = pdUser();
+            const ref = db.collection('purchaseDrafts').doc(id);
+            db.runTransaction(function(t) {
+                return t.get(ref).then(function(snap) {
+                    if (!snap.exists || snap.data().status !== 'pending') throw new Error('الطلب ده اتراجع قبل كده');
+                    t.update(ref, { status: 'approved', approvedAt: Date.now(), approvedBy: me, history: (snap.data().history || []).concat([{ action: 'اتعتمد', by: me.name, at: Date.now() }]) });
+                });
+            }).then(function() {
+                if (kind === 'stock_adjust') {
+                    const inv = inventory[d.productCode] || (inventory[d.productCode] = { code: d.productCode, qty: 0, cost: 0, minStock: 0 });
+                    inv.qty = (Number(inv.qty) || 0) + Number(d.delta || 0);
+                    saveInventory();
+                    addStockMovement(d.productCode, d.productName, 'adjustment', Number(d.delta || 0), inv.qty, 'تعديل يدوي', `${d.reason} (طلبه ${(d.createdBy && d.createdBy.name) || '-'} واعتمده ${me.name})`);
+                    logAction('اعتماد تعديل مخزون', `${d.productName}: ${d.delta > 0 ? '+' : ''}${d.delta} — السبب: ${d.reason} — طلبه ${(d.createdBy && d.createdBy.name) || '-'} واعتمده ${me.name}`);
+                } else {
+                    d.items.forEach(item => {
+                        if (inventory[item.productCode]) {
+                            inventory[item.productCode].qty -= item.qty;
+                            addStockMovement(item.productCode, item.productName, 'out', -item.qty, inventory[item.productCode].qty, 'مرتجع شراء', 'خصم مخزون من مرتجع فاتورة شراء #' + d.originalInvoiceNumber);
+                        }
+                    });
+                    saveInventory();
+                    if (d.isCash) addTreasuryEntry('in', d.grandTotal, d.supplierCode || 'مورد', 'supplier', 'مرتجع فاتورة شراء #' + d.originalInvoiceNumber, 'مرتجع شراء', false);
+                    const ret = {
+                        id: Date.now(), number: getNextDocNumber(purchaseReturns).toString().padStart(4, '0'),
+                        date: new Date().toISOString(), originalInvoiceId: d.originalInvoiceId, originalInvoiceNumber: d.originalInvoiceNumber,
+                        supplierCode: d.supplierCode, supplierName: d.supplier, items: d.items, grandTotal: d.grandTotal,
+                        affectsBalance: !d.isCash, notes: d.notes || '', createdBy: d.createdBy || null, approvedBy: me, draftId: d.id
+                    };
+                    purchaseReturns.push(ret);
+                    savePurchaseReturns();
+                    logAction('اعتماد مرتجع شراء', `مرتجع #${ret.number} لفاتورة #${d.originalInvoiceNumber} — ${d.supplier} بقيمة ${Number(d.grandTotal).toFixed(2)} ر.س — عمله ${(d.createdBy && d.createdBy.name) || '-'} واعتمده ${me.name}`);
+                    try { renderPurchaseReturns(); renderSuppliers(); renderTreasury(); } catch (e) {}
+                }
+                try { renderInventory(); renderMovements(); renderLowStock(); updateDashboardStats(); } catch (e) {}
+                closeModal('approvalReviewModal');
+                showToast('اتعتمد واتطبق');
+            }).catch(function(e) { console.error(e); showToast(e.message || 'تعذر الاعتماد', 'error'); })
+              .then(function() { btn.disabled = false; });
+        }
+
+        function rejectGenericDraft() {
+            const id = document.getElementById('approvalReviewId').value;
+            const reason = document.getElementById('approvalReviewNote').value.trim();
+            if (!reason) { showToast('اكتب سبب الرفض', 'error'); return; }
+            const d = purchaseDrafts.find(x => x.id === id); if (!d || !db) return;
+            const me = pdUser();
+            db.collection('purchaseDrafts').doc(id).update({ status: 'returned', returnReason: reason, returnedBy: me, returnedAt: Date.now(),
+                history: (d.history || []).concat([{ action: 'اترفض: ' + reason, by: me.name, at: Date.now() }]) })
+                .then(() => { logAction('رفض ' + APPROVAL_KIND_LABEL[draftKind(d)], reason); closeModal('approvalReviewModal'); showToast('اترفض ورجع لصاحبه'); })
+                .catch(e => { console.error(e); showToast('تعذر الحفظ', 'error'); });
+        }
+        function dismissReturnedDraft(id) {
+            if (!db) return;
+            db.collection('purchaseDrafts').doc(id).update({ status: 'closed', closedAt: Date.now() }).catch(e => console.error(e));
         }
 
         // إضافة مورد جديد من جوه فاتورة الشراء، وبعد الحفظ بيتختار في الفاتورة على طول
@@ -8417,7 +8892,7 @@
         // ==================== PURCHASE INVOICE ====================
         function initPurchaseInvoice() {
             document.getElementById('purchaseInvoiceDate').textContent = new Date().toLocaleDateString('ar-SA');
-            document.getElementById('purchaseInvoiceNumber').textContent = getNextDocNumber(purchaseInvoices).toString().padStart(4, '0');
+            document.getElementById('purchaseInvoiceNumber').textContent = 'يتحدد بعد الاعتماد';
             addPurchaseRow();
             showInvoiceDraftBanner('purchase');
         }
@@ -8506,47 +8981,11 @@
 
             const paymentMethod = document.getElementById('purchasePaymentMethod').value;
             const grandTotal = items.reduce((sum, item) => sum + item.total, 0);
-
-            items.forEach(item => {
-                if (!inventory[item.productCode]) {
-                    inventory[item.productCode] = { code: item.productCode, qty: 0, cost: item.cost, minStock: 0 };
-                }
-                const beforeQty = inventory[item.productCode].qty;
-                inventory[item.productCode].qty += item.qty;
-                if (beforeQty + item.qty > 0) {
-                    const oldValue = beforeQty * (inventory[item.productCode].cost || 0);
-                    const newValue = item.qty * item.cost;
-                    inventory[item.productCode].cost = (oldValue + newValue) / (beforeQty + item.qty);
-                }
-                addStockMovement(item.productCode, item.productName, 'purchase', item.qty, inventory[item.productCode].qty, 'فاتورة شراء #' + getNextDocNumber(purchaseInvoices).toString().padStart(4, '0'), 'إضافة من فاتورة شراء');
-            });
-            saveInventory();
-
-            // Deduct from treasury if cash payment (isDebtRelated=false: دفع فوري وليس سداد دين قائم)
-            if (paymentMethod === 'نقدي' || paymentMethod === 'تحويل بنكي') {
-                addTreasuryEntry('out', grandTotal, supplierCode, 'supplier', 'فاتورة شراء #' + getNextDocNumber(purchaseInvoices).toString().padStart(4, '0'), paymentMethod, false);
-            }
-
-            const supplier = suppliers.find(s => s.code === supplierCode);
-            const invoice = {
-                id: Date.now(), number: document.getElementById('purchaseInvoiceNumber').textContent,
-                type: 'purchase',
-                date: new Date().toISOString(), supplierCode, supplier: supplier ? supplier.name : supplierCode,
-                supplierInvoice: document.getElementById('purchaseSupplierInvoice').value,
-                paymentMethod: paymentMethod,
-                notes: document.getElementById('purchaseNotes').value, items,
-                grandTotal: grandTotal
-            };
-            purchaseInvoices.push(invoice);
-            localStorage.setItem('purchaseInvoices', JSON.stringify(purchaseInvoices));
-            if (db) db.collection('purchaseInvoiceRecords').doc(String(invoice.id)).set(invoice).catch(function(e) { console.error('purchase invoice sync failed:', e); showToast('تعذر رفع فاتورة الشراء للسحابة (' + (e && e.code ? e.code : e) + ')', 'error', 8000); });
-            logAction('فاتورة شراء', `تم إنشاء فاتورة شراء #${invoice.number} من المورد ${invoice.supplier} بقيمة ${grandTotal.toFixed(2)} ر.س`);
-            showToast('تم حفظ فاتورة الشراء وإضافة المخزون بنجاح');
-            resetPurchaseInvoice(); updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderInventory(); renderMovements(); renderLowStock(); renderTreasury();
+            submitPurchaseForReview({ supplierCode, paymentMethod, items, grandTotal });
         }
 
         function resetPurchaseInvoice() {
-            document.getElementById('purchaseInvoiceNumber').textContent = getNextDocNumber(purchaseInvoices).toString().padStart(4, '0');
+            document.getElementById('purchaseInvoiceNumber').textContent = 'يتحدد بعد الاعتماد';
             document.getElementById('purchaseSupplier').value = '';
             document.getElementById('purchaseSupplierSearch').value = '';
             document.getElementById('purchaseSupplierInvoice').value = '';
@@ -8557,6 +8996,10 @@
             document.getElementById('purchaseGrandTotal').textContent = '0 ر.س';
             addPurchaseRow();
             clearInvoiceDraft('purchase');
+            editingPurchaseDraftId = null;
+            const att = document.getElementById('purchaseAttachment'); if (att) att.value = '';
+            const attEx = document.getElementById('purchaseAttachmentExisting'); if (attEx) attEx.innerHTML = '';
+            const eb = document.getElementById('purchaseDraftEditBanner'); if (eb) eb.style.display = 'none';
         }
 
         function printPurchaseInvoice() { window.print(); }
@@ -8579,8 +9022,8 @@
                 <td>${typeBadge}</td><td>${date}</td><td><strong>${party}</strong></td>
                 <td>${salesman}</td><td>${inv.items.length}</td><td><strong style="color:${isSale ? 'var(--accent)' : 'var(--teal)'};">${inv.grandTotal.toFixed(2)} ر.س</strong></td>
                 <td><button class="btn btn-primary btn-icon btn-sm" onclick='viewInvoice(${inv.id}, "${inv.type}")'><i class="fas fa-eye"></i></button>
-                <button class="btn btn-warning btn-icon btn-sm" onclick='openEditInvoiceModal(${inv.id}, "${inv.type}")'><i class="fas fa-edit"></i></button>
-                <button class="btn btn-danger btn-icon btn-sm" onclick="deleteAnyInvoice(${inv.id}, '${inv.type}')"><i class="fas fa-trash"></i></button></td></tr>`;
+                <button class="btn btn-warning btn-icon btn-sm admin-only" onclick='openEditInvoiceModal(${inv.id}, "${inv.type}")'><i class="fas fa-edit"></i></button>
+                <button class="btn btn-danger btn-icon btn-sm admin-only" onclick="deleteAnyInvoice(${inv.id}, '${inv.type}')"><i class="fas fa-trash"></i></button></td></tr>`;
             }).join('');
         }
 
@@ -8613,10 +9056,11 @@
         }
 
         function deleteAnyInvoice(id, type) {
+            if (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin') { showToast('حذف الفواتير للمدير بس', 'error'); return; }
             if (type === 'purchase') {
                 const invCheck = purchaseInvoices.find(i => i.id === id);
-                if (invCheck && invCheck.paymentMethod === 'آجل' && (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin')) {
-                    showToast('حذف فواتير الشراء الآجلة متاح للمدير فقط', 'error');
+                if (invCheck && (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin')) {
+                    showToast('فاتورة الشراء بعد الاعتماد مقفولة. التصليح بمرتجع مشتريات، أو من المدير', 'error');
                     return;
                 }
             }
@@ -8669,10 +9113,11 @@
         let editingInvoiceId = null, editingInvoiceType = null, editInvoiceItems = [];
 
         function openEditInvoiceModal(id, type) {
+            if (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin') { showToast('تعديل الفواتير للمدير بس', 'error'); return; }
             const invoice = type === 'sale' ? invoices.find(i => i.id === id) : purchaseInvoices.find(i => i.id === id);
             if (!invoice) return;
-            if (type === 'purchase' && invoice.paymentMethod === 'آجل' && (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin')) {
-                showToast('تعديل فواتير الشراء الآجلة متاح للمدير فقط', 'error');
+            if (type === 'purchase' && (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin')) {
+                showToast('فاتورة الشراء بعد الاعتماد مقفولة. التصليح بمرتجع مشتريات، أو من المدير', 'error');
                 return;
             }
             editingInvoiceId = id;
@@ -9214,6 +9659,9 @@
             purchaseReturns.filter(r => r.originalInvoiceId === id).forEach(r => {
                 r.items.forEach(it => { alreadyReturned[it.productCode] = (alreadyReturned[it.productCode] || 0) + it.qty; });
             });
+            (typeof purchaseDrafts !== 'undefined' ? purchaseDrafts : []).filter(r => r.kind === 'purchase_return' && r.status === 'pending' && r.originalInvoiceId === id).forEach(r => {
+                r.items.forEach(it => { alreadyReturned[it.productCode] = (alreadyReturned[it.productCode] || 0) + it.qty; });
+            });
             tbody.innerHTML = invoice.items.map(item => {
                 const returnedBefore = alreadyReturned[item.productCode] || 0;
                 const maxQty = Math.max(0, item.qty - returnedBefore);
@@ -9273,34 +9721,12 @@
             if (stockError) { showToast('الكمية المطلوب إرجاعها أكبر من المتاح في المخزون!', 'error'); return; }
 
             const grandTotal = items.reduce((s, it) => s + it.total, 0);
-            const isCash = invoice.paymentMethod !== 'آجل';
-
-            items.forEach(item => {
-                if (inventory[item.productCode]) {
-                    inventory[item.productCode].qty -= item.qty;
-                    addStockMovement(item.productCode, item.productName, 'out', -item.qty, inventory[item.productCode].qty, 'مرتجع شراء', 'خصم مخزون من مرتجع فاتورة شراء #' + invoice.number);
-                }
-            });
-            saveInventory();
-
-            if (isCash) {
-                addTreasuryEntry('in', grandTotal, invoice.supplierCode || 'مورد', 'supplier', 'مرتجع فاتورة شراء #' + invoice.number, 'مرتجع شراء', false);
-            }
-
-            const ret = {
-                id: Date.now(), number: getNextDocNumber(purchaseReturns).toString().padStart(4, '0'),
-                date: new Date().toISOString(), originalInvoiceId: invoice.id, originalInvoiceNumber: invoice.number,
-                supplierCode: invoice.supplierCode, supplierName: invoice.supplier,
-                items, grandTotal,
-                affectsBalance: !isCash,
+            submitApprovalRequest('purchase_return', {
+                originalInvoiceId: invoice.id, originalInvoiceNumber: invoice.number,
+                supplierCode: invoice.supplierCode, supplier: invoice.supplier,
+                items, grandTotal, isCash: invoice.paymentMethod !== 'آجل',
                 notes: document.getElementById('purchaseReturnNotes').value.trim()
-            };
-            purchaseReturns.push(ret);
-            savePurchaseReturns();
-            logAction('مرتجع شراء', `تم تسجيل مرتجع شراء #${ret.number} لفاتورة #${invoice.number} - المورد ${invoice.supplier} بقيمة ${grandTotal.toFixed(2)} ر.س`);
-            showToast('تم حفظ مرتجع الشراء وتحديث المخزون والحسابات بنجاح');
-            resetPurchaseReturnForm();
-            renderPurchaseReturns(); renderSuppliers(); updateDashboardStats(); renderInventory(); renderMovements(); renderLowStock(); renderTreasury();
+            }, function() { resetPurchaseReturnForm(); });
         }
 
         function resetPurchaseReturnForm() {
@@ -11219,6 +11645,7 @@
         }
 
         function handleProductExcelUpload(event) {
+            if (!currentUser || String(currentUser.role || '').toLowerCase() !== 'admin') { showToast('تعديل الأصناف والأسعار للمدير بس', 'error'); event.target.value = ''; return; }
             const file = event.target.files[0];
             if (!file) return;
             const reader = new FileReader();
@@ -11350,6 +11777,7 @@
         }
 
         function importExcelProducts() {
+            if (!currentUser || String(currentUser.role || '').toLowerCase() !== 'admin') { showToast('تعديل الأصناف والأسعار للمدير بس', 'error'); return; }
             let updateExisting = document.getElementById('productExcelUpdateExisting').checked;
             if (!updateExisting) {
                 const existingCount = excelProductsData.filter(p => !p.brandError && p.code && products.some(x => x.code === p.code)).length;
