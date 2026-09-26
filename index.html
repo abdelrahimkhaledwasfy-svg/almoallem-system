@@ -1938,6 +1938,12 @@
 
         <!-- Backup Section -->
         <section id="backup-section" class="section">
+            <div class="card" style="border-right:4px solid var(--warning);">
+                <div class="card-header"><div class="card-title"><i class="fas fa-search"></i> فحص البيانات القديمة (قبل تقسيم التخزين)</div>
+                    <button class="btn btn-warning btn-sm" onclick="checkOldStoreData()"><i class="fas fa-search"></i> افحص دلوقتي</button></div>
+                <p style="font-size:13px;color:var(--text-light);margin:0;">بيقرا النسخة القديمة من البيانات اللي كانت متخزنة قبل تقسيم التخزين، ويوريك فواتير الشراء اللي فيها ومش موجودة دلوقتي (زي فواتير سبتمبر). <strong>قراءة بس، مش بيغيّر أي حاجة.</strong></p>
+                <div id="oldDataResult"></div>
+            </div>
             <div class="stats-grid">
                 <div class="stat-card sales">
                     <div class="stat-icon"><i class="fas fa-database"></i></div>
@@ -3478,6 +3484,7 @@
                 customerOrders = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
                 localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
                 syncReservedOrdersIntoLocalInventory(customerOrders);
+                try { processRepDeliveredOrders(); } catch (e) { console.error('processRepDeliveredOrders error:', e); }
                 let addedAny = false;
                 customerOrders.forEach(function(o) { if (syncCustomerFromOrder(o)) addedAny = true; });
                 if (addedAny) {
@@ -4090,7 +4097,9 @@
                     totalCost: order.items.reduce((sum, it) => sum + ((it.cost || 0) * (it.stockDeductQty != null ? it.stockDeductQty : it.qty)), 0),
                     totalProfit: order.items.reduce((sum, it) => sum + (it.profit || 0), 0),
                     sourceOrderId: order.id,
-                    deliveryStatus: 'بانتظار التسليم'
+                    deliveryStatus: 'تم التسليم',
+                    deliveredByRepCode: order.repDelivery ? (order.repDelivery.code || '') : '',
+                    deliveredByRepName: order.repDelivery ? (order.repDelivery.name || '') : ''
                 };
                 invoices.push(invoice);
                 localStorage.setItem('invoices', JSON.stringify(invoices));
@@ -4129,6 +4138,12 @@
 
                 // حالة الطلب اتحدّثت بالفعل جوه المعاملة الذرية فوق؛ هنا بس بنضيف بيانات الفاتورة
                 // المرتبطة (رقمها، النقاط المخصومة) كتحديث تكميلي غير حرج
+                // لو مندوب التسليم هو اللي سلّم: سجل العهدة بتاعه ياخد رقم الفاتورة والمبلغ النهائي بعد خصم النقاط
+                if (order.repDelivery && db) {
+                    db.collection('deliveryCollectionRecords').doc('DLV-ORD-' + order.id)
+                        .set({ invoiceId: invoice.id, invoiceNumber: invoice.number, amount: grandTotal }, { merge: true })
+                        .catch(function(e) { console.error('custody record update failed:', e); });
+                }
                 return orderRef.update({ invoiceNumber: invoice.number, pointsDeducted: pointsToDeduct, appliedDiscount: appliedDiscount }).catch(function(e) { console.error('order metadata update failed:', e); });
             }).then(function() {
                 order.status = 'delivered';
@@ -7969,6 +7984,113 @@
             // تحديث لحظي: كل 10 ثواني وهو مفتوح
             svTimer = setInterval(renderSupervisorDashboard, 10000);
         })();
+
+
+        // ==================== طلبات سلّمها مندوب التسليم من الأبليكشن ====================
+        // المندوب بيدوس "تم التسليم" في الأبليكشن، فبيتكتب على الطلب (repDelivery). أي جهاز فاتح السيستم
+        // بيقفل الطلب ويعمل الفاتورة والنقاط. fulfillOrderCore معاملة ذرية، فلو جهازين حاولوا مع بعض واحد بس بينجح.
+        const repDeliveryAttempts = {};
+        function processRepDeliveredOrders() {
+            if (!db || !currentUser) return;
+            customerOrders.forEach(function(o) {
+                if (o.status !== 'ready' || !o.repDelivery) return;
+                const last = repDeliveryAttempts[o.id];
+                if (last && Date.now() - last < 60000) return;
+                repDeliveryAttempts[o.id] = Date.now();
+                fulfillOrderCore(o.id, { silent: true }).then(function(ok) {
+                    if (ok) {
+                        logAction('تسليم طلب بواسطة مندوب التسليم', `الطلب #${o.id.slice(-6)} للعميل ${o.customerName || ''} — سلّمه ${o.repDelivery.name || o.repDelivery.code}`);
+                        showToast(`اتقفل طلب ${o.customerName || ''} (سلّمه ${o.repDelivery.name || ''})`, 'success', 3500);
+                        renderCustomerOrders(); updatePendingOrdersBadge();
+                    }
+                }).catch(function(e) { console.error('auto-fulfill failed:', e); });
+            });
+        }
+
+        // ==================== اقتراحات "ناس كتير بتطلبهم مع بعض" للأبليكشن ====================
+        // بتتحسب من فواتير البيع آخر 90 يوم، وبتتحفظ في مستند واحد (appMeta/suggestions) الأبليكشن بيقراه مرة واحدة
+        function buildAppSuggestions() {
+            if (!db || !currentUser) return;
+            if (invoices.length < 20) return;
+            const last = Number(localStorage.getItem('_appSuggestionsBuiltAt') || 0);
+            if (Date.now() - last < 12 * 3600000) return;
+            localStorage.setItem('_appSuggestionsBuiltAt', String(Date.now()));
+            const since = Date.now() - 90 * 86400000;
+            const pc = {};
+            let used = 0;
+            invoices.forEach(function(inv) {
+                if (inv.type !== 'sale' || new Date(inv.date).getTime() < since) return;
+                const codes = Array.from(new Set((inv.items || []).map(i => i.productCode).filter(Boolean)));
+                if (codes.length < 2 || codes.length > 60) return;
+                used++;
+                codes.forEach(a => { const m = pc[a] || (pc[a] = {}); codes.forEach(b => { if (a !== b) m[b] = (m[b] || 0) + 1; }); });
+            });
+            const pairs = {};
+            Object.keys(pc).forEach(function(a) {
+                const top = Object.keys(pc[a]).filter(b => pc[a][b] >= 2).sort((x, y) => pc[a][y] - pc[a][x]).slice(0, 6).map(b => ({ c: b, n: pc[a][b] }));
+                if (top.length) pairs[a] = top;
+            });
+            db.collection('appMeta').doc('suggestions').set({ pairs: pairs, updatedAt: Date.now(), basedOnInvoices: used })
+                .catch(function(e) { console.error('suggestions save failed:', e); localStorage.removeItem('_appSuggestionsBuiltAt'); });
+        }
+        setInterval(function() { try { buildAppSuggestions(); } catch (e) { console.error(e); } }, 60000);
+
+        // ==================== فحص البيانات القديمة (قراءة فقط) ====================
+        // بيقرا المستند القديم storeData/main (قبل تقسيم التخزين) ويقارن فواتيره باللي موجود دلوقتي. مش بيغيّر أي حاجة.
+        let oldDataMissingPurchases = [];
+        function checkOldStoreData() {
+            if (!currentUser || String(currentUser.role || '').toLowerCase() !== 'admin') { showToast('الفحص ده للمدير بس', 'error'); return; }
+            if (!db) { showToast('لا يوجد اتصال بالسحابة', 'error'); return; }
+            const out = document.getElementById('oldDataResult');
+            out.innerHTML = '<div style="padding:12px;color:var(--text-light);"><i class="fas fa-spinner fa-spin"></i> بقرا البيانات القديمة...</div>';
+            db.collection('storeData').doc('main').get().then(function(snap) {
+                const d = snap.exists ? (snap.data() || {}) : {};
+                const oldP = Array.isArray(d.purchaseInvoices) ? d.purchaseInvoices : [];
+                const oldS = Array.isArray(d.invoices) ? d.invoices : [];
+                const key = inv => [String(inv.number || ''), String(inv.supplierCode || inv.customerCode || ''), String(inv.date || '').slice(0, 10)].join('|');
+                const curPIds = new Set(purchaseInvoices.map(p => String(p.id))), curPKeys = new Set(purchaseInvoices.map(key));
+                const curSIds = new Set(invoices.map(p => String(p.id))), curSKeys = new Set(invoices.map(key));
+                oldDataMissingPurchases = oldP.filter(p => !curPIds.has(String(p.id)) && !curPKeys.has(key(p)))
+                    .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+                const missingS = oldS.filter(p => !curSIds.has(String(p.id)) && !curSKeys.has(key(p)));
+                const fmt = n => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+                const total = oldDataMissingPurchases.reduce((s, p) => s + (Number(p.grandTotal) || 0), 0);
+                let html = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:12px 0;">
+                    <div style="background:#f8f9fa;border-radius:10px;padding:12px;"><div style="font-size:12px;color:var(--text-light);">فواتير شراء في النسخة القديمة</div><div style="font-size:22px;font-weight:800;">${oldP.length}</div></div>
+                    <div style="background:${oldDataMissingPurchases.length ? 'rgba(231,76,60,0.08)' : 'rgba(39,174,96,0.08)'};border-radius:10px;padding:12px;"><div style="font-size:12px;color:var(--text-light);">فواتير شراء مش موجودة دلوقتي</div><div style="font-size:22px;font-weight:800;color:${oldDataMissingPurchases.length ? 'var(--danger)' : 'var(--accent)'};">${oldDataMissingPurchases.length}</div><div style="font-size:12px;">بإجمالي ${fmt(total)}</div></div>
+                    <div style="background:#f8f9fa;border-radius:10px;padding:12px;"><div style="font-size:12px;color:var(--text-light);">فواتير بيع مش موجودة دلوقتي</div><div style="font-size:22px;font-weight:800;">${missingS.length}</div><div style="font-size:12px;">من ${oldS.length} في النسخة القديمة</div></div>
+                </div>`;
+                if (!snap.exists) html = '<div class="alert" style="padding:12px;">مفيش نسخة قديمة (storeData/main) على السحابة.</div>';
+                else if (!oldP.length) html += '<div style="padding:10px;color:var(--text-light);">النسخة القديمة مفيهاش فواتير شراء محفوظة.</div>';
+                if (oldDataMissingPurchases.length) {
+                    html += `<div class="table-container" style="max-height:380px;overflow-y:auto;"><table><thead><tr><th>رقم الفاتورة</th><th>التاريخ</th><th>المورد</th><th>رقم فاتورة المورد</th><th>عدد الأصناف</th><th>الإجمالي</th></tr></thead><tbody>` +
+                        oldDataMissingPurchases.map(p => `<tr><td>${escapeHtml(String(p.number || '-'))}</td><td>${p.date ? new Date(p.date).toLocaleDateString('ar-EG') : '-'}</td><td>${escapeHtml(p.supplier || p.supplierCode || '-')}</td><td>${escapeHtml(p.supplierInvoice || '-')}</td><td>${(p.items || []).length}</td><td><strong>${fmt(p.grandTotal)}</strong></td></tr>`).join('') +
+                        `</tbody></table></div>
+                        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px;">
+                            <button class="btn btn-info btn-sm" onclick="downloadOldMissingPurchases()"><i class="fas fa-download"></i> احفظ نسخة منهم على جهازك (Excel)</button>
+                            <span style="font-size:13px;color:var(--text-light);">الفحص ده قراية بس، ومفيش أي حاجة اتغيرت. ابعت الصورة دي لـ Claude عشان تقرروا ترجّعوهم إزاي.</span>
+                        </div>`;
+                }
+                out.innerHTML = html;
+                logAction('فحص البيانات القديمة', `فواتير شراء ناقصة: ${oldDataMissingPurchases.length} — فواتير بيع ناقصة: ${missingS.length}`);
+            }).catch(function(e) {
+                console.error('old data check failed:', e);
+                out.innerHTML = '<div style="padding:12px;color:var(--danger);">تعذر قراءة البيانات القديمة: ' + escapeHtml(e.message || '') + '</div>';
+            });
+        }
+        function downloadOldMissingPurchases() {
+            if (!oldDataMissingPurchases.length) return;
+            const rows = [['رقم الفاتورة', 'التاريخ', 'كود المورد', 'المورد', 'رقم فاتورة المورد', 'كود الصنف', 'اسم الصنف', 'الوحدة', 'الكمية', 'سعر الشراء', 'الإجمالي', 'إجمالي الفاتورة']];
+            oldDataMissingPurchases.forEach(p => (p.items && p.items.length ? p.items : [{}]).forEach(it => rows.push([
+                p.number || '', p.date ? new Date(p.date).toLocaleDateString('ar-EG') : '', p.supplierCode || '', p.supplier || '', p.supplierInvoice || '',
+                it.productCode || '', it.productName || '', it.unit || '', it.qty || '', it.cost || '', it.total || '', p.grandTotal || ''
+            ])));
+            const ws = XLSX.utils.aoa_to_sheet(rows);
+            ws['!cols'] = rows[0].map(() => ({ wch: 16 }));
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'فواتير شراء قديمة');
+            XLSX.writeFile(wb, 'فواتير_شراء_قديمة_ناقصة.xlsx');
+        }
 
         // إضافة مورد جديد من جوه فاتورة الشراء، وبعد الحفظ بيتختار في الفاتورة على طول
         let pendingPurchaseSupplierSelect = false;
