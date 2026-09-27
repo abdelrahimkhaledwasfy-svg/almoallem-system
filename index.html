@@ -2012,6 +2012,11 @@
                 <p style="font-size:13px;color:var(--text-light);margin:0;">بيقرا النسخة القديمة من البيانات اللي كانت متخزنة قبل تقسيم التخزين، ويوريك فواتير الشراء اللي فيها ومش موجودة دلوقتي (زي فواتير سبتمبر). <strong>قراءة بس، مش بيغيّر أي حاجة.</strong></p>
                 <div id="oldDataResult"></div>
             </div>
+            <div class="card" style="border-right:4px solid var(--danger);">
+                <div class="card-header"><div class="card-title"><i class="fas fa-tools"></i> إعادة بناء فواتير الشراء المفقودة</div>
+                    <button class="btn btn-danger btn-sm" onclick="reconstructLostPurchases()"><i class="fas fa-search-plus"></i> دوّر عليهم</button></div>
+                <p style="font-size:13px;color:var(--text-light);margin:0;">كل فاتورة شراء قديمة سابت أثر في <strong>سجل العمليات</strong> (الرقم، المورد، الإجمالي، التاريخ)، وفي <strong>حركات المخزون</strong> (الأصناف والكميات)، وفي <strong>الخزنة</strong> لو اتدفعت. الأداة بتجمع الآثار دي وتعيد بناء الفواتير اللي اختفت. هتشوفهم قبل الحفظ، و<strong>المخزون والخزنة مش بيتغيروا</strong> لأنهم اتسجلوا وقتها.</p>
+            </div>
             <div class="card" style="border-right:4px solid var(--info);">
                 <div class="card-header"><div class="card-title"><i class="fas fa-heartbeat"></i> فحص سلامة البيانات</div><button class="btn btn-primary btn-sm" onclick="runHealthCheck()"><i class="fas fa-stethoscope"></i> افحص دلوقتي</button></div>
                 <p style="font-size:13px;color:var(--text-light);margin:0 0 10px;">بيراجع البيانات الحقيقية ويطلعلك أي حاجة مش مظبوطة: أرقام مكررة، فلوس مش متسجلة، مخزون سالب، وغيرهم. قراءة بس.</p>
@@ -9970,6 +9975,75 @@
             el.innerHTML = `<div style="font-weight:800;margin-bottom:8px;">${okCount} من ${checks.length} سليم</div>` + checks.map(c => `<div style="padding:8px 10px;border-radius:8px;margin-bottom:6px;background:${c.ok ? 'rgba(46,204,113,0.07)' : 'rgba(231,76,60,0.08)'};"><strong>${c.ok ? '✅' : '⚠️'} ${c.title}</strong>${!c.ok && c.detail ? `<div style="font-size:12.5px;margin-top:3px;">${escapeHtml(c.detail)}</div>` : ''}</div>`).join('');
             logAction('فحص سلامة البيانات', `${okCount} من ${checks.length} سليم`);
             return checks;
+        }
+
+
+        // ==================== إعادة بناء فواتير الشراء المفقودة من آثارها ====================
+        let rebuiltPurchases = [];
+        function reconstructLostPurchases() {
+            if (!currentUser || String(currentUser.role).toLowerCase() !== 'admin' || !db) { showToast('للمدير بس', 'error'); return; }
+            showToast('بدوّر في السجلات...');
+            Promise.all([
+                db.collection('auditLogRecords').where('type', '==', 'فاتورة شراء').get(),
+                db.collection('stockMovementRecords').where('type', '==', 'purchase').get()
+            ]).then(([logSnap, movSnap]) => {
+                const logs = logSnap.docs.map(d => d.data());
+                const movs = movSnap.docs.map(d => d.data());
+                const near = (a, b, mins) => Math.abs(new Date(a).getTime() - new Date(b).getTime()) <= mins * 60000;
+                const norm = s => normalizeArabicText(s || '');
+                rebuiltPurchases = [];
+                logs.sort((a, b) => String(a.date).localeCompare(String(b.date))).forEach(l => {
+                    const m = /#(\d+).*?المورد\s+(.+?)\s+بقيمة\s+([\d.,]+)/.exec(l.details || '');
+                    if (!m) return;
+                    const number = m[1], supplierName = m[2].trim(), total = parseFloat(m[3].replace(/,/g, ''));
+                    // موجودة فعلًا؟ (نفس الرقم وفي نفس اليوم تقريبًا)
+                    if (purchaseInvoices.some(p => String(p.number) === number && near(p.date, l.date, 24 * 60))) return;
+                    const items = movs.filter(mv => mv.reference === 'فاتورة شراء #' + number && near(mv.date, l.date, 20))
+                        .map(mv => ({ productCode: mv.productCode, productName: mv.productName, unit: (products.find(p => p.code === mv.productCode) || {}).unit || '', qty: Number(mv.qty) || 0, unitCost: mv.unitCost }));
+                    const sup = suppliers.find(s => norm(s.name) === norm(supplierName));
+                    const pay = treasury.find(t => t.type === 'out' && (t.notes || '') === 'فاتورة شراء #' + number && near(t.date, l.date, 20));
+                    const flags = [];
+                    // سعر كل صنف: لو صنف واحد = الإجمالي ÷ الكمية، ولو أكتر بيتوزع على حسب التكلفة (تقديري)
+                    if (items.length === 1 && items[0].qty > 0) items[0].cost = total / items[0].qty;
+                    else if (items.length > 1) {
+                        const w = items.map(it => it.qty * (Number(it.unitCost) || Number((products.find(p => p.code === it.productCode) || {}).cost) || 1));
+                        const sw = w.reduce((a, b) => a + b, 0) || 1;
+                        items.forEach((it, i) => { it.cost = it.qty > 0 ? (total * w[i] / sw) / it.qty : 0; });
+                        flags.push('أسعار الأصناف تقديرية');
+                    }
+                    items.forEach(it => { it.cost = Math.round((it.cost || 0) * 100) / 100; it.total = Math.round(it.qty * it.cost * 100) / 100; delete it.unitCost; });
+                    if (!items.length) flags.push('مفيش أصناف في حركات المخزون');
+                    if (!sup) flags.push('المورد مش متسجل بالاسم ده');
+                    const clash = purchaseInvoices.some(p => String(p.number) === number);
+                    rebuiltPurchases.push({
+                        id: newRecordId(), number: clash ? number + '-ق' : number, type: 'purchase', date: l.date,
+                        supplierCode: sup ? sup.code : '', supplier: sup ? sup.name : supplierName, supplierInvoice: '',
+                        paymentMethod: pay ? (pay.reference || 'نقدي') : 'آجل', notes: 'اتعادت من سجلات النظام' + (flags.length ? ' (' + flags.join('، ') + ')' : ''),
+                        items, grandTotal: total, reconstructed: true, createdBy: { name: l.fullName || l.username || '' }, _flags: flags
+                    });
+                });
+                if (!rebuiltPurchases.length) { showToast('مفيش فواتير شراء مفقودة لقيتلها آثار في السجلات', 'warning', 5000); return; }
+                const sum = rebuiltPurchases.reduce((s, p) => s + p.grandTotal, 0);
+                xlPreview({ title: `لقيت ${rebuiltPurchases.length} فاتورة شراء مفقودة (بإجمالي ${sum.toFixed(2)})`,
+                    info: 'دي الفواتير اللي ليها آثار ومش موجودة دلوقتي. <strong>الحفظ بيرجّعها للسجلات بس</strong>: المخزون والخزنة مش هيتغيروا (اتسجلوا وقتها)، وأرصدة الموردين هترجع تتحسب صح. الفواتير اللي عليها ملاحظة راجعها بعد الحفظ. <button class="btn btn-info btn-sm" onclick="exportRebuiltPurchases()"><i class="fas fa-download"></i> نزّلهم Excel الأول</button>',
+                    headers: ['رقم الفاتورة', 'التاريخ', 'المورد', 'الدفع', 'الأصناف', 'الإجمالي'],
+                    entries: rebuiltPurchases.map((p, i) => ({ row: i + 1, cells: [p.number, new Date(p.date).toLocaleDateString('ar-EG'), p.supplier, p.paymentMethod, p.items.map(it => it.productName + ' ×' + it.qty).join('، '), p.grandTotal.toFixed(2)], status: 'new', note: p._flags.join('، '), p })),
+                    confirmLabel: 'رجّع الفواتير دي',
+                    onConfirm: function(list) {
+                        let chain = Promise.resolve();
+                        for (let i = 0; i < list.length; i += 400) {
+                            const part = list.slice(i, i + 400);
+                            chain = chain.then(() => { const b = db.batch(); part.forEach(e => { const p = Object.assign({}, e.p); delete p._flags; b.set(db.collection('purchaseInvoiceRecords').doc(String(p.id)), p); }); return b.commit(); });
+                        }
+                        chain.then(() => { logAction('إعادة بناء فواتير شراء مفقودة', `رجع ${list.length} فاتورة بإجمالي ${list.reduce((s, e) => s + e.p.grandTotal, 0).toFixed(2)}`); showToast(`رجعت ${list.length} فاتورة شراء`); })
+                            .catch(err => { console.error(err); showToast('تعذر الحفظ: ' + (err.message || ''), 'error'); });
+                    } });
+            }).catch(e => { console.error(e); showToast('تعذر قراءة السجلات: ' + (e.message || ''), 'error'); });
+        }
+        function exportRebuiltPurchases() {
+            const rows = [['رقم الفاتورة', 'التاريخ', 'المورد', 'طريقة الدفع', 'كود الصنف', 'الصنف', 'الكمية', 'سعر الشراء', 'الإجمالي', 'إجمالي الفاتورة', 'ملاحظة']];
+            rebuiltPurchases.forEach(p => (p.items.length ? p.items : [{}]).forEach(it => rows.push([p.number, new Date(p.date).toLocaleDateString('ar-EG'), p.supplier, p.paymentMethod, it.productCode || '', it.productName || '', it.qty || '', it.cost || '', it.total || '', p.grandTotal, (p._flags || []).join('، ')])));
+            xlWrite('فواتير_شراء_معاد_بناؤها', [{ name: 'الفواتير', rows }]);
         }
 
         // إضافة مورد جديد من جوه فاتورة الشراء، وبعد الحفظ بيتختار في الفاتورة على طول
