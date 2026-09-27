@@ -2790,7 +2790,9 @@
             expenses: { collection: 'expenseRecords', idField: 'id', money: true },
             salesReturns: { collection: 'salesReturnRecords', idField: 'id', money: true },
             purchaseReturns: { collection: 'purchaseReturnRecords', idField: 'id', money: true },
-            supplierAdjustments: { collection: 'supplierAdjustmentRecords', idField: 'id', money: true }
+            supplierAdjustments: { collection: 'supplierAdjustmentRecords', idField: 'id', money: true },
+            // اليوزرات كمان خرجوا من المستند اللي أبليكشن العملاء بيقراه (مكان للموظفين بس)
+            users: { collection: 'systemUsers', idField: 'id', money: true }
         };
         // الوضع الجديد بيتفعّل بعد ما نتأكد إن الكتابة في الأماكن الجديدة مسموحة (قواعد Firebase)
         let moneySplitActive = localStorage.getItem('_moneySplitActive') === '1';
@@ -2799,9 +2801,9 @@
         function newRecordId() { return Date.now() * 1000 + Math.floor(Math.random() * 1000); }
         function idTime(id) { const n = parseInt(String(id), 10) || 0; return n > 1e14 ? Math.floor(n / 1000) : n; }
         function getListByKey(k) { switch (k) { case 'products': return products; case 'customers': return customers; case 'suppliers': return suppliers;
-            case 'treasury': return treasury; case 'expenses': return expenses; case 'salesReturns': return salesReturns; case 'purchaseReturns': return purchaseReturns; case 'supplierAdjustments': return supplierAdjustments; } return []; }
+            case 'users': return users; case 'treasury': return treasury; case 'expenses': return expenses; case 'salesReturns': return salesReturns; case 'purchaseReturns': return purchaseReturns; case 'supplierAdjustments': return supplierAdjustments; } return []; }
         function setListByKey(k, v) { switch (k) { case 'products': products = v; break; case 'customers': customers = v; break; case 'suppliers': suppliers = v; break;
-            case 'treasury': treasury = v; break; case 'expenses': expenses = v; break; case 'salesReturns': salesReturns = v; break; case 'purchaseReturns': purchaseReturns = v; break; case 'supplierAdjustments': supplierAdjustments = v; break; } }
+            case 'users': users = v; break; case 'treasury': treasury = v; break; case 'expenses': expenses = v; break; case 'salesReturns': salesReturns = v; break; case 'purchaseReturns': purchaseReturns = v; break; case 'supplierAdjustments': supplierAdjustments = v; break; } }
         const lsKeyLastSynced = k => '_lastSynced' + k.charAt(0).toUpperCase() + k.slice(1);
         let lastSyncedSplit = {
             products: JSON.parse(localStorage.getItem('_lastSyncedProducts') || '[]'),
@@ -2812,7 +2814,8 @@
             expenses: JSON.parse(localStorage.getItem('_lastSyncedExpenses') || '[]'),
             salesReturns: JSON.parse(localStorage.getItem('_lastSyncedSalesReturns') || '[]'),
             purchaseReturns: JSON.parse(localStorage.getItem('_lastSyncedPurchaseReturns') || '[]'),
-            supplierAdjustments: JSON.parse(localStorage.getItem('_lastSyncedSupplierAdjustments') || '[]')
+            supplierAdjustments: JSON.parse(localStorage.getItem('_lastSyncedSupplierAdjustments') || '[]'),
+            users: JSON.parse(localStorage.getItem('_lastSyncedUsers') || '[]')
         };
         let splitSyncTimers = {};
 
@@ -3131,12 +3134,13 @@
             if (!db) return Promise.reject(new Error('لا يوجد اتصال بالسحابة'));
             const payload = {
                 salesmen,
-                users: (users || []).map(u => { const c = Object.assign({}, u); if (c.authMigrated) delete c.password; return c; }), appCategories, appBrands, activationCodes, requireActivationCode, loyaltySettings, appBanners, appOffers,
+ appCategories, appBrands, activationCodes, requireActivationCode, loyaltySettings, appBanners, appOffers,
                 appCities, appRegions, appNeighborhoods, appNotifications, deliveryZones, neighborhoodZoneMap, salesTargets,
                 updatedAt: Date.now(),
                 updatedBy: DEVICE_ID
             };
-            if (!moneySplitActive) Object.assign(payload, { expenses, treasury, salesReturns, purchaseReturns, supplierAdjustments });
+            if (!moneySplitActive) Object.assign(payload, { expenses, treasury, salesReturns, purchaseReturns, supplierAdjustments,
+                users: (users || []).map(u => { const c = Object.assign({}, u); if (c.authMigrated) delete c.password; return c; }) });
             const cleanPayload = JSON.parse(JSON.stringify(payload));
             const docRef = db.collection('storeData').doc('main');
             // معاملة (transaction) بتتأكد وقت الكتابة نفسه إن مفيش نسخة أحدث اتسجلت من جهاز تاني
@@ -3262,6 +3266,7 @@
         const MAIN_ARRAY_KEYS = ['salesmen', 'users', 'appCategories', 'appBrands', 'activationCodes', 'appBanners', 'appOffers', 'appCities', 'appRegions', 'appNeighborhoods', 'appNotifications', 'deliveryZones'];
         const MAIN_OBJECT_KEYS = ['neighborhoodZoneMap', 'salesTargets', 'loyaltySettings'];
         const MONEY_LIST_KEYS = ['treasury', 'expenses', 'salesReturns', 'purchaseReturns', 'supplierAdjustments'];
+        const GATED_SPLIT_KEYS = MONEY_LIST_KEYS.concat(['users']);
         function getMainVar(k) { switch (k) { case 'salesmen': return salesmen; case 'users': return users; case 'appCategories': return appCategories; case 'appBrands': return appBrands;
             case 'activationCodes': return activationCodes; case 'appBanners': return appBanners; case 'appOffers': return appOffers; case 'appCities': return appCities; case 'appRegions': return appRegions;
             case 'appNeighborhoods': return appNeighborhoods; case 'appNotifications': return appNotifications; case 'deliveryZones': return deliveryZones; case 'neighborhoodZoneMap': return neighborhoodZoneMap;
@@ -3316,7 +3321,7 @@
                     purchaseReturns = pick('purchaseReturns', []); supplierAdjustments = pick('supplierAdjustments', []);
                 } else importMoneyFromMain(data);
                 try { rebuildTreasuryChain(); } catch (e) { console.error(e); }
-                users = data.users ? pick('users', []) : users;
+                if (!moneySplitActive) users = data.users ? pick('users', []) : users;
                 appCategories = pick('appCategories', []);
                 appBrands = pick('appBrands', []);
                 activationCodes = pick('activationCodes', []);
@@ -3386,16 +3391,18 @@
         }
         // بتنقل أي حركة موجودة على الجهاز ده ومش موجودة في المكان الجديد (مفيش مسح ولا تكرار، ويتعمل أكتر من مرة بأمان)
         function migrateMoneyLists() {
-            if (localStorage.getItem('_moneySplitMigrated') === '1') return Promise.resolve();
+            if (localStorage.getItem('_moneySplitMigrated') === '2') return Promise.resolve();
             return db.collection('storeData').doc('main').get().then(mainSnap => {
               const mainData = mainSnap.exists ? (mainSnap.data() || {}) : {};
-              return Promise.all(MONEY_LIST_KEYS.map(k => {
+              return Promise.all(GATED_SPLIT_KEYS.map(k => {
                 const col = SPLIT_COLLECTION_KEYS[k].collection;
                 return db.collection(col).get().then(snap => {
                     const existing = new Set(snap.docs.map(d => d.id));
                     // المصدر: اللي على السحابة في المستند القديم + اللي على الجهاز ده، من غير تكرار
                     const byId = {};
-                    (mainData[k] || []).concat(getListByKey(k)).forEach(r => { if (r && r.id != null) byId[String(r.id)] = r; });
+                    // لو نفس السجل موجود على الجهاز وعلى السحابة، نسخة السحابة هي اللي تمشي
+                    getListByKey(k).concat(mainData[k] || []).forEach(r => { if (r && r.id != null) byId[String(r.id)] = r; });
+                    if (k === 'users') Object.values(byId).forEach(u => { if (u.authMigrated) delete u.password; });
                     const all = Object.values(byId);
                     setListByKey(k, all);
                     const missing = all.filter(r => !existing.has(String(r.id)));
@@ -3407,12 +3414,12 @@
                     return chain.then(() => console.log('ترحيل ' + k + ': ' + missing.length));
                 });
               }));
-            }).then(() => { _origLocalStorageSetItem('_moneySplitMigrated', '1'); try { rebuildTreasuryChain(); } catch (e) {} });
+            }).then(() => { _origLocalStorageSetItem('_moneySplitMigrated', '2'); try { rebuildTreasuryChain(); } catch (e) {} });
         }
         function startMoneyRecordsListeners() {
             if (!db || moneyListenersStarted) return;
             moneyListenersStarted = true;
-            MONEY_LIST_KEYS.forEach(k => {
+            GATED_SPLIT_KEYS.forEach(k => {
                 db.collection(SPLIT_COLLECTION_KEYS[k].collection).onSnapshot(function(snap) {
                     const merged = mergeSplitIncoming(k, snap.docs.map(d => d.data()), 'id');
                     setListByKey(k, merged);
@@ -3421,6 +3428,7 @@
                     _origLocalStorageSetItem(lsKeyLastSynced(k), JSON.stringify(lastSyncedSplit[k]));
                     try { normalizeAllProfit(); updateDashboardStats(); } catch (e) {}
                     try { if (k === 'treasury' || k === 'expenses') { renderTreasury(); } } catch (e) {}
+                    try { if (k === 'users' && document.getElementById('users-section') && document.getElementById('users-section').classList.contains('active')) renderUsers(); } catch (e) {}
                     try { if (k === 'expenses') renderExpenses(); if (k === 'salesReturns') renderSalesReturns(); if (k === 'purchaseReturns') renderPurchaseReturns(); if (k === 'supplierAdjustments') renderSuppliers(); } catch (e) {}
                 }, function(err) { console.error('money listener ' + k, err); });
             });
@@ -4866,8 +4874,28 @@
             const errorEl = document.getElementById('loginError');
             const user = users.find(u => u.username.trim().toLowerCase() === username.toLowerCase());
             if (!user) {
-                errorEl.textContent = 'اسم المستخدم أو كلمة المرور غير صحيحة';
-                errorEl.style.display = 'block';
+                // الجهاز ده لسه ماعندوش قايمة الموظفين (بقت مكان خاص بالموظفين بس): ندخل الأول، وبعدين نقرا الصلاحية
+                if (!auth || !db || !username || !password) { errorEl.textContent = 'اسم المستخدم أو كلمة المرور غير صحيحة'; errorEl.style.display = 'block'; return; }
+                const btn0 = document.getElementById('loginSubmitBtn'); if (btn0) btn0.disabled = true;
+                const email = pseudoEmailForUsername(username);
+                auth.signInWithEmailAndPassword(email, password).then(function() {
+                    return db.collection('systemRoles').doc('main').get();
+                }).then(function(snap) {
+                    const entry = snap.exists ? (snap.data() || {})[email] : null;
+                    if (!entry || !entry.active) { auth.signOut().catch(function() {}); throw new Error(entry ? 'inactive' : 'norole'); }
+                    currentUser = { id: null, username: entry.username || username, fullName: entry.fullName || username, role: entry.role };
+                    saveCurrentUser();
+                    document.getElementById('loginOverlay').style.display = 'none';
+                    document.getElementById('loginUsername').value = ''; document.getElementById('loginPassword').value = '';
+                    if (btn0) btn0.disabled = false;
+                    applyRolePermissions(); updateUserBar();
+                    logAction('تسجيل دخول', `قام المستخدم ${currentUser.fullName} بتسجيل الدخول`);
+                    showSection(getHomeSection());
+                }).catch(function(e) {
+                    if (btn0) btn0.disabled = false;
+                    errorEl.textContent = (e && e.message === 'inactive') ? 'هذا الحساب موقوف، الرجاء التواصل مع مدير النظام' : 'اسم المستخدم أو كلمة المرور غير صحيحة';
+                    errorEl.style.display = 'block';
+                });
                 return;
             }
             if (!user.active) {
