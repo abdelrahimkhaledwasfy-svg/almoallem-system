@@ -2012,6 +2012,11 @@
                 <p style="font-size:13px;color:var(--text-light);margin:0;">بيقرا النسخة القديمة من البيانات اللي كانت متخزنة قبل تقسيم التخزين، ويوريك فواتير الشراء اللي فيها ومش موجودة دلوقتي (زي فواتير سبتمبر). <strong>قراءة بس، مش بيغيّر أي حاجة.</strong></p>
                 <div id="oldDataResult"></div>
             </div>
+            <div class="card" style="border-right:4px solid var(--info);">
+                <div class="card-header"><div class="card-title"><i class="fas fa-heartbeat"></i> فحص سلامة البيانات</div><button class="btn btn-primary btn-sm" onclick="runHealthCheck()"><i class="fas fa-stethoscope"></i> افحص دلوقتي</button></div>
+                <p style="font-size:13px;color:var(--text-light);margin:0 0 10px;">بيراجع البيانات الحقيقية ويطلعلك أي حاجة مش مظبوطة: أرقام مكررة، فلوس مش متسجلة، مخزون سالب، وغيرهم. قراءة بس.</p>
+                <div id="healthResult"></div>
+            </div>
             <div class="card" style="border-right:4px solid var(--accent);">
                 <div class="card-header"><div class="card-title"><i class="fas fa-cloud"></i> النسخ الاحتياطية الأوتوماتيك (آخر 14 يوم)</div><button class="btn btn-secondary btn-sm" onclick="renderCloudBackups()"><i class="fas fa-sync"></i> تحديث</button></div>
                 <p style="font-size:13px;color:var(--text-light);margin:0 0 10px;">كل يوم بتتعمل نسخة كاملة من البيانات لوحدها على السحابة، أول ما المدير أو المحاسب يفتح السيستم. الاسترجاع مش أوتوماتيك عشان الأمان.</p>
@@ -2778,13 +2783,36 @@
         const SPLIT_COLLECTION_KEYS = {
             products: { collection: 'productRecords', idField: 'code' },
             customers: { collection: 'customerRecords', idField: 'code' },
-            suppliers: { collection: 'supplierRecords', idField: 'code' }
+            suppliers: { collection: 'supplierRecords', idField: 'code' },
+            // *** 2026-09: الفلوس خرجت من المستند المشترك: كل حركة في مكانها لوحدها (مفيش حد أقصى للحجم، ومفيش تعارض،
+            // وأبليكشن العملاء مبقاش بيوصله أي حاجة عن الخزنة أو المصروفات) ***
+            treasury: { collection: 'treasuryRecords', idField: 'id', money: true },
+            expenses: { collection: 'expenseRecords', idField: 'id', money: true },
+            salesReturns: { collection: 'salesReturnRecords', idField: 'id', money: true },
+            purchaseReturns: { collection: 'purchaseReturnRecords', idField: 'id', money: true },
+            supplierAdjustments: { collection: 'supplierAdjustmentRecords', idField: 'id', money: true }
         };
+        // الوضع الجديد بيتفعّل بعد ما نتأكد إن الكتابة في الأماكن الجديدة مسموحة (قواعد Firebase)
+        let moneySplitActive = localStorage.getItem('_moneySplitActive') === '1';
+        let moneySplitAt = Number(localStorage.getItem('_moneySplitAt') || 0);
+        // id فريد حتى لو جهازين سجلوا في نفس الملّي ثانية (رقم عادي عشان الزراير القديمة تفضل شغالة)
+        function newRecordId() { return Date.now() * 1000 + Math.floor(Math.random() * 1000); }
+        function idTime(id) { const n = parseInt(String(id), 10) || 0; return n > 1e14 ? Math.floor(n / 1000) : n; }
+        function getListByKey(k) { switch (k) { case 'products': return products; case 'customers': return customers; case 'suppliers': return suppliers;
+            case 'treasury': return treasury; case 'expenses': return expenses; case 'salesReturns': return salesReturns; case 'purchaseReturns': return purchaseReturns; case 'supplierAdjustments': return supplierAdjustments; } return []; }
+        function setListByKey(k, v) { switch (k) { case 'products': products = v; break; case 'customers': customers = v; break; case 'suppliers': suppliers = v; break;
+            case 'treasury': treasury = v; break; case 'expenses': expenses = v; break; case 'salesReturns': salesReturns = v; break; case 'purchaseReturns': purchaseReturns = v; break; case 'supplierAdjustments': supplierAdjustments = v; break; } }
+        const lsKeyLastSynced = k => '_lastSynced' + k.charAt(0).toUpperCase() + k.slice(1);
         let lastSyncedSplit = {
             products: JSON.parse(localStorage.getItem('_lastSyncedProducts') || '[]'),
             customers: JSON.parse(localStorage.getItem('_lastSyncedCustomers') || '[]'),
             suppliers: JSON.parse(localStorage.getItem('_lastSyncedSuppliers') || '[]'),
-            inventory: JSON.parse(localStorage.getItem('_lastSyncedInventory') || '{}')
+            inventory: JSON.parse(localStorage.getItem('_lastSyncedInventory') || '{}'),
+            treasury: JSON.parse(localStorage.getItem('_lastSyncedTreasury') || '[]'),
+            expenses: JSON.parse(localStorage.getItem('_lastSyncedExpenses') || '[]'),
+            salesReturns: JSON.parse(localStorage.getItem('_lastSyncedSalesReturns') || '[]'),
+            purchaseReturns: JSON.parse(localStorage.getItem('_lastSyncedPurchaseReturns') || '[]'),
+            supplierAdjustments: JSON.parse(localStorage.getItem('_lastSyncedSupplierAdjustments') || '[]')
         };
         let splitSyncTimers = {};
 
@@ -2799,12 +2827,10 @@
         // تعديل كل واحد فيهم بيتحفظ لوحده من غير ما يمسح تعديل التاني.
         function pushSplitDiff(key) {
             if (!db) return;
-            let current, conf;
-            if (key === 'products') { current = products; conf = SPLIT_COLLECTION_KEYS.products; }
-            else if (key === 'customers') { current = customers; conf = SPLIT_COLLECTION_KEYS.customers; }
-            else if (key === 'suppliers') { current = suppliers; conf = SPLIT_COLLECTION_KEYS.suppliers; }
-            else if (key === 'inventory') { pushInventoryDiff(); return; }
-            else return;
+            if (key === 'inventory') { pushInventoryDiff(); return; }
+            const conf = SPLIT_COLLECTION_KEYS[key];
+            if (!conf || (conf.money && !moneySplitActive)) return;
+            const current = getListByKey(key);
 
             const currentMap = {}, prevMap = {};
             (current || []).forEach(function(item) { if (item && item[conf.idField] != null) currentMap[item[conf.idField]] = item; });
@@ -2823,33 +2849,92 @@
                 if (!currentMap[id]) { batch.delete(db.collection(conf.collection).doc(String(id))); opCount++; }
             });
             if (opCount === 0) return;
-            batch.commit().then(function() {
-                lastSyncedSplit[key] = JSON.parse(JSON.stringify(current || []));
-                _origLocalStorageSetItem('_lastSynced' + key.charAt(0).toUpperCase() + key.slice(1), JSON.stringify(lastSyncedSplit[key]));
-            }).catch(function(err) { console.error('Split sync failed for ' + key + ':', err); });
+            const before = lastSyncedSplit[key];
+            lastSyncedSplit[key] = JSON.parse(JSON.stringify(current || []));
+            _origLocalStorageSetItem('_lastSynced' + key.charAt(0).toUpperCase() + key.slice(1), JSON.stringify(lastSyncedSplit[key]));
+            batch.commit().catch(function(err) {
+                console.error('Split sync failed for ' + key + ':', err);
+                lastSyncedSplit[key] = before;
+                _origLocalStorageSetItem('_lastSynced' + key.charAt(0).toUpperCase() + key.slice(1), JSON.stringify(before));
+                scheduleSplitSync(key);
+            });
         }
 
+        // المخزون بيتبعت كـ "زوّد/نقّص كذا" (increment) مش "خليه كذا"، عشان لو جهازين (أو طلب أبليكشن)
+        // غيّروا نفس الصنف في نفس الوقت، التغييرين يتجمعوا بدل ما واحد يمسح التاني.
         function pushInventoryDiff() {
             if (!db) return;
             const currentMap = inventory || {};
             const prevMap = lastSyncedSplit.inventory || {};
+            const inc = (firebase && firebase.firestore && firebase.firestore.FieldValue && firebase.firestore.FieldValue.increment) ? firebase.firestore.FieldValue.increment : null;
             const batch = db.batch();
+            const rollback = {};
             let opCount = 0;
             Object.keys(currentMap).forEach(function(code) {
                 const cur = currentMap[code], prev = prevMap[code];
-                if (!prev || JSON.stringify(prev) !== JSON.stringify(cur)) {
-                    batch.set(db.collection('inventoryRecords').doc(String(code)), Object.assign({ code: code }, cur));
-                    opCount++;
+                if (prev && JSON.stringify(prev) === JSON.stringify(cur)) return;
+                const ref = db.collection('inventoryRecords').doc(String(code));
+                if (!prev || !inc) {
+                    batch.set(ref, Object.assign({ code: code }, cur));
+                } else {
+                    const upd = { code: code };
+                    Object.keys(cur).forEach(function(f) { if (f !== 'qty' && JSON.stringify(cur[f]) !== JSON.stringify(prev[f])) upd[f] = cur[f]; });
+                    const delta = (Number(cur.qty) || 0) - (Number(prev.qty) || 0);
+                    if (Math.abs(delta) > 1e-9) upd.qty = inc(delta);
+                    batch.set(ref, upd, { merge: true });
                 }
+                rollback[code] = prev;
+                prevMap[code] = JSON.parse(JSON.stringify(cur));   // بنعتبره اتبعت فورًا، عشان التحديث اللي راجع من السحابة مايتحسبش مرتين
+                opCount++;
             });
             Object.keys(prevMap).forEach(function(code) {
-                if (!currentMap[code]) { batch.delete(db.collection('inventoryRecords').doc(String(code))); opCount++; }
+                if (!currentMap[code]) { batch.delete(db.collection('inventoryRecords').doc(String(code))); rollback[code] = prevMap[code]; delete prevMap[code]; opCount++; }
             });
             if (opCount === 0) return;
-            batch.commit().then(function() {
-                lastSyncedSplit.inventory = JSON.parse(JSON.stringify(inventory || {}));
+            lastSyncedSplit.inventory = prevMap;
+            _origLocalStorageSetItem('_lastSyncedInventory', JSON.stringify(prevMap));
+            batch.commit().catch(function(err) {
+                console.error('Inventory split sync failed:', err);
+                // فشل الإرسال: نرجّع "آخر المتبعت" زي ما كان، عشان التغيير يتبعت تاني في المحاولة الجاية
+                Object.keys(rollback).forEach(function(code) { if (rollback[code]) lastSyncedSplit.inventory[code] = rollback[code]; else delete lastSyncedSplit.inventory[code]; });
                 _origLocalStorageSetItem('_lastSyncedInventory', JSON.stringify(lastSyncedSplit.inventory));
-            }).catch(function(err) { console.error('Inventory split sync failed:', err); });
+                scheduleSplitSync('inventory');
+            });
+        }
+
+        // لما يوصل تحديث من السحابة: أي تعديل محلي لسه متبعتش (أصناف/عملاء/موردين) بيفضل زي ما هو، ويتبعت بعدها
+        function mergeSplitIncoming(key, serverArr, idField) {
+            const local = getListByKey(key);
+            const prevMap = {}, localMap = {};
+            (lastSyncedSplit[key] || []).forEach(it => { if (it && it[idField] != null) prevMap[it[idField]] = JSON.stringify(it); });
+            (local || []).forEach(it => { if (it && it[idField] != null) localMap[it[idField]] = it; });
+            let pending = false;
+            let out = serverArr.filter(it => { const id = it[idField]; if (prevMap[id] !== undefined && !localMap[id]) { pending = true; return false; } return true; });
+            out = out.map(it => { const id = it[idField], loc = localMap[id]; if (loc && prevMap[id] !== undefined && JSON.stringify(loc) !== prevMap[id]) { pending = true; return loc; } return it; });
+            const serverIds = new Set(serverArr.map(it => it[idField]));
+            Object.keys(localMap).forEach(id => { if (prevMap[id] === undefined && !serverIds.has(localMap[id][idField])) { out.push(localMap[id]); pending = true; } });
+            lastSyncedSplit[key] = JSON.parse(JSON.stringify(serverArr));
+            if (pending) setTimeout(function() { scheduleSplitSync(key); }, 0);
+            return out;
+        }
+        function mergeInventoryIncoming(serverInv) {
+            const prev = lastSyncedSplit.inventory || {};
+            const out = JSON.parse(JSON.stringify(serverInv));
+            let pending = false;
+            Object.keys(inventory || {}).forEach(code => {
+                const loc = inventory[code], p = prev[code];
+                if (!p) { if (!out[code]) { out[code] = loc; pending = true; } return; }
+                if (JSON.stringify(loc) === JSON.stringify(p)) return;
+                const base = out[code] || {};
+                const merged = Object.assign({}, base);
+                Object.keys(loc).forEach(f => { if (f !== 'qty' && JSON.stringify(loc[f]) !== JSON.stringify(p[f])) merged[f] = loc[f]; });
+                merged.qty = (Number(base.qty) || 0) + ((Number(loc.qty) || 0) - (Number(p.qty) || 0));
+                out[code] = merged; pending = true;
+            });
+            Object.keys(prev).forEach(code => { if (!inventory[code] && out[code]) { delete out[code]; pending = true; } });
+            lastSyncedSplit.inventory = JSON.parse(JSON.stringify(serverInv));
+            if (pending) setTimeout(function() { scheduleSplitSync('inventory'); }, 0);
+            return out;
         }
 
         // ==================== الإشعارات الفورية (OneSignal عبر وسيط Cloudflare Worker) ====================
@@ -2965,6 +3050,8 @@
                     startCustomerRecordsListener();
                     startSupplierRecordsListener();
                     startInventoryRecordsListener();
+                    try { activateMoneySplit(); } catch (e) { console.error(e); }
+                    try { probeCounters(); } catch (e) { console.error(e); }
                 });
                 setupStaleTabAutoRefresh();
             } catch (e) {
@@ -2992,7 +3079,7 @@
             localStorage.setItem = function(key, value) {
                 _origLocalStorageSetItem(key, value);
                 if (applyingRemoteUpdate) return;
-                if (SPLIT_COLLECTION_KEYS[key] || key === 'inventory') { scheduleSplitSync(key); return; }
+                if (key === 'inventory' || (SPLIT_COLLECTION_KEYS[key] && (!SPLIT_COLLECTION_KEYS[key].money || moneySplitActive))) { scheduleSplitSync(key); return; }
                 if (CLOUD_SYNCED_KEYS.has(key)) scheduleCloudSync();
             };
         }
@@ -3044,12 +3131,12 @@
             if (!db) return Promise.reject(new Error('لا يوجد اتصال بالسحابة'));
             const payload = {
                 salesmen,
-                expenses, treasury, salesReturns, purchaseReturns, supplierAdjustments,
-                users, appCategories, appBrands, activationCodes, requireActivationCode, loyaltySettings, appBanners, appOffers,
+                users: (users || []).map(u => { const c = Object.assign({}, u); if (c.authMigrated) delete c.password; return c; }), appCategories, appBrands, activationCodes, requireActivationCode, loyaltySettings, appBanners, appOffers,
                 appCities, appRegions, appNeighborhoods, appNotifications, deliveryZones, neighborhoodZoneMap, salesTargets,
                 updatedAt: Date.now(),
                 updatedBy: DEVICE_ID
             };
+            if (!moneySplitActive) Object.assign(payload, { expenses, treasury, salesReturns, purchaseReturns, supplierAdjustments });
             const cleanPayload = JSON.parse(JSON.stringify(payload));
             const docRef = db.collection('storeData').doc('main');
             // معاملة (transaction) بتتأكد وقت الكتابة نفسه إن مفيش نسخة أحدث اتسجلت من جهاز تاني
@@ -3064,7 +3151,7 @@
                 });
             }).then(() => {
                 staleSyncRetryCount = 0;
-                snapshotMoneyLists(cleanPayload);
+                snapshotMainState(cleanPayload);
                 lastKnownServerUpdatedAt = cleanPayload.updatedAt;
                 _origLocalStorageSetItem('_syncOutboxPending', '0');
                 updateSyncBadge('synced');
@@ -3169,67 +3256,91 @@
         // السحابة الجديدة بدل ما نمسحها بالكامل (بنستخدمها لما يكتشف الرفع إن فيه تعديل أحدث وصل
         // من جهاز تاني وإحنا لسه شايلين تعديل محلي معلق زي فاتورة طلب أبليكشن)
         // القوائم المالية اللي في المستند المشترك: وقت التعارض لازم الإضافات المحلية متتمسحش
+        // ==================== دمج آمن للمستند المشترك ====================
+        // وقت التعارض (جهازين حفظوا في نفس اللحظة): اللي اتضاف أو اتعدل أو اتمسح على الجهاز ده بعد آخر مزامنة
+        // بيفضل زي ما هو، واللي اتغير على الجهاز التاني بيتاخد. ده بيشتغل على كل القوائم والإعدادات، مش الفلوس بس.
+        const MAIN_ARRAY_KEYS = ['salesmen', 'users', 'appCategories', 'appBrands', 'activationCodes', 'appBanners', 'appOffers', 'appCities', 'appRegions', 'appNeighborhoods', 'appNotifications', 'deliveryZones'];
+        const MAIN_OBJECT_KEYS = ['neighborhoodZoneMap', 'salesTargets', 'loyaltySettings'];
         const MONEY_LIST_KEYS = ['treasury', 'expenses', 'salesReturns', 'purchaseReturns', 'supplierAdjustments'];
-        let lastSyncedMoney = {};   // { key: { id: JSON } } نسخة من اللي كان على السحابة آخر مرة
-        function snapshotMoneyLists(src) {
-            lastSyncedMoney = {};
-            MONEY_LIST_KEYS.forEach(k => { const m = {}; (src[k] || []).forEach(it => { if (it && it.id != null) m[String(it.id)] = JSON.stringify(it); }); lastSyncedMoney[k] = m; });
+        function getMainVar(k) { switch (k) { case 'salesmen': return salesmen; case 'users': return users; case 'appCategories': return appCategories; case 'appBrands': return appBrands;
+            case 'activationCodes': return activationCodes; case 'appBanners': return appBanners; case 'appOffers': return appOffers; case 'appCities': return appCities; case 'appRegions': return appRegions;
+            case 'appNeighborhoods': return appNeighborhoods; case 'appNotifications': return appNotifications; case 'deliveryZones': return deliveryZones; case 'neighborhoodZoneMap': return neighborhoodZoneMap;
+            case 'salesTargets': return salesTargets; case 'loyaltySettings': return loyaltySettings; case 'requireActivationCode': return requireActivationCode; default: return getListByKey(k); } }
+        let lastSyncedMain = {};
+        const itemKey = it => it == null ? null : (it.id != null ? 'i:' + it.id : it.code != null ? 'c:' + it.code : it.name != null ? 'n:' + it.name : null);
+        function snapshotMainState(src) {
+            lastSyncedMain = {};
+            MAIN_ARRAY_KEYS.concat(MONEY_LIST_KEYS).forEach(k => { const m = {}; (src[k] || []).forEach(it => { const ik = itemKey(it); if (ik) m[ik] = JSON.stringify(it); }); lastSyncedMain[k] = m; });
+            MAIN_OBJECT_KEYS.forEach(k => { const m = {}; const o = src[k] || {}; Object.keys(o).forEach(p => m[p] = JSON.stringify(o[p])); lastSyncedMain[k] = m; });
+            lastSyncedMain.requireActivationCode = JSON.stringify(src.requireActivationCode || false);
         }
-        function mergeMoneyList(key, serverList, localList) {
-            const base = lastSyncedMoney[key] || {};
-            const localIds = new Set(localList.filter(it => it && it.id != null).map(it => String(it.id)));
-            const serverIds = new Set(serverList.filter(it => it && it.id != null).map(it => String(it.id)));
-            // اتمسح محليًا بعد آخر مزامنة → يفضل ممسوح
-            let out = serverList.filter(it => !(base[String(it.id)] !== undefined && !localIds.has(String(it.id))));
-            // اتعدل محليًا بعد آخر مزامنة → التعديل المحلي هو اللي يمشي
-            out = out.map(it => { const loc = localList.find(l => String(l.id) === String(it.id)); return (loc && base[String(it.id)] !== undefined && JSON.stringify(loc) !== base[String(it.id)]) ? loc : it; });
-            // اتضاف محليًا ومش على السحابة → يتضاف (ده اللي كان بيضيع قبل كده)
-            localList.forEach(it => { if (it && it.id != null && !serverIds.has(String(it.id)) && base[String(it.id)] === undefined) out.push(it); });
+        function mergeArrayThreeWay(key, serverList, localList) {
+            const base = lastSyncedMain[key] || {};
+            const localMap = {}; (localList || []).forEach(it => { const ik = itemKey(it); if (ik) localMap[ik] = it; });
+            const serverKeys = new Set();
+            let out = (serverList || []).filter(it => { const ik = itemKey(it); serverKeys.add(ik); return !(ik && base[ik] !== undefined && !localMap[ik]); });
+            out = out.map(it => { const ik = itemKey(it), loc = localMap[ik]; return (loc && base[ik] !== undefined && JSON.stringify(loc) !== base[ik]) ? loc : it; });
+            (localList || []).forEach(it => { const ik = itemKey(it); if (ik && !serverKeys.has(ik) && base[ik] === undefined) out.push(it); });
             return out;
+        }
+        function mergeObjectThreeWay(key, serverObj, localObj) {
+            const base = lastSyncedMain[key] || {}; const out = Object.assign({}, serverObj || {});
+            Object.keys(localObj || {}).forEach(p => { const lv = JSON.stringify(localObj[p]); if (base[p] === undefined ? !(p in out) : lv !== base[p]) out[p] = localObj[p]; });
+            Object.keys(base).forEach(p => { if (!(p in (localObj || {}))) delete out[p]; });
+            return out;
+        }
+        // الوضع الجديد: لو جهاز لسه شغال بالنسخة القديمة سجّل حركة فلوس في المستند المشترك، بناخدها ونحطها في مكانها
+        function importMoneyFromMain(data) {
+            if (!moneySplitActive) return;
+            MONEY_LIST_KEYS.forEach(k => {
+                const list = data[k]; if (!Array.isArray(list) || !list.length) return;
+                const local = getListByKey(k), seen = new Set((lastSyncedSplit[k] || []).map(x => String(x.id))), have = new Set(local.map(x => String(x.id)));
+                let added = 0;
+                list.forEach(r => { if (!r || r.id == null) return; const id = String(r.id); const t = idTime(id);
+                    if (!have.has(id) && !seen.has(id) && t > moneySplitAt) { local.push(r); added++; } });
+                if (added) { _origLocalStorageSetItem(k, JSON.stringify(local)); scheduleSplitSync(k); console.log('اتنقل ' + added + ' من ' + k + ' سجّلهم جهاز بنسخة قديمة'); }
+            });
         }
         function applyRemoteSnapshot(data, opts) {
                 opts = opts || {};
-                const localMoney = {};
-                if (opts.mergeWithLocal) Object.assign(localMoney, { treasury: treasury.slice(), expenses: expenses.slice(), salesReturns: salesReturns.slice(), purchaseReturns: purchaseReturns.slice(), supplierAdjustments: supplierAdjustments.slice() });
+                const local = {};
+                if (opts.mergeWithLocal) MAIN_ARRAY_KEYS.concat(MAIN_OBJECT_KEYS, MONEY_LIST_KEYS, ['requireActivationCode']).forEach(k => { const v = getMainVar(k); local[k] = Array.isArray(v) ? v.slice() : (v && typeof v === 'object' ? Object.assign({}, v) : v); });
+                const pick = (k, fallback) => opts.mergeWithLocal
+                    ? (MAIN_OBJECT_KEYS.includes(k) ? mergeObjectThreeWay(k, data[k] || fallback, local[k]) : mergeArrayThreeWay(k, data[k] || fallback, local[k]))
+                    : (data[k] || fallback);
 
                 applyingRemoteUpdate = true;
-                salesmen = data.salesmen || [];
-                expenses = data.expenses || [];
-                treasury = data.treasury || [];
-                salesReturns = data.salesReturns || [];
-                purchaseReturns = data.purchaseReturns || [];
-                supplierAdjustments = data.supplierAdjustments || [];
-                if (opts.mergeWithLocal) {
-                    expenses = mergeMoneyList('expenses', expenses, localMoney.expenses || []);
-                    treasury = mergeMoneyList('treasury', treasury, localMoney.treasury || []);
-                    salesReturns = mergeMoneyList('salesReturns', salesReturns, localMoney.salesReturns || []);
-                    purchaseReturns = mergeMoneyList('purchaseReturns', purchaseReturns, localMoney.purchaseReturns || []);
-                    supplierAdjustments = mergeMoneyList('supplierAdjustments', supplierAdjustments, localMoney.supplierAdjustments || []);
-                }
-                snapshotMoneyLists(data);
+                salesmen = pick('salesmen', []);
+                if (!moneySplitActive) {
+                    expenses = pick('expenses', []); treasury = pick('treasury', []); salesReturns = pick('salesReturns', []);
+                    purchaseReturns = pick('purchaseReturns', []); supplierAdjustments = pick('supplierAdjustments', []);
+                } else importMoneyFromMain(data);
                 try { rebuildTreasuryChain(); } catch (e) { console.error(e); }
-                users = data.users || users;
-                appCategories = data.appCategories || [];
-                appBrands = data.appBrands || [];
-                activationCodes = data.activationCodes || [];
-                requireActivationCode = data.requireActivationCode || false;
-                loyaltySettings = data.loyaltySettings || loyaltySettings;
-                appBanners = data.appBanners || [];
-                appOffers = data.appOffers || [];
-                appCities = data.appCities || [];
-                appRegions = data.appRegions || [];
-                appNeighborhoods = data.appNeighborhoods || [];
-                appNotifications = data.appNotifications || [];
-                deliveryZones = data.deliveryZones || [];
-                neighborhoodZoneMap = data.neighborhoodZoneMap || {};
-                salesTargets = data.salesTargets || salesTargets;
+                users = data.users ? pick('users', []) : users;
+                appCategories = pick('appCategories', []);
+                appBrands = pick('appBrands', []);
+                activationCodes = pick('activationCodes', []);
+                requireActivationCode = (opts.mergeWithLocal && JSON.stringify(local.requireActivationCode) !== lastSyncedMain.requireActivationCode) ? local.requireActivationCode : (data.requireActivationCode || false);
+                loyaltySettings = data.loyaltySettings ? pick('loyaltySettings', {}) : loyaltySettings;
+                appBanners = pick('appBanners', []);
+                appOffers = pick('appOffers', []);
+                appCities = pick('appCities', []);
+                appRegions = pick('appRegions', []);
+                appNeighborhoods = pick('appNeighborhoods', []);
+                appNotifications = pick('appNotifications', []);
+                deliveryZones = pick('deliveryZones', []);
+                neighborhoodZoneMap = pick('neighborhoodZoneMap', {});
+                salesTargets = data.salesTargets ? pick('salesTargets', {}) : salesTargets;
+                snapshotMainState(data);
 
                 localStorage.setItem('salesmen', JSON.stringify(salesmen));
-                localStorage.setItem('expenses', JSON.stringify(expenses));
-                localStorage.setItem('treasury', JSON.stringify(treasury));
-                localStorage.setItem('salesReturns', JSON.stringify(salesReturns));
-                localStorage.setItem('purchaseReturns', JSON.stringify(purchaseReturns));
-                localStorage.setItem('supplierAdjustments', JSON.stringify(supplierAdjustments));
+                if (!moneySplitActive) {
+                    localStorage.setItem('expenses', JSON.stringify(expenses));
+                    localStorage.setItem('treasury', JSON.stringify(treasury));
+                    localStorage.setItem('salesReturns', JSON.stringify(salesReturns));
+                    localStorage.setItem('purchaseReturns', JSON.stringify(purchaseReturns));
+                    localStorage.setItem('supplierAdjustments', JSON.stringify(supplierAdjustments));
+                }
                 localStorage.setItem('users', JSON.stringify(users));
                 localStorage.setItem('appCategories', JSON.stringify(appCategories));
                 localStorage.setItem('appBrands', JSON.stringify(appBrands));
@@ -3252,6 +3363,67 @@
                 try { loadAllData(); } catch (e) { console.error('refresh after remote update failed:', e); }
                 showToast('تم تحديث البيانات من جهاز آخر', 'info');
                 updateSyncBadge('synced');
+        }
+
+        // ==================== تفعيل الأماكن المنفصلة للفلوس + نقل البيانات القديمة (آمن ومتكرر) ====================
+        let moneyListenersStarted = false;
+        function activateMoneySplit() {
+            if (!db) return Promise.resolve();
+            const meta = db.collection('meta').doc('moneySplit');
+            return meta.get().then(snap => {
+                const at = snap.exists && snap.data().at ? snap.data().at : Date.now();
+                return meta.set({ at, lastCheckBy: DEVICE_ID, lastCheckAt: Date.now() }, { merge: true }).then(() => {
+                    const first = !moneySplitActive;
+                    moneySplitActive = true; moneySplitAt = at;
+                    _origLocalStorageSetItem('_moneySplitActive', '1'); _origLocalStorageSetItem('_moneySplitAt', String(at));
+                    return migrateMoneyLists().then(() => { startMoneyRecordsListeners(); if (first) scheduleCloudSync(); });
+                });
+            }).catch(e => {
+                console.error('money split not allowed by rules, staying on the old storage:', e);
+                moneySplitActive = false; _origLocalStorageSetItem('_moneySplitActive', '0');
+                window._moneySplitBlocked = true;
+            });
+        }
+        // بتنقل أي حركة موجودة على الجهاز ده ومش موجودة في المكان الجديد (مفيش مسح ولا تكرار، ويتعمل أكتر من مرة بأمان)
+        function migrateMoneyLists() {
+            if (localStorage.getItem('_moneySplitMigrated') === '1') return Promise.resolve();
+            return db.collection('storeData').doc('main').get().then(mainSnap => {
+              const mainData = mainSnap.exists ? (mainSnap.data() || {}) : {};
+              return Promise.all(MONEY_LIST_KEYS.map(k => {
+                const col = SPLIT_COLLECTION_KEYS[k].collection;
+                return db.collection(col).get().then(snap => {
+                    const existing = new Set(snap.docs.map(d => d.id));
+                    // المصدر: اللي على السحابة في المستند القديم + اللي على الجهاز ده، من غير تكرار
+                    const byId = {};
+                    (mainData[k] || []).concat(getListByKey(k)).forEach(r => { if (r && r.id != null) byId[String(r.id)] = r; });
+                    const all = Object.values(byId);
+                    setListByKey(k, all);
+                    const missing = all.filter(r => !existing.has(String(r.id)));
+                    let chain = Promise.resolve();
+                    for (let i = 0; i < missing.length; i += 400) {
+                        const part = missing.slice(i, i + 400);
+                        chain = chain.then(() => { const b = db.batch(); part.forEach(r => b.set(db.collection(col).doc(String(r.id)), r)); return b.commit(); });
+                    }
+                    return chain.then(() => console.log('ترحيل ' + k + ': ' + missing.length));
+                });
+              }));
+            }).then(() => { _origLocalStorageSetItem('_moneySplitMigrated', '1'); try { rebuildTreasuryChain(); } catch (e) {} });
+        }
+        function startMoneyRecordsListeners() {
+            if (!db || moneyListenersStarted) return;
+            moneyListenersStarted = true;
+            MONEY_LIST_KEYS.forEach(k => {
+                db.collection(SPLIT_COLLECTION_KEYS[k].collection).onSnapshot(function(snap) {
+                    const merged = mergeSplitIncoming(k, snap.docs.map(d => d.data()), 'id');
+                    setListByKey(k, merged);
+                    if (k === 'treasury') { try { rebuildTreasuryChain(); } catch (e) {} }
+                    _origLocalStorageSetItem(k, JSON.stringify(getListByKey(k)));
+                    _origLocalStorageSetItem(lsKeyLastSynced(k), JSON.stringify(lastSyncedSplit[k]));
+                    try { normalizeAllProfit(); updateDashboardStats(); } catch (e) {}
+                    try { if (k === 'treasury' || k === 'expenses') { renderTreasury(); } } catch (e) {}
+                    try { if (k === 'expenses') renderExpenses(); if (k === 'salesReturns') renderSalesReturns(); if (k === 'purchaseReturns') renderPurchaseReturns(); if (k === 'supplierAdjustments') renderSuppliers(); } catch (e) {}
+                }, function(err) { console.error('money listener ' + k, err); });
+            });
         }
 
         // ==================== CUSTOMER ORDERS (من أبليكشن العملاء) ====================
@@ -3553,8 +3725,7 @@
             if (!db || productRecordsListenerStarted) return;
             productRecordsListenerStarted = true;
             db.collection('productRecords').onSnapshot(function(snap) {
-                products = snap.docs.map(function(d) { return d.data(); });
-                lastSyncedSplit.products = JSON.parse(JSON.stringify(products));
+                products = mergeSplitIncoming('products', snap.docs.map(function(d) { return d.data(); }), 'code');
                 _origLocalStorageSetItem('products', JSON.stringify(products));
                 _origLocalStorageSetItem('_lastSyncedProducts', JSON.stringify(lastSyncedSplit.products));
                 try { if (document.getElementById('products-section') && document.getElementById('products-section').classList.contains('active')) renderProducts(); } catch (e) {}
@@ -3567,8 +3738,7 @@
             if (!db || customerRecordsListenerStarted) return;
             customerRecordsListenerStarted = true;
             db.collection('customerRecords').onSnapshot(function(snap) {
-                customers = snap.docs.map(function(d) { return d.data(); });
-                lastSyncedSplit.customers = JSON.parse(JSON.stringify(customers));
+                customers = mergeSplitIncoming('customers', snap.docs.map(function(d) { return d.data(); }), 'code');
                 _origLocalStorageSetItem('customers', JSON.stringify(customers));
                 _origLocalStorageSetItem('_lastSyncedCustomers', JSON.stringify(lastSyncedSplit.customers));
                 try { if (document.getElementById('customers-section') && document.getElementById('customers-section').classList.contains('active')) renderCustomers(); } catch (e) {}
@@ -3580,8 +3750,7 @@
             if (!db || supplierRecordsListenerStarted) return;
             supplierRecordsListenerStarted = true;
             db.collection('supplierRecords').onSnapshot(function(snap) {
-                suppliers = snap.docs.map(function(d) { return d.data(); });
-                lastSyncedSplit.suppliers = JSON.parse(JSON.stringify(suppliers));
+                suppliers = mergeSplitIncoming('suppliers', snap.docs.map(function(d) { return d.data(); }), 'code');
                 _origLocalStorageSetItem('suppliers', JSON.stringify(suppliers));
                 _origLocalStorageSetItem('_lastSyncedSuppliers', JSON.stringify(lastSyncedSplit.suppliers));
                 try { if (document.getElementById('suppliers-section') && document.getElementById('suppliers-section').classList.contains('active')) renderSuppliers(); } catch (e) {}
@@ -3595,8 +3764,7 @@
             db.collection('inventoryRecords').onSnapshot(function(snap) {
                 const inv = {};
                 snap.docs.forEach(function(d) { const data = d.data(); inv[d.id] = data; });
-                inventory = inv;
-                lastSyncedSplit.inventory = JSON.parse(JSON.stringify(inventory));
+                inventory = mergeInventoryIncoming(inv);
                 _origLocalStorageSetItem('inventory', JSON.stringify(inventory));
                 _origLocalStorageSetItem('_lastSyncedInventory', JSON.stringify(lastSyncedSplit.inventory));
                 try { if (document.getElementById('inventory-section') && document.getElementById('inventory-section').classList.contains('active')) renderInventory(); } catch (e) {}
@@ -4246,7 +4414,8 @@
                         return { alreadyFulfilledElsewhere: true };
                     }
                     const allRefs = custLoyaltyRef ? refs.concat([custLoyaltyRef]) : refs;
-                    return Promise.all(allRefs.map(r => t.get(r))).then(function(snaps) {
+                    let counterRes = null;
+                    return readCounterInTx(t, 'saleInvoice', invoices.filter(i => i.type === 'sale')).then(function(c) { counterRes = c; return Promise.all(allRefs.map(r => t.get(r))); }).then(function(snaps) {
                         const stockSnaps = snaps.slice(0, refs.length);
                         const loyaltySnap = custLoyaltyRef ? snaps[snaps.length - 1] : null;
 
@@ -4284,8 +4453,9 @@
                             t.set(custLoyaltyRef, { points: newPoints, updatedAt: Date.now() }, { merge: true });
                         }
                         t.update(orderRef, { status: 'delivered', deliveredAt: Date.now(), deliveredBy: DEVICE_ID });
+                        counterRes.commit();
 
-                        return { pointsToDeduct, appliedDiscount, grandTotal, earnedPoints, newPoints };
+                        return { pointsToDeduct, appliedDiscount, grandTotal, earnedPoints, newPoints, invoiceNumber: counterRes.next };
                     });
                 });
             }).then(function(txResult) {
@@ -4320,7 +4490,7 @@
                 localStorage.setItem('inventory', JSON.stringify(inventory));
 
                 const invoice = {
-                    id: Date.now(), number: getNextDocNumber(invoices.filter(i => i.type === 'sale')).toString().padStart(4, '0'),
+                    id: Date.now(), number: String(txResult.invoiceNumber || getNextDocNumber(invoices.filter(i => i.type === 'sale'))).padStart(4, '0'),
                     type: 'sale', date: new Date().toISOString(),
                     customerCode: order.customerCode || '', customerName: order.customerName || '',
                     salesmanCode: order.repCode || '', salesmanName: order.repName || '',
@@ -4951,6 +5121,41 @@
             openModal('userModal');
         }
 
+
+        // ==================== مفيش باسورد نصي في أي مكان على السحابة ====================
+        // بنعمل حساب الدخول الحقيقي (Firebase Auth) وقت إنشاء المستخدم نفسه، ومش بنحفظ الباسورد خالص.
+        function createAuthAccount(username, password) {
+            const secAuth = getSecondaryAuth();
+            return secAuth.createUserWithEmailAndPassword(pseudoEmailForUsername(username), password)
+                .then(() => secAuth.signOut().catch(() => {}))
+                .catch(err => {
+                    if (err && err.code === 'auth/email-already-in-use') {
+                        // الحساب موجود: نتأكد إن الباسورد ده هو نفسه
+                        return secAuth.signInWithEmailAndPassword(pseudoEmailForUsername(username), password).then(() => secAuth.signOut().catch(() => {}));
+                    }
+                    throw err;
+                });
+        }
+        // المدير لما يفتح السيستم: أي مستخدم قديم لسه باسورده نصي بيتعمله حساب حقيقي وبيتمسح الباسورد
+        let _migratingUsers = false;
+        function migrateRemainingPlainPasswords() {
+            if (_migratingUsers || !db || !currentUser || String(currentUser.role || '').toLowerCase() !== 'admin') return;
+            const pending = users.filter(u => u.password && !u.authMigrated);
+            if (!pending.length) return;
+            _migratingUsers = true;
+            let done = 0, failed = [];
+            pending.reduce((chain, u) => chain.then(() => createAuthAccount(u.username, u.password)
+                .then(() => { u.authMigrated = true; delete u.password; done++; })
+                .catch(e => { console.error('user migration failed', u.username, e); failed.push(u.fullName || u.username); })), Promise.resolve())
+            .then(() => {
+                _migratingUsers = false;
+                if (done) { saveUsers(); logAction('تأمين الحسابات', `اتعمل حساب دخول آمن لـ ${done} مستخدم واتمسحت باسورداتهم النصية`); }
+                if (failed.length) showToast('تعذر تأمين حسابات: ' + failed.join('، ') + ' — افتح المستخدم واكتب له باسورد جديد', 'warning', 8000);
+            });
+        }
+        setInterval(function() { try { migrateRemainingPlainPasswords(); } catch (e) {} }, 60000);
+        setTimeout(function() { try { migrateRemainingPlainPasswords(); } catch (e) {} }, 8000);
+
         function saveUser() {
             const id = document.getElementById('userEditId').value;
             const fullName = document.getElementById('userFullName').value.trim();
@@ -4981,7 +5186,8 @@
                 } else if (password && u.authMigrated) {
                     showToast('تنبيه: تغيير كلمة السر لمستخدم مرحّل مسبقًا محتاج يدخل هو نفسه ويسجل دخول بالقديمة الأول، أو تواصل مع الدعم الفني', 'info', 8000);
                 } else if (password) {
-                    u.password = password; // لسه ماترحّلش - هيترحّل تلقائيًا أول ما يسجل دخول
+                    createAuthAccount(u.username, password).then(function() { u.authMigrated = true; delete u.password; saveUsers(); renderUsers(); showToast('اتعمل للمستخدم حساب دخول آمن'); })
+                        .catch(function(e) { console.error(e); showToast('تعذر حفظ الباسورد: ' + (e && e.message ? e.message : ''), 'error', 6000); });
                 }
                 logAction('تعديل مستخدم', `تم تعديل بيانات المستخدم ${fullName}`);
                 saveUsers();
@@ -4995,8 +5201,10 @@
                 // هو البريد الوهمي المبني على اليوزرنيم، ومعروف من دلوقتي)؛ حساب الدخول الفعلي بتاعه
                 // (Firebase Authentication) هيتعمل تلقائيًا أول ما يسجل دخول بنفسه لأول مرة
                 const pseudoEmail = pseudoEmailForUsername(username);
-                upsertSystemRole(pseudoEmail, { role: role, username: username, fullName: fullName, active: active }).then(function() {
-                    users.push({ id: Date.now(), username, password, fullName, role, active, lastLogin: null });
+                createAuthAccount(username, password).then(function() {
+                    return upsertSystemRole(pseudoEmail, { role: role, username: username, fullName: fullName, active: active });
+                }).then(function() {
+                    users.push({ id: Date.now(), username, fullName, role, active, lastLogin: null, authMigrated: true });
                     logAction('إضافة مستخدم', `تم إضافة مستخدم جديد: ${fullName} (${ROLES[role].label})`);
                     saveUsers();
                     closeModal('userModal');
@@ -5140,6 +5348,31 @@
 
         // يحسب الرقم التالي لأي نوع مستند (فاتورة/مرتجع) اعتمادًا على أعلى رقم مستخدم فعليًا
         // بدلاً من عدد العناصر الحالي، لتفادي تكرار الأرقام بعد حذف مستند قديم.
+        // ==================== عدادات الأرقام المشتركة (مستحيل رقمين يتكرروا بين الأجهزة) ====================
+        function localMaxNumber(list) { return list.reduce((m, x) => Math.max(m, parseInt(x.number, 10) || 0), 0); }
+        // جوه معاملة: بيقرا العداد (لازم قبل أي كتابة) ويرجّع دالة بتحجز الرقم الجاي
+        // العداد بيتفعّل بس لو قواعد Firebase سامحة بيه، وإلا بنرجع للطريقة القديمة (عشان قفل الطلبات مايقفش أبدًا)
+        let countersAllowed = false;
+        function probeCounters() {
+            if (!db) return;
+            db.collection('counters').doc('_probe').set({ at: Date.now(), by: DEVICE_ID }, { merge: true })
+                .then(() => { countersAllowed = true; }).catch(e => { countersAllowed = false; console.warn('counters blocked by rules', e); });
+        }
+        function readCounterInTx(t, kind, localList) {
+            if (!countersAllowed) return Promise.resolve({ next: localMaxNumber(localList) + 1, commit: () => {} });
+            const ref = db.collection('counters').doc(kind);
+            return t.get(ref).then(snap => {
+                const next = Math.max(snap.exists ? (Number(snap.data().value) || 0) : 0, localMaxNumber(localList)) + 1;
+                return { next, commit: () => t.set(ref, { value: next, updatedAt: Date.now() }, { merge: true }) };
+            });
+        }
+        // برّه أي معاملة: بيحجز رقم لوحده
+        function reserveDocNumber(kind, localList) {
+            if (!db || !countersAllowed) return Promise.resolve(localMaxNumber(localList) + 1);
+            return db.runTransaction(t => readCounterInTx(t, kind, localList).then(c => { c.commit(); return c.next; }))
+                .catch(e => { console.error('counter failed', e); return localMaxNumber(localList) + 1; });
+        }
+
         function getNextDocNumber(list) {
             if (!list || list.length === 0) return 1;
             const max = list.reduce((m, x) => {
@@ -5164,7 +5397,7 @@
             const currentBalance = getTreasuryBalance();
             const newBalance = type === 'in' ? currentBalance + amount : currentBalance - amount;
             // id فريد حتى لو حركتين اتسجلوا في نفس الملّي ثانية
-            let newId = Date.now(); while (treasury.some(t => t.id === newId)) newId++;
+            let newId = newRecordId(); while (treasury.some(t => t.id === newId)) newId++;
             treasury.unshift({
                 id: newId, date: new Date().toISOString(), type, amount, party, partyType, notes: notes || '', reference: reference || '',
                 account: account || ((reference === 'تحويل بنكي' || reference === 'بطاقة') ? 'bank' : 'cash'),
@@ -7242,7 +7475,7 @@
                     }
                 }
             } else {
-                expenses.push({ id: Date.now(), type, amount, costCenter, description, date: new Date(date).toISOString() });
+                expenses.push({ id: newRecordId(), type, amount, costCenter, description, date: new Date(date).toISOString() });
                 // Deduct from treasury
                 addTreasuryEntry('out', amount, 'نظام', 'expense', description || 'مصروف: ' + type, 'مصروف #' + expenses.length);
             }
@@ -8641,14 +8874,17 @@
             const me = pdUser();
             const ref = db.collection('purchaseDrafts').doc(id);
             // معاملة ذرية: لو اتنين داسوا اعتماد في نفس اللحظة، واحد بس اللي بيعدّي
+            let purchaseNo = null;
             db.runTransaction(function(t) {
-                return t.get(ref).then(function(snap) {
+                let c;
+                return readCounterInTx(t, 'purchaseInvoice', purchaseInvoices).then(function(cc) { c = cc; return t.get(ref); }).then(function(snap) {
                     if (!snap.exists || snap.data().status !== 'pending') throw new Error('الفاتورة دي اتراجعت قبل كده');
+                    c.commit(); purchaseNo = c.next;
                     t.update(ref, { status: 'approved', approvedAt: Date.now(), approvedBy: me, items: items, grandTotal: grandTotal,
                         history: (snap.data().history || []).concat([{ action: 'اتعتمدت' + (priceChanges.length ? ' (مع تعديل أسعار)' : ''), by: me.name, at: Date.now() }]) });
                 });
             }).then(function() {
-                const inv = postApprovedPurchase(Object.assign({}, d, { items, grandTotal }), me, priceChanges);
+                const inv = postApprovedPurchase(Object.assign({}, d, { items, grandTotal }), me, priceChanges, purchaseNo);
                 ref.update({ approvedInvoiceNumber: inv.number, approvedInvoiceId: inv.id }).catch(() => {});
                 closeModal('purchaseReviewModal');
                 showToast(`اتعتمدت فاتورة الشراء #${inv.number} والمخزون زاد`);
@@ -8657,8 +8893,8 @@
         }
 
         // نفس اللي كانت الفاتورة بتعمله زمان وقت الحفظ، بس دلوقتي بيحصل وقت الاعتماد
-        function postApprovedPurchase(d, approver, priceChanges) {
-            const number = getNextDocNumber(purchaseInvoices).toString().padStart(4, '0');
+        function postApprovedPurchase(d, approver, priceChanges, reservedNo) {
+            const number = String(reservedNo || getNextDocNumber(purchaseInvoices)).padStart(4, '0');
             d.items.forEach(item => {
                 if (!inventory[item.productCode]) inventory[item.productCode] = { code: item.productCode, qty: 0, cost: item.cost, minStock: 0 };
                 const beforeQty = Number(inventory[item.productCode].qty) || 0;
@@ -8833,9 +9069,13 @@
             const btn = document.getElementById('approvalApproveBtn'); btn.disabled = true;
             const me = pdUser();
             const ref = db.collection('purchaseDrafts').doc(id);
+            let returnNo = null;
             db.runTransaction(function(t) {
-                return t.get(ref).then(function(snap) {
+                const counterP = kind === 'purchase_return' ? readCounterInTx(t, 'purchaseReturn', purchaseReturns) : Promise.resolve(null);
+                let c;
+                return counterP.then(function(cc) { c = cc; return t.get(ref); }).then(function(snap) {
                     if (!snap.exists || snap.data().status !== 'pending') throw new Error('الطلب ده اتراجع قبل كده');
+                    if (c) { c.commit(); returnNo = c.next; }
                     t.update(ref, { status: 'approved', approvedAt: Date.now(), approvedBy: me, history: (snap.data().history || []).concat([{ action: 'اتعتمد', by: me.name, at: Date.now() }]) });
                 });
             }).then(function() {
@@ -8863,7 +9103,7 @@
                     saveInventory();
                     if (d.isCash) addTreasuryEntry('in', d.grandTotal, d.supplierCode || 'مورد', 'supplier', 'مرتجع فاتورة شراء #' + d.originalInvoiceNumber, 'مرتجع شراء', false);
                     const ret = {
-                        id: Date.now(), number: getNextDocNumber(purchaseReturns).toString().padStart(4, '0'),
+                        id: newRecordId(), number: String(returnNo || getNextDocNumber(purchaseReturns)).padStart(4, '0'),
                         date: new Date().toISOString(), originalInvoiceId: d.originalInvoiceId, originalInvoiceNumber: d.originalInvoiceNumber,
                         supplierCode: d.supplierCode, supplierName: d.supplier, items: d.items, grandTotal: d.grandTotal,
                         affectsBalance: !d.isCash, notes: d.notes || '', createdBy: d.createdBy || null, approvedBy: me, draftId: d.id
@@ -9471,7 +9711,7 @@
             if (!tb || !db) return;
             db.collection('backups').get().then(snap => {
                 const rows = snap.docs.map(d => d.data()).filter(b => b.complete).sort((a, b) => String(b.day).localeCompare(String(a.day)));
-                tb.innerHTML = rows.map(b => `<tr><td><strong>${escapeHtml(b.day)}</strong></td><td>${new Date(b.createdAt).toLocaleTimeString('ar-EG')}</td><td>${escapeHtml((b.by && b.by.name) || '')}</td><td>${b.counts ? `${b.counts.invoices || 0} بيع · ${b.counts.purchaseInvoices || 0} شراء · ${b.counts.products || 0} صنف` : ''}</td><td>${b.sizeKB} KB</td><td><button class="btn btn-info btn-sm" onclick="downloadCloudBackup('${escapeHtml(b.day)}')"><i class="fas fa-download"></i> تحميل</button></td></tr>`).join('')
+                tb.innerHTML = rows.map(b => `<tr><td><strong>${escapeHtml(b.day)}</strong></td><td>${new Date(b.createdAt).toLocaleTimeString('ar-EG')}</td><td>${escapeHtml((b.by && b.by.name) || '')}</td><td>${b.counts ? `${b.counts.invoices || 0} بيع · ${b.counts.purchaseInvoices || 0} شراء · ${b.counts.products || 0} صنف` : ''}</td><td>${b.sizeKB} KB</td><td style="white-space:nowrap;"><button class="btn btn-info btn-sm" onclick="downloadCloudBackup('${escapeHtml(b.day)}')"><i class="fas fa-download"></i> تحميل</button> <button class="btn btn-warning btn-sm admin-only" onclick="restoreMissingFromBackup('${escapeHtml(b.day)}')"><i class="fas fa-undo"></i> رجّع الناقص</button></td></tr>`).join('')
                     || '<tr><td colspan="6" style="text-align:center;color:var(--text-light);padding:15px;">أول نسخة هتتعمل تلقائي النهارده</td></tr>';
             }).catch(e => { tb.innerHTML = '<tr><td colspan="6" style="color:var(--danger);">تعذر قراءة النسخ: ' + escapeHtml(e.message || '') + '</td></tr>'; });
         }
@@ -9624,6 +9864,84 @@
                 el.textContent = (pts * pv).toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' ر.س';
                 el.title = pts.toLocaleString('en-US') + ' نقطة × ' + pv;
             }).catch(e => { console.error(e); el.textContent = 'تعذر الحساب'; });
+        }
+
+
+        // ==================== استرجاع الناقص من نسخة احتياطية (مبيمسحش ولا بيغيّر أي حاجة موجودة) ====================
+        function restoreMissingFromBackup(day) {
+            if (!currentUser || String(currentUser.role).toLowerCase() !== 'admin' || !db) return;
+            db.collection('backups').doc(day).collection('parts').get().then(ps => {
+                const data = JSON.parse(ps.docs.map(d => d.data()).sort((a, b) => a.i - b.i).map(p => p.data).join(''));
+                const plan = [
+                    ['invoices', 'فواتير البيع والشراء (بيع)', 'invoiceRecords', 'id', invoices],
+                    ['purchaseInvoices', 'فواتير الشراء', 'purchaseInvoiceRecords', 'id', purchaseInvoices],
+                    ['products', 'الأصناف', 'productRecords', 'code', products],
+                    ['customers', 'العملاء', 'customerRecords', 'code', customers],
+                    ['suppliers', 'الموردين', 'supplierRecords', 'code', suppliers],
+                    ['stockMovements', 'حركات المخزون', 'stockMovementRecords', 'id', stockMovements],
+                    ['deliveryCollections', 'عهدة المناديب', 'deliveryCollectionRecords', 'id', deliveryCollections],
+                    ['repSettlements', 'استلام العهدة', 'repSettlements', 'id', repSettlements]
+                ].concat(MONEY_LIST_KEYS.map(k => [k, { treasury: 'حركات الخزنة', expenses: 'المصروفات', salesReturns: 'مرتجعات البيع', purchaseReturns: 'مرتجعات الشراء', supplierAdjustments: 'تسويات الموردين' }[k], moneySplitActive ? SPLIT_COLLECTION_KEYS[k].collection : null, 'id', getListByKey(k)]));
+                const entries = [];
+                plan.forEach(([k, label, col, idf, cur]) => {
+                    const have = new Set((cur || []).map(x => String(x[idf])));
+                    const missing = (data[k] || []).filter(x => x && x[idf] != null && !have.has(String(x[idf])));
+                    if (missing.length) entries.push({ row: entries.length + 1, cells: [label, missing.length, missing.slice(0, 3).map(x => x.number || x.name || x.customerName || x.code || x.id).join('، ')], status: 'new', k, col, idf, missing });
+                });
+                if (!entries.length) { showToast('مفيش حاجة ناقصة: كل اللي في نسخة ' + day + ' موجود دلوقتي'); return; }
+                xlPreview({ title: 'استرجاع الناقص من نسخة ' + day, info: 'دي الحاجات اللي كانت موجودة في النسخة ومش موجودة دلوقتي. <strong>الاسترجاع بيضيفها بس</strong>، ومش بيغيّر ولا بيمسح أي حاجة موجودة. <strong>المخزون والأرصدة مش بتتغير.</strong> لو فيه حاجة إنت مسحتها بقصد، اقفل الشاشة دي.',
+                    headers: ['البيان', 'العدد', 'أمثلة'], entries, confirmLabel: 'رجّعهم',
+                    onConfirm: function(list) {
+                        let total = 0; let chain = Promise.resolve();
+                        list.forEach(e => {
+                            if (e.col) for (let i = 0; i < e.missing.length; i += 400) {
+                                const part = e.missing.slice(i, i + 400);
+                                chain = chain.then(() => { const b = db.batch(); part.forEach(r => b.set(db.collection(e.col).doc(String(r[e.idf])), r)); return b.commit(); });
+                            } else { const arr = getListByKey(e.k); e.missing.forEach(r => arr.push(r)); localStorage.setItem(e.k, JSON.stringify(arr)); }
+                            total += e.missing.length;
+                        });
+                        chain.then(() => { logAction('استرجاع من نسخة احتياطية', `نسخة ${day}: رجع ${total} سجل`); showToast(`رجع ${total} سجل. هيظهروا خلال ثواني`); })
+                            .catch(err => { console.error(err); showToast('تعذر الاسترجاع: ' + (err.message || ''), 'error'); });
+                    } });
+            }).catch(e => { console.error(e); showToast('تعذر قراءة النسخة', 'error'); });
+        }
+
+        // ==================== فحص سلامة البيانات ====================
+        function runHealthCheck() {
+            const el = document.getElementById('healthResult'); if (!el) return;
+            normalizeAllProfit();
+            const checks = [];
+            const add = (ok, title, detail) => checks.push({ ok, title, detail });
+            const dupes = list => { const m = {}; list.forEach(x => { const n = String(x.number || ''); if (n) m[n] = (m[n] || 0) + 1; }); return Object.keys(m).filter(n => m[n] > 1); };
+            const ds = dupes(invoices.filter(i => i.type === 'sale')), dp = dupes(purchaseInvoices);
+            add(!ds.length && !dp.length, 'أرقام الفواتير مش مكررة', (ds.length ? 'بيع مكرر: ' + ds.slice(0, 10).join('، ') + ' ' : '') + (dp.length ? 'شراء مكرر: ' + dp.slice(0, 10).join('، ') : '') + (ds.length || dp.length ? ' (دي اتعملت قبل الإصلاح، ومن هنا ورايح مش هتتكرر)' : ''));
+            const cash = getTreasuryBalance('cash');
+            add(cash >= 0, 'رصيد النقدية مش بالسالب', cash < 0 ? `النقدية ${cash.toFixed(2)} — غالبًا فيه قبض متسجلش أو صرف متسجل مرتين` : '');
+            const neg = products.filter(p => (Number((inventory[p.code] || {}).qty) || 0) < 0);
+            add(!neg.length, 'مفيش أصناف رصيدها بالسالب', neg.slice(0, 10).map(p => `${p.name} (${inventory[p.code].qty})`).join('، '));
+            const since = Date.now() - 60 * 86400000;
+            const delivered = customerOrders.filter(o => o.status === 'delivered' && (o.deliveredAt || o.createdAt || 0) >= since);
+            const invByOrder = new Set(invoices.filter(i => i.sourceOrderId).map(i => i.sourceOrderId));
+            const noInv = delivered.filter(o => !invByOrder.has(o.id) && !o.invoiceNumber);
+            add(!noInv.length, 'كل طلب اتسلم ليه فاتورة', noInv.slice(0, 10).map(o => '#' + o.id.slice(-6)).join('، '));
+            const custodyByOrder = new Set(deliveryCollections.map(r => r.orderId).filter(Boolean));
+            const treasuryText = treasury.map(t => (t.notes || '') + ' ' + (t.reference || '')).join('\n');
+            const cashUntracked = invoices.filter(i => i.sourceOrderId && new Date(i.date).getTime() >= Math.max(since, moneySplitAt || 0) && !custodyByOrder.has(i.sourceOrderId) && !treasuryText.includes(i.sourceOrderId.slice(-6)));
+            add(!cashUntracked.length, 'فلوس كل طلب متسجلة (عهدة أو خزنة)', cashUntracked.slice(0, 10).map(i => '#' + i.number).join('، ') + (cashUntracked.length ? ' — فلوس الطلبات دي مش متسجلة لا في عهدة ولا في الخزنة' : ''));
+            const plain = (users || []).filter(u => u.password && !u.authMigrated);
+            add(!plain.length, 'مفيش باسوردات مكشوفة', plain.map(u => u.fullName || u.username).join('، '));
+            const payloadSize = JSON.stringify({ salesmen, users, appCategories, appBrands, activationCodes, appBanners, appOffers, appCities, appRegions, appNeighborhoods, appNotifications, deliveryZones, neighborhoodZoneMap, salesTargets, loyaltySettings,
+                ...(moneySplitActive ? {} : { treasury, expenses, salesReturns, purchaseReturns, supplierAdjustments }) }).length;
+            add(payloadSize < 700000, 'المستند المشترك بعيد عن الحد الأقصى', `الحجم ${Math.round(payloadSize / 1024)} KB من 1024 KB`);
+            add(moneySplitActive, 'الفلوس متخزنة في أماكنها المنفصلة', moneySplitActive ? '' : 'قواعد Firebase مانعة الأماكن الجديدة — ابعت صورة القواعد لـ Claude');
+            const lateApprovals = (typeof purchaseDrafts !== 'undefined' ? purchaseDrafts : []).filter(d => d.status === 'pending' && Date.now() - (d.submittedAt || 0) > 86400000);
+            add(!lateApprovals.length, 'مفيش طلبات اعتماد متأخرة أكتر من يوم', lateApprovals.length ? lateApprovals.length + ' طلب مستني' : '');
+            const lastBackup = localStorage.getItem('_lastBackupDay');
+            add(lastBackup === new Date().toISOString().slice(0, 10), 'فيه نسخة احتياطية النهارده', lastBackup ? 'آخر نسخة: ' + lastBackup : 'لسه مفيش نسخة على الجهاز ده');
+            const okCount = checks.filter(c => c.ok).length;
+            el.innerHTML = `<div style="font-weight:800;margin-bottom:8px;">${okCount} من ${checks.length} سليم</div>` + checks.map(c => `<div style="padding:8px 10px;border-radius:8px;margin-bottom:6px;background:${c.ok ? 'rgba(46,204,113,0.07)' : 'rgba(231,76,60,0.08)'};"><strong>${c.ok ? '✅' : '⚠️'} ${c.title}</strong>${!c.ok && c.detail ? `<div style="font-size:12.5px;margin-top:3px;">${escapeHtml(c.detail)}</div>` : ''}</div>`).join('');
+            logAction('فحص سلامة البيانات', `${okCount} من ${checks.length} سليم`);
+            return checks;
         }
 
         // إضافة مورد جديد من جوه فاتورة الشراء، وبعد الحفظ بيتختار في الفاتورة على طول
@@ -9848,6 +10166,10 @@
             };
             invoices.push(invoice);
             localStorage.setItem('invoices', JSON.stringify(invoices));
+            reserveDocNumber('saleInvoice', invoices.filter(i => i.type === 'sale' && i.id !== invoice.id)).then(function(n) {
+                const num = String(n).padStart(4, '0');
+                if (num !== invoice.number) { invoice.number = num; localStorage.setItem('invoices', JSON.stringify(invoices)); if (db) db.collection('invoiceRecords').doc(String(invoice.id)).set(invoice, { merge: true }).catch(function() {}); try { renderInvoices(); } catch (e) {} }
+            });
             if (db) db.collection('invoiceRecords').doc(String(invoice.id)).set(invoice).catch(function(e) { console.error('invoice sync failed:', e); showToast('تعذر رفع الفاتورة للسحابة (' + (e && e.code ? e.code : e) + ')', 'error', 8000); });
             logAction('فاتورة بيع', `تم إنشاء فاتورة بيع #${invoice.number} للعميل ${invoice.customerName} بقيمة ${grandTotal.toFixed(2)} ر.س`);
             showToast('تم حفظ الفاتورة وخصم المخزون بنجاح');
@@ -10552,7 +10874,7 @@
             }
 
             const ret = {
-                id: Date.now(), number: getNextDocNumber(salesReturns).toString().padStart(4, '0'),
+                id: newRecordId(), number: getNextDocNumber(salesReturns).toString().padStart(4, '0'),
                 date: new Date().toISOString(), originalInvoiceId: invoice.id, originalInvoiceNumber: invoice.number,
                 customerCode: invoice.customerCode, customerName: invoice.customerName,
                 items, grandTotal, totalProfit,
@@ -10560,6 +10882,10 @@
                 notes: document.getElementById('salesReturnNotes').value.trim()
             };
             salesReturns.push(ret);
+            reserveDocNumber('salesReturn', salesReturns.filter(r => r.id !== ret.id)).then(function(n) {
+                const num = String(n).padStart(4, '0');
+                if (num !== ret.number) { ret.number = num; saveSalesReturns(); try { renderSalesReturns && renderSalesReturns(); } catch (e) {} }
+            });
             saveSalesReturns();
             logAction('مرتجع بيع', `تم تسجيل مرتجع بيع #${ret.number} لفاتورة #${invoice.number} - العميل ${invoice.customerName} بقيمة ${grandTotal.toFixed(2)} ر.س`);
             showToast('تم حفظ مرتجع البيع وتحديث المخزون والحسابات بنجاح');
