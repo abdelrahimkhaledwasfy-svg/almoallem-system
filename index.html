@@ -1137,6 +1137,15 @@
                 <h3><i class="fas fa-coins"></i> رصيد الخزنة الحالي</h3>
                 <div class="balance-value" id="treasuryCurrentBalance">0 ر.س</div>
             </div>
+            <div class="card">
+                <div class="card-header"><div class="card-title"><i class="fas fa-wallet"></i> الأرصدة حسب الحساب</div>
+                    <button class="btn btn-primary btn-sm" onclick="openCashBankTransfer()"><i class="fas fa-exchange-alt"></i> تحويل بين النقدية والبنك</button></div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
+                    <div style="background:rgba(39,174,96,0.08);border-radius:12px;padding:14px;"><div style="font-size:13px;color:var(--text-light);"><i class="fas fa-money-bill-wave"></i> النقدية (المفروض في الدرج)</div><div style="font-size:24px;font-weight:800;" id="treasuryCashBalance">0</div></div>
+                    <div style="background:rgba(52,152,219,0.08);border-radius:12px;padding:14px;"><div style="font-size:13px;color:var(--text-light);"><i class="fas fa-university"></i> البنك</div><div style="font-size:24px;font-weight:800;" id="treasuryBankBalance">0</div></div>
+                    <div style="background:rgba(231,76,60,0.06);border-radius:12px;padding:14px;"><div style="font-size:13px;color:var(--text-light);"><i class="fas fa-star"></i> نقاط ولاء مستحقة للعملاء (التزام)</div><div style="font-size:24px;font-weight:800;" id="loyaltyLiability">—</div><button class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="computeLoyaltyLiability()">احسب دلوقتي</button></div>
+                </div>
+            </div>
             <div class="stats-grid">
                 <div class="stat-card sales">
                     <div class="stat-icon"><i class="fas fa-arrow-down" style="color:var(--accent);"></i></div>
@@ -2550,6 +2559,19 @@
         </div>
     </div>
 
+    <!-- Cash/Bank Transfer Modal -->
+    <div class="modal-overlay" id="cashBankModal">
+        <div class="modal" style="max-width:440px;">
+            <div class="modal-header"><h3 class="modal-title"><i class="fas fa-exchange-alt"></i> تحويل بين النقدية والبنك</h3><button class="modal-close" onclick="closeModal('cashBankModal')">&times;</button></div>
+            <div class="modal-body">
+                <div class="form-group"><label class="form-label">الاتجاه</label><select class="form-control" id="cbDirection"><option value="c2b">إيداع: من النقدية للبنك</option><option value="b2c">سحب: من البنك للنقدية</option></select></div>
+                <div class="form-group"><label class="form-label">المبلغ</label><input type="number" class="form-control" id="cbAmount" min="0" step="any"></div>
+                <div class="form-group"><label class="form-label">ملاحظات</label><input type="text" class="form-control" id="cbNotes"></div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('cashBankModal')">إلغاء</button><button class="btn btn-success" onclick="saveCashBankTransfer()"><i class="fas fa-check"></i> تسجيل</button></div>
+        </div>
+    </div>
+
     <!-- Expense Modal -->
     <div class="modal-overlay" id="expenseModal">
         <div class="modal">
@@ -2573,6 +2595,7 @@
                 <div class="form-group"><label class="form-label">الجهة (من)</label><select class="form-control" id="treasuryInParty"><option value="">اختر...</option></select></div>
                 <div class="form-group"><label class="form-label">المبلغ</label><input type="number" class="form-control" id="treasuryInAmount" placeholder="0.00"></div>
                 <div class="form-group"><label class="form-label">نوع القبض</label><select class="form-control" id="treasuryInType"><option value="تحصيل آجل">تحصيل من عميل (آجل)</option><option value="مبيعات نقدية">مبيعات نقدية</option><option value="إضافة رصيد">إضافة رصيد</option><option value="أخرى">أخرى</option></select></div>
+                <div class="form-group"><label class="form-label">الحساب</label><select class="form-control" id="treasuryInAccount"><option value="cash">نقدية (الخزنة)</option><option value="bank">البنك</option></select></div>
                 <div class="form-group"><label class="form-label">البيان</label><input type="text" class="form-control" id="treasuryInNotes" placeholder="بيان القبض..."></div>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('treasuryInModal')">إلغاء</button><button class="btn btn-success" onclick="saveTreasuryIn()"><i class="fas fa-save"></i> حفظ</button></div>
@@ -2635,6 +2658,7 @@
                 <div class="form-group"><label class="form-label">الجهة (إلى)</label><select class="form-control" id="treasuryOutParty"><option value="">اختر...</option></select></div>
                 <div class="form-group"><label class="form-label">المبلغ</label><input type="number" class="form-control" id="treasuryOutAmount" placeholder="0.00"></div>
                 <div class="form-group"><label class="form-label">نوع الصرف</label><select class="form-control" id="treasuryOutType"><option value="دفع مورد">دفع لمورد (آجل)</option><option value="مصروفات">مصروفات</option><option value="سحب رصيد">سحب رصيد</option><option value="أخرى">أخرى</option></select></div>
+                <div class="form-group"><label class="form-label">الحساب</label><select class="form-control" id="treasuryOutAccount"><option value="cash">نقدية (الخزنة)</option><option value="bank">البنك</option></select></div>
                 <div class="form-group"><label class="form-label">البيان</label><input type="text" class="form-control" id="treasuryOutNotes" placeholder="بيان الصرف..."></div>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('treasuryOutModal')">إلغاء</button><button class="btn btn-danger" onclick="saveTreasuryOut()"><i class="fas fa-save"></i> حفظ</button></div>
@@ -3040,6 +3064,7 @@
                 });
             }).then(() => {
                 staleSyncRetryCount = 0;
+                snapshotMoneyLists(cleanPayload);
                 lastKnownServerUpdatedAt = cleanPayload.updatedAt;
                 _origLocalStorageSetItem('_syncOutboxPending', '0');
                 updateSyncBadge('synced');
@@ -3143,8 +3168,29 @@
         // opts.mergeWithLocal = true: بندمج فواتير/حركات مخزون/سجل الأحداث المحلية المعلقة مع بيانات
         // السحابة الجديدة بدل ما نمسحها بالكامل (بنستخدمها لما يكتشف الرفع إن فيه تعديل أحدث وصل
         // من جهاز تاني وإحنا لسه شايلين تعديل محلي معلق زي فاتورة طلب أبليكشن)
+        // القوائم المالية اللي في المستند المشترك: وقت التعارض لازم الإضافات المحلية متتمسحش
+        const MONEY_LIST_KEYS = ['treasury', 'expenses', 'salesReturns', 'purchaseReturns', 'supplierAdjustments'];
+        let lastSyncedMoney = {};   // { key: { id: JSON } } نسخة من اللي كان على السحابة آخر مرة
+        function snapshotMoneyLists(src) {
+            lastSyncedMoney = {};
+            MONEY_LIST_KEYS.forEach(k => { const m = {}; (src[k] || []).forEach(it => { if (it && it.id != null) m[String(it.id)] = JSON.stringify(it); }); lastSyncedMoney[k] = m; });
+        }
+        function mergeMoneyList(key, serverList, localList) {
+            const base = lastSyncedMoney[key] || {};
+            const localIds = new Set(localList.filter(it => it && it.id != null).map(it => String(it.id)));
+            const serverIds = new Set(serverList.filter(it => it && it.id != null).map(it => String(it.id)));
+            // اتمسح محليًا بعد آخر مزامنة → يفضل ممسوح
+            let out = serverList.filter(it => !(base[String(it.id)] !== undefined && !localIds.has(String(it.id))));
+            // اتعدل محليًا بعد آخر مزامنة → التعديل المحلي هو اللي يمشي
+            out = out.map(it => { const loc = localList.find(l => String(l.id) === String(it.id)); return (loc && base[String(it.id)] !== undefined && JSON.stringify(loc) !== base[String(it.id)]) ? loc : it; });
+            // اتضاف محليًا ومش على السحابة → يتضاف (ده اللي كان بيضيع قبل كده)
+            localList.forEach(it => { if (it && it.id != null && !serverIds.has(String(it.id)) && base[String(it.id)] === undefined) out.push(it); });
+            return out;
+        }
         function applyRemoteSnapshot(data, opts) {
                 opts = opts || {};
+                const localMoney = {};
+                if (opts.mergeWithLocal) Object.assign(localMoney, { treasury: treasury.slice(), expenses: expenses.slice(), salesReturns: salesReturns.slice(), purchaseReturns: purchaseReturns.slice(), supplierAdjustments: supplierAdjustments.slice() });
 
                 applyingRemoteUpdate = true;
                 salesmen = data.salesmen || [];
@@ -3153,6 +3199,15 @@
                 salesReturns = data.salesReturns || [];
                 purchaseReturns = data.purchaseReturns || [];
                 supplierAdjustments = data.supplierAdjustments || [];
+                if (opts.mergeWithLocal) {
+                    expenses = mergeMoneyList('expenses', expenses, localMoney.expenses || []);
+                    treasury = mergeMoneyList('treasury', treasury, localMoney.treasury || []);
+                    salesReturns = mergeMoneyList('salesReturns', salesReturns, localMoney.salesReturns || []);
+                    purchaseReturns = mergeMoneyList('purchaseReturns', purchaseReturns, localMoney.purchaseReturns || []);
+                    supplierAdjustments = mergeMoneyList('supplierAdjustments', supplierAdjustments, localMoney.supplierAdjustments || []);
+                }
+                snapshotMoneyLists(data);
+                try { rebuildTreasuryChain(); } catch (e) { console.error(e); }
                 users = data.users || users;
                 appCategories = data.appCategories || [];
                 appBrands = data.appBrands || [];
@@ -5105,11 +5160,14 @@
             if (db) db.collection('stockMovementRecords').doc(String(movement.id)).set(movement).catch(function(e) { console.error('stock movement sync failed:', e); });
         }
 
-        function addTreasuryEntry(type, amount, party, partyType, notes, reference, isDebtRelated = true) {
+        function addTreasuryEntry(type, amount, party, partyType, notes, reference, isDebtRelated = true, account) {
             const currentBalance = getTreasuryBalance();
             const newBalance = type === 'in' ? currentBalance + amount : currentBalance - amount;
+            // id فريد حتى لو حركتين اتسجلوا في نفس الملّي ثانية
+            let newId = Date.now(); while (treasury.some(t => t.id === newId)) newId++;
             treasury.unshift({
-                id: Date.now(), date: new Date().toISOString(), type, amount, party, partyType, notes: notes || '', reference: reference || '',
+                id: newId, date: new Date().toISOString(), type, amount, party, partyType, notes: notes || '', reference: reference || '',
+                account: account || ((reference === 'تحويل بنكي' || reference === 'بطاقة') ? 'bank' : 'cash'),
                 balanceAfter: newBalance,
                 // isDebtRelated: true = هذه حركة تحصيل/سداد فعلية لدين قائم (تؤثر على رصيد العميل/المورد الآجل).
                 // false = مجرد قيد نقدية تلقائي مصاحب لفاتورة نقدية أو عكس لها، ولا يمثل سداد دين فعلي.
@@ -5119,9 +5177,22 @@
             logAction(type === 'in' ? 'سند قبض' : 'سند صرف', `${reference || ''} - ${notes || ''} - المبلغ: ${amount.toFixed(2)} ر.س`);
         }
 
-        function getTreasuryBalance() {
-            if (treasury.length === 0) return 0;
-            return treasury[0].balanceAfter;
+        // حساب كل حركة: نقدية (الدرج) ولا بنك (تحويل / بطاقة)
+        function treasuryAccountOf(t) {
+            if (t.account === 'bank' || t.account === 'cash') return t.account;
+            return (t.reference === 'تحويل بنكي' || t.reference === 'بطاقة') ? 'bank' : 'cash';
+        }
+        // الرصيد = مجموع كل الحركات (مش آخر رصيد مكتوب)، عشان يفضل صح حتى لو حركتين اتسجلوا من جهازين في نفس الوقت
+        function getTreasuryBalance(account) {
+            return treasury.reduce((s, t) => (account && treasuryAccountOf(t) !== account) ? s : s + (t.type === 'in' ? 1 : -1) * (Number(t.amount) || 0), 0);
+        }
+        // بيرتّب الحركات من الأحدث للأقدم ويعيد حساب "الرصيد بعد الحركة" من أول حركة
+        function rebuildTreasuryChain() {
+            const key = t => [new Date(t.date || 0).getTime(), Number(String(t.id).split('-')[0]) || 0];
+            treasury.sort((a, b) => { const ka = key(a), kb = key(b); return (ka[0] - kb[0]) || (ka[1] - kb[1]); });
+            let bal = 0;
+            treasury.forEach(t => { bal += (t.type === 'in' ? 1 : -1) * (Number(t.amount) || 0); t.balanceAfter = Math.round(bal * 100) / 100; });
+            treasury.reverse();
         }
 
         function getCustomerBalance(customerCode) {
@@ -7302,7 +7373,7 @@
             if (!party) { showToast('الرجاء اختيار الجهة', 'error'); return; }
             if (isNaN(amount) || amount <= 0) { showToast('الرجاء إدخال مبلغ صحيح', 'error'); return; }
 
-            addTreasuryEntry('in', amount, party, 'customer', notes, type);
+            addTreasuryEntry('in', amount, party, 'customer', notes, type, true, (document.getElementById('treasuryInAccount') || {}).value || 'cash');
             saveTreasury();
             renderTreasury(); updateDashboardStats();
             closeModal('treasuryInModal');
@@ -7319,7 +7390,7 @@
             const currentBalance = getTreasuryBalance();
             if (amount > currentBalance) { showToast('المبلغ المطلوب أكبر من رصيد الخزنة الحالي!', 'error'); return; }
 
-            addTreasuryEntry('out', amount, party, 'supplier', notes, type);
+            addTreasuryEntry('out', amount, party, 'supplier', notes, type, true, (document.getElementById('treasuryOutAccount') || {}).value || 'cash');
             saveTreasury();
             renderTreasury(); updateDashboardStats();
             closeModal('treasuryOutModal');
@@ -7362,6 +7433,8 @@
         }
 
         function renderTreasury() {
+            rebuildTreasuryChain();
+            try { renderTreasuryAccounts(); } catch (e) { console.error(e); }
             const tbody = document.getElementById('treasuryTable');
             if (treasury.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;"><div style="color:var(--text-light);"><i class="fas fa-coins" style="font-size:48px;margin-bottom:15px;display:block;opacity:0.4;"></i><h3 style="color:var(--text);margin-bottom:8px;">لا توجد حركات خزنة</h3><p>ابدأ بتسجيل رصيد افتتاحي أو حركة قبض/صرف</p></div></td></tr>`;
@@ -9515,6 +9588,42 @@
                 block('أصناف رصيدها بالسالب', 'rgba(243,156,18,0.1)', negative, p => `${escapeHtml(p.name)} (${(inventory[p.code] || {}).qty})`, 'معناها إن فيه بيع اتسجل قبل فاتورة الشراء بتاعته. اعتمد فواتير الشراء المستنية أو اعمل جرد.') +
                 block('بيعات من غير تكلفة متسجلة (اتحسبت بالتكلفة الحالية تقديريًا)', 'rgba(243,156,18,0.1)', estimated, x => `#${escapeHtml(String(x.inv))} ${escapeHtml(x.name)}`, 'دي فواتير قديمة؛ الربح بتاعها تقريبي.') +
                 block('بيعات بخسارة آخر 90 يوم', 'rgba(243,156,18,0.1)', lossSales, x => `#${escapeHtml(String(x.inv))} ${escapeHtml(x.name)} (${x.profit.toFixed(2)})`, 'غالبًا بسبب خصم نقاط كبير أو سعر بيع قديم.');
+        }
+
+
+        // ==================== حسابات الخزنة (نقدية / بنك) + التزام نقاط الولاء ====================
+        function renderTreasuryAccounts() {
+            const f = n => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ر.س';
+            const c = document.getElementById('treasuryCashBalance'); if (c) c.textContent = f(getTreasuryBalance('cash'));
+            const b = document.getElementById('treasuryBankBalance'); if (b) b.textContent = f(getTreasuryBalance('bank'));
+        }
+        function openCashBankTransfer() {
+            document.getElementById('cbAmount').value = ''; document.getElementById('cbNotes').value = '';
+            openModal('cashBankModal');
+        }
+        function saveCashBankTransfer() {
+            const dir = document.getElementById('cbDirection').value;
+            const amount = parseFloat(document.getElementById('cbAmount').value);
+            if (isNaN(amount) || amount <= 0) { showToast('اكتب مبلغ صحيح', 'error'); return; }
+            const from = dir === 'c2b' ? 'cash' : 'bank', to = dir === 'c2b' ? 'bank' : 'cash';
+            if (getTreasuryBalance(from) < amount && !confirm('المبلغ أكبر من رصيد ' + (from === 'cash' ? 'النقدية' : 'البنك') + '. تكمل؟')) return;
+            const notes = document.getElementById('cbNotes').value.trim() || (dir === 'c2b' ? 'إيداع نقدية في البنك' : 'سحب من البنك للنقدية');
+            // حركتين متساويين: خروج من حساب ودخول في التاني، فالإجمالي مبيتغيرش
+            addTreasuryEntry('out', amount, 'تحويل داخلي', 'transfer', notes, 'تحويل داخلي', false, from);
+            addTreasuryEntry('in', amount, 'تحويل داخلي', 'transfer', notes, 'تحويل داخلي', false, to);
+            closeModal('cashBankModal'); renderTreasury(); updateDashboardStats();
+            showToast('تم التحويل');
+        }
+        function computeLoyaltyLiability() {
+            const el = document.getElementById('loyaltyLiability');
+            if (!db) return;
+            el.textContent = '...';
+            db.collection('customerLoyaltyPoints').get().then(snap => {
+                const pts = snap.docs.reduce((s, d) => s + (Number((d.data() || {}).points) || 0), 0);
+                const pv = Number(loyaltySettings.pointValue) || 1;
+                el.textContent = (pts * pv).toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' ر.س';
+                el.title = pts.toLocaleString('en-US') + ' نقطة × ' + pv;
+            }).catch(e => { console.error(e); el.textContent = 'تعذر الحساب'; });
         }
 
         // إضافة مورد جديد من جوه فاتورة الشراء، وبعد الحفظ بيتختار في الفاتورة على طول
