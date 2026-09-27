@@ -1346,6 +1346,11 @@
                 </div>
             </div>
 
+            <div class="card" style="border-right:4px solid var(--profit);">
+                <div class="card-header"><div class="card-title"><i class="fas fa-file-invoice-dollar"></i> قائمة الدخل للفترة (صافي الربح بالتفصيل)</div></div>
+                <div id="profitStatement"></div>
+            </div>
+
             <div class="dashboard-grid">
                 <div class="chart-wrapper">
                     <div class="card-header">
@@ -1406,6 +1411,11 @@
                         <tbody id="profitCustomersTable"></tbody>
                     </table>
                 </div>
+            </div>
+
+            <div class="card" style="border-right:4px solid var(--warning);">
+                <div class="card-header"><div class="card-title"><i class="fas fa-stethoscope"></i> فحص الربحية (حاجات بتأثر على دقة الربح)</div><button class="btn btn-secondary btn-sm" onclick="renderProfitAudit()"><i class="fas fa-sync"></i> افحص</button></div>
+                <div id="profitAudit"></div>
             </div>
         </section>
 
@@ -3420,6 +3430,7 @@
             invoiceRecordsListenerStarted = true;
             db.collection('invoiceRecords').onSnapshot(function(snap) {
                 invoices = snap.docs.map(function(d) { return d.data(); });
+                normalizeAllProfit();
                 localStorage.setItem('invoices', JSON.stringify(invoices));
                 try { updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderTopProducts(); renderPaymentSummary(); updateSalesChart(); } catch (e) { console.error('refresh after invoice update failed:', e); }
             }, function(err) { console.error('Invoice records listener error:', err); });
@@ -4269,6 +4280,7 @@
                     deliveredByRepCode: order.repDelivery ? (order.repDelivery.code || '') : '',
                     deliveredByRepName: order.repDelivery ? (order.repDelivery.name || '') : ''
                 };
+                normalizeDocProfit(invoice);   // خصم النقاط بيتوزع على الأصناف ويتخصم من الربح
                 invoices.push(invoice);
                 localStorage.setItem('invoices', JSON.stringify(invoices));
                 if (db) db.collection('invoiceRecords').doc(String(invoice.id)).set(invoice).catch(function(e) { console.error('app-order invoice sync failed:', e); });
@@ -5087,7 +5099,7 @@
         let _stockMovementSeq = 0;
         function addStockMovement(productCode, productName, type, qty, balanceAfter, reference, notes) {
             _stockMovementSeq++;
-            const movement = { id: Date.now() + '-' + _stockMovementSeq + '-' + Math.random().toString(36).slice(2, 6), date: new Date().toISOString(), productCode, productName, type, qty, balanceAfter, reference, notes: notes || '' };
+            const movement = { unitCost: Number((inventory[productCode] || {}).cost) || Number((products.find(p => p.code === productCode) || {}).cost) || 0, id: Date.now() + '-' + _stockMovementSeq + '-' + Math.random().toString(36).slice(2, 6), date: new Date().toISOString(), productCode, productName, type, qty, balanceAfter, reference, notes: notes || '' };
             stockMovements.unshift(movement);
             saveStockMovements();
             if (db) db.collection('stockMovementRecords').doc(String(movement.id)).set(movement).catch(function(e) { console.error('stock movement sync failed:', e); });
@@ -5195,7 +5207,61 @@
             return salesReturns.filter(r => r.customerCode === customerCode).reduce((s, r) => s + r.grandTotal, 0);
         }
 
+
+        // ==================== محرّك الربحية (مصدر واحد لكل أرقام الربح) ====================
+        // الربح بيتحسب دايمًا من البيانات الأصلية: صافي البيع (بعد خصم النقاط) − التكلفة الفعلية وقت البيع.
+        // مش بنعتمد على أرقام ربح متخزنة قديمة، فالفواتير القديمة كمان بتتحسب صح (خصم النقاط بيتخصم).
+        function pItemDeduct(it) { return it.stockDeductQty != null ? (Number(it.stockDeductQty) || 0) : (Number(it.qty) || 0); }
+        function pItemGross(it) { return it.total != null ? (Number(it.total) || 0) : (Number(it.price) || 0) * (Number(it.qty) || 0); }
+        function pItemUnitCost(it) {
+            if (it.cost != null && it.cost !== '' && !isNaN(Number(it.cost))) return Number(it.cost);
+            it._costEstimated = true;   // الصنف اتباع من غير ما تكلفته تتسجل: بنستخدم التكلفة الحالية ونعلّم عليه في فحص الربحية
+            return Number((inventory[it.productCode] || {}).cost) || Number((products.find(p => p.code === it.productCode) || {}).cost) || 0;
+        }
+        // بيحسب لفاتورة بيع أو مرتجع بيع: صافي كل صنف بعد نصيبه من الخصم، وتكلفته، وربحه
+        function normalizeDocProfit(doc) {
+            if (!doc || !Array.isArray(doc.items)) return doc;
+            const gross = doc.items.reduce((s, it) => s + pItemGross(it), 0);
+            const net = Number(doc.grandTotal) || 0;
+            const factor = gross > 0 ? net / gross : 1;
+            let cogs = 0, profit = 0;
+            doc.items.forEach(it => {
+                const c = pItemUnitCost(it) * pItemDeduct(it);
+                const ns = pItemGross(it) * factor;
+                it._netTotal = ns; it._cogs = c; it.profit = ns - c;
+                cogs += c; profit += ns - c;
+            });
+            doc._grossTotal = gross;
+            doc._discount = Math.max(0, gross - net);
+            doc.totalCost = cogs;
+            doc.totalProfit = profit;
+            return doc;
+        }
+        function normalizeAllProfit() {
+            try { invoices.forEach(i => { if (i.type === 'sale') normalizeDocProfit(i); }); salesReturns.forEach(normalizeDocProfit); } catch (e) { console.error('normalizeAllProfit', e); }
+        }
+        function isStockCountMovement(m) { return m.type === 'adjustment' || m.reference === 'تعديل يدوي' || m.reference === 'جرد Excel'; }
+        // ملخص الربح لأي فترة: نفس المعادلة في الواجهة الرئيسية وشاشة الربحية والتقارير
+        function profitSummary(fromMs, toMs) {
+            normalizeAllProfit();
+            const inR = d => { const t = new Date(d).getTime(); return t >= fromMs && t <= toMs; };
+            const sales = invoices.filter(i => i.type === 'sale' && inR(i.date));
+            const rets = salesReturns.filter(r => inR(r.date));
+            let gross = 0, net = 0, cogs = 0, retVal = 0, retCost = 0, loss = 0, gain = 0;
+            sales.forEach(i => { gross += i._grossTotal || 0; net += Number(i.grandTotal) || 0; cogs += Number(i.totalCost) || 0; });
+            rets.forEach(r => { retVal += Number(r.grandTotal) || 0; retCost += Number(r.totalCost) || 0; });
+            stockMovements.filter(m => isStockCountMovement(m) && inR(m.date)).forEach(m => {
+                const q = Number(m.qty) || 0;
+                const uc = m.unitCost != null ? Number(m.unitCost) : (Number((inventory[m.productCode] || {}).cost) || 0);
+                if (q < 0) loss += Math.abs(q) * uc; else gain += q * uc;
+            });
+            const exp = expenses.filter(e => inR(e.date)).reduce((s, e) => s + (Number(e.amount) || 0), 0);
+            const netSales = net - retVal, netCogs = cogs - retCost, grossProfit = netSales - netCogs;
+            return { count: sales.length, gross, discount: gross - net, net, retVal, netSales, cogs: netCogs, grossProfit, loss, gain, exp, netProfit: grossProfit - loss + gain - exp };
+        }
+
         function loadAllData() {
+            normalizeAllProfit();
             try { renderProducts(); } catch(e) { console.error('renderProducts error:', e); }
             try { renderCustomers(); } catch(e) { console.error('renderCustomers error:', e); }
             try { renderSuppliers(); } catch(e) { console.error('renderSuppliers error:', e); }
@@ -8522,10 +8588,13 @@
             const number = getNextDocNumber(purchaseInvoices).toString().padStart(4, '0');
             d.items.forEach(item => {
                 if (!inventory[item.productCode]) inventory[item.productCode] = { code: item.productCode, qty: 0, cost: item.cost, minStock: 0 };
-                const beforeQty = inventory[item.productCode].qty;
-                inventory[item.productCode].qty += item.qty;
-                if (beforeQty + item.qty > 0) {
-                    const oldValue = beforeQty * (inventory[item.productCode].cost || 0);
+                const beforeQty = Number(inventory[item.productCode].qty) || 0;
+                inventory[item.productCode].qty = beforeQty + item.qty;
+                if (beforeQty <= 0) {
+                    // المخزون كان صفر أو بالسالب: التكلفة الجديدة هي سعر الشراء ده بالظبط (المتوسط المرجّح هنا بيطلع غلط)
+                    inventory[item.productCode].cost = item.cost;
+                } else {
+                    const oldValue = beforeQty * (Number(inventory[item.productCode].cost) || 0);
                     inventory[item.productCode].cost = (oldValue + item.qty * item.cost) / (beforeQty + item.qty);
                 }
                 addStockMovement(item.productCode, item.productName, 'purchase', item.qty, inventory[item.productCode].qty, 'فاتورة شراء #' + number, 'إضافة مخزون (اعتمدها ' + approver.name + ')');
@@ -9403,6 +9472,51 @@
                 });
         }
 
+
+        // ==================== قائمة الدخل + فحص الربحية ====================
+        function renderProfitStatement(ps) {
+            const el = document.getElementById('profitStatement');
+            if (!el) return;
+            const f = n => (n < 0 ? '−' : '') + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const line = (label, val, opts) => `<div style="display:flex;justify-content:space-between;padding:8px 4px;border-bottom:1px solid var(--border);${opts && opts.bold ? 'font-weight:800;font-size:15px;' : ''}${opts && opts.bg ? 'background:' + opts.bg + ';' : ''}"><span>${label}</span><span style="${opts && opts.color ? 'color:' + opts.color + ';' : ''}">${f(val)} ر.س</span></div>`;
+            el.innerHTML =
+                line(`إجمالي المبيعات بالسعر الكامل (${ps.count} فاتورة)`, ps.gross) +
+                line('− خصم نقاط الولاء', -ps.discount, { color: 'var(--danger)' }) +
+                line('− مرتجعات البيع', -ps.retVal, { color: 'var(--danger)' }) +
+                line('= صافي المبيعات', ps.netSales, { bold: true }) +
+                line('− تكلفة البضاعة المباعة (بعد المرتجعات)', -ps.cogs, { color: 'var(--danger)' }) +
+                line('= مجمل الربح', ps.grossProfit, { bold: true, bg: 'rgba(46,204,113,0.06)' }) +
+                line('− خسائر الجرد والتالف', -ps.loss, { color: 'var(--danger)' }) +
+                line('+ زيادات الجرد', ps.gain, { color: 'var(--accent)' }) +
+                line('− المصروفات', -ps.exp, { color: 'var(--danger)' }) +
+                line('= صافي الربح', ps.netProfit, { bold: true, bg: ps.netProfit >= 0 ? 'rgba(46,204,113,0.12)' : 'rgba(231,76,60,0.1)', color: ps.netProfit >= 0 ? 'var(--accent)' : 'var(--danger)' }) +
+                `<div style="font-size:12px;color:var(--text-light);margin-top:8px;">التكلفة = متوسط تكلفة الصنف وقت البيع. خسائر وزيادات الجرد متقيّمة بمتوسط التكلفة وقت الجرد. عجز مناديب التسليم مش خسارة، لأنه فلوس لسه مطلوبة منهم.</div>`;
+            try { renderProfitAudit(); } catch (e) { console.error(e); }
+        }
+        function renderProfitAudit() {
+            const el = document.getElementById('profitAudit');
+            if (!el) return;
+            normalizeAllProfit();
+            const since = Date.now() - 90 * 86400000;
+            const recent = invoices.filter(i => i.type === 'sale' && new Date(i.date).getTime() >= since);
+            const soldCodes = new Set(); recent.forEach(i => (i.items || []).forEach(it => soldCodes.add(it.productCode)));
+            const costOf = p => Number((inventory[p.code] || {}).cost) || Number(p.cost) || 0;
+            const zeroCost = products.filter(p => soldCodes.has(p.code) && costOf(p) <= 0);
+            const belowCost = products.filter(p => costOf(p) > 0 && Number(p.price) > 0 && Number(p.price) < costOf(p));
+            const negative = products.filter(p => (Number((inventory[p.code] || {}).qty) || 0) < 0);
+            const estimated = []; recent.forEach(i => (i.items || []).forEach(it => { if (it._costEstimated) estimated.push({ inv: i.number, name: it.productName }); }));
+            const lossSales = []; recent.forEach(i => (i.items || []).forEach(it => { if ((it.profit || 0) < -0.01) lossSales.push({ inv: i.number, name: it.productName, profit: it.profit }); }));
+            const block = (title, color, list, fmt, hint) => `<div style="margin-bottom:12px;padding:12px;border-radius:10px;background:${list.length ? color : 'rgba(46,204,113,0.06)'};">
+                <div style="font-weight:700;">${list.length ? '⚠️' : '✅'} ${title}: <span>${list.length}</span></div>
+                ${list.length ? `<div style="font-size:12.5px;margin-top:6px;line-height:1.9;">${list.slice(0, 25).map(fmt).join('، ')}${list.length > 25 ? ` ... و${list.length - 25} كمان` : ''}</div><div style="font-size:12px;color:var(--text-light);margin-top:4px;">${hint}</div>` : ''}</div>`;
+            el.innerHTML =
+                block('أصناف اتباعت آخر 90 يوم وتكلفتها صفر (ربحها بيطلع 100%)', 'rgba(231,76,60,0.08)', zeroCost, p => escapeHtml(p.name), 'الحل: سجّل لها فاتورة شراء بسعرها الحقيقي، أو حط سعر التكلفة في الصنف.') +
+                block('أصناف سعر بيعها أقل من تكلفتها', 'rgba(231,76,60,0.08)', belowCost, p => `${escapeHtml(p.name)} (بيع ${Number(p.price).toFixed(2)} / تكلفة ${costOf(p).toFixed(2)})`, 'راجع السعر في قاعدة الأصناف.') +
+                block('أصناف رصيدها بالسالب', 'rgba(243,156,18,0.1)', negative, p => `${escapeHtml(p.name)} (${(inventory[p.code] || {}).qty})`, 'معناها إن فيه بيع اتسجل قبل فاتورة الشراء بتاعته. اعتمد فواتير الشراء المستنية أو اعمل جرد.') +
+                block('بيعات من غير تكلفة متسجلة (اتحسبت بالتكلفة الحالية تقديريًا)', 'rgba(243,156,18,0.1)', estimated, x => `#${escapeHtml(String(x.inv))} ${escapeHtml(x.name)}`, 'دي فواتير قديمة؛ الربح بتاعها تقريبي.') +
+                block('بيعات بخسارة آخر 90 يوم', 'rgba(243,156,18,0.1)', lossSales, x => `#${escapeHtml(String(x.inv))} ${escapeHtml(x.name)} (${x.profit.toFixed(2)})`, 'غالبًا بسبب خصم نقاط كبير أو سعر بيع قديم.');
+        }
+
         // إضافة مورد جديد من جوه فاتورة الشراء، وبعد الحفظ بيتختار في الفاتورة على طول
         let pendingPurchaseSupplierSelect = false;
         function quickAddPurchaseSupplier(name) {
@@ -9954,9 +10068,9 @@
                     addTreasuryEntry('in', newGrandTotal, inv.customerCode || 'عميل', 'customer', 'المبلغ الجديد بعد تعديل فاتورة بيع #' + inv.number, 'تعديل', false);
                 }
                 inv.items = editInvoiceItems;
-                inv.grandTotal = newGrandTotal;
-                inv.totalCost = editInvoiceItems.reduce((s, i) => s + ((i.cost || 0) * (i.stockDeductQty != null ? i.stockDeductQty : i.qty)), 0);
-                inv.totalProfit = editInvoiceItems.reduce((s, i) => s + (i.profit || 0), 0);
+                // لو الفاتورة كان عليها خصم نقاط، الخصم بيفضل زي ما هو بعد التعديل
+                inv.grandTotal = Math.max(0, newGrandTotal - (Number(inv.discount) || 0));
+                normalizeDocProfit(inv);
                 localStorage.setItem('invoices', JSON.stringify(invoices));
                 if (db) db.collection('invoiceRecords').doc(String(inv.id)).set(inv).catch(function(e) { console.error('invoice edit sync failed:', e); });
                 saveInventory();
@@ -10307,9 +10421,11 @@
                 }
             });
             if (items.length === 0) { showToast('الرجاء تحديد صنف واحد على الأقل للإرجاع', 'error'); return; }
-
-            const grandTotal = items.reduce((s, it) => s + it.total, 0);
-            const totalProfit = items.reduce((s, it) => s + it.profit, 0);
+            // لو الفاتورة الأصلية عليها خصم نقاط، المرتجع بيرجع السعر بعد الخصم (مش السعر الكامل)
+            normalizeDocProfit(invoice);
+            const discFactor = invoice._grossTotal > 0 ? (Number(invoice.grandTotal) || 0) / invoice._grossTotal : 1;
+            const grandTotal = Math.round(items.reduce((s, it) => s + it.total, 0) * discFactor * 100) / 100;
+            const totalProfit = items.reduce((s, it) => s + it.profit, 0) - items.reduce((s, it) => s + it.total, 0) * (1 - discFactor);
             const isCash = invoice.paymentMethod !== 'آجل';
 
             // Update inventory back (بوحدة الكرتونة الأساسية، حتى لو الإرجاع كان بالقطاعي)
@@ -10762,7 +10878,7 @@
                         productProfit[item.productCode] = { name: item.productName, unit: item.unit, qty: 0, sales: 0, cost: 0, profit: 0 };
                     }
                     productProfit[item.productCode].qty += item.qty;
-                    productProfit[item.productCode].sales += item.total;
+                    productProfit[item.productCode].sales += item._netTotal != null ? item._netTotal : item.total;
                     productProfit[item.productCode].cost += itemCost * deductQty;
                     productProfit[item.productCode].profit += itemProfit;
                 });
@@ -10800,7 +10916,7 @@
                 r.items.forEach(item => {
                     if (productProfit[item.productCode]) {
                         productProfit[item.productCode].qty -= item.qty;
-                        productProfit[item.productCode].sales -= item.total;
+                        productProfit[item.productCode].sales -= item._netTotal != null ? item._netTotal : item.total;
                         productProfit[item.productCode].cost -= (item.cost || 0) * (item.stockDeductQty != null ? item.stockDeductQty : item.qty);
                         productProfit[item.productCode].profit -= (item.profit || 0);
                     }
@@ -10811,10 +10927,16 @@
                 }
             });
 
-            const totalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
-            const netAfterExpenses = totalProfit - totalExpenses;
+            // الإجماليات من محرّك الربحية (نفس الأرقام في كل مكان)
+            const pf = new Date(document.getElementById('profitFromDate').value).getTime();
+            const ptD = new Date(document.getElementById('profitToDate').value); ptD.setHours(23, 59, 59, 999);
+            const ps = profitSummary(pf, ptD.getTime());
+            totalSales = ps.netSales; totalCost = ps.cogs; totalProfit = ps.grossProfit;
+            const totalExpenses = ps.exp + ps.loss - ps.gain;   // المصروفات + خسائر الجرد − زيادات الجرد
+            const netAfterExpenses = ps.netProfit;
             const margin = totalSales > 0 ? ((totalProfit / totalSales) * 100).toFixed(1) : 0;
             const netMargin = totalSales > 0 ? ((netAfterExpenses / totalSales) * 100).toFixed(1) : 0;
+            renderProfitStatement(ps);
 
             // Update stats
             document.getElementById('profitTotalProfit').textContent = totalProfit.toFixed(2) + ' ر.س';
@@ -11103,8 +11225,8 @@
             const totalPurchases = purchaseInvoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
             document.getElementById('reportTotalPurchases').textContent = totalPurchases.toFixed(2) + ' ر.س';
 
-            const totalProfit = invoices.reduce((sum, inv) => sum + (inv.totalProfit || 0), 0);
-            document.getElementById('reportTotalProfit').textContent = totalProfit.toFixed(2) + ' ر.س';
+            const allPs = profitSummary(0, Date.now() + 86400000);
+            document.getElementById('reportTotalProfit').textContent = allPs.grossProfit.toFixed(2) + ' ر.س';
 
             const tbody = document.getElementById('salesSummaryTable');
             const values = Object.values(summary);
@@ -11794,11 +11916,11 @@
             const periodPurchaseInvoices = purchaseInvoices.filter(inv => inRange(inv.date));
             const periodExpenses = expenses.filter(e => inRange(e.date));
 
-            const totalSales = periodSaleInvoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
+            const ps = profitSummary(new Date(range.start).getTime(), new Date(range.end).getTime());
+            const totalSales = ps.netSales;   // صافي المبيعات بعد خصم النقاط والمرتجعات
             const totalPurchases = periodPurchaseInvoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
-            const totalProfit = periodSaleInvoices.reduce((sum, inv) => sum + (inv.totalProfit || 0), 0);
-            const totalExpenses = periodExpenses.reduce((sum, e) => sum + e.amount, 0);
-            const netProfit = totalProfit - totalExpenses;
+            const totalExpenses = ps.exp;
+            const netProfit = ps.netProfit;   // نفس معادلة شاشة الربحية بالظبط
 
             // دول دايمًا إجمالي كلي (تراكمي) مهما كانت الفترة المختارة، لأنها أرصدة مش نشاط فترة
             const totalCustomersDebt = customers.reduce((sum, c) => sum + Math.max(0, getCustomerBalance(c.code)), 0);
