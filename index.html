@@ -472,6 +472,7 @@
             <li class="nav-item" data-section="sales-supervisor"><a class="nav-link" href="javascript:void(0)" onclick="showSection('sales-supervisor')"><i class="fas fa-satellite-dish"></i><span class="menu-text">داشبورد مشرف المبيعات</span></a></li>
             <li class="nav-item" data-section="sales-tracking"><a class="nav-link" href="javascript:void(0)" onclick="showSection('sales-tracking')"><i class="fas fa-tachometer-alt"></i><span class="menu-text">لوحة متابعة المبيعات</span></a></li>
             <li class="nav-item" data-section="smart-analytics"><a class="nav-link" href="javascript:void(0)" onclick="showSection('smart-analytics')"><i class="fas fa-brain"></i><span class="menu-text">التحليلات الذكية</span></a></li>
+            <li class="nav-item" data-section="rep-custody"><a class="nav-link" href="javascript:void(0)" onclick="showSection('rep-custody')"><i class="fas fa-hand-holding-usd"></i><span class="menu-text">عهدة المناديب</span> <span id="repCustodyBadge" class="badge badge-danger" style="display:none;margin-right:6px;">0</span></a></li>
             <li class="nav-item" data-section="treasury"><a class="nav-link" href="javascript:void(0)" onclick="showSection('treasury')"><i class="fas fa-coins"></i><span class="menu-text">الخزنة اليومية</span></a></li>
             <li class="nav-item" data-section="expenses"><a class="nav-link" href="javascript:void(0)" onclick="showSection('expenses')"><i class="fas fa-wallet"></i><span class="menu-text">التكاليف والمصروفات</span></a></li>
             <li class="nav-item" data-section="inventory"><a class="nav-link" href="javascript:void(0)" onclick="showSection('inventory')"><i class="fas fa-warehouse"></i><span class="menu-text">إدارة المخزون</span></a></li>
@@ -519,6 +520,8 @@
         <!-- Dashboard Section -->
         <section id="dashboard-section" class="section active">
             <div id="purchaseApprovalAlert" style="display:none;cursor:pointer;margin-bottom:14px;padding:14px 18px;border-radius:12px;font-size:14px;" onclick="showSection('purchase-approvals')"></div>
+            <div id="repCustodyAlert" style="display:none;cursor:pointer;margin-bottom:14px;padding:14px 18px;border-radius:12px;font-size:14px;background:rgba(231,76,60,0.1);border-right:4px solid var(--danger);" onclick="showSection('rep-custody')"></div>
+            <div id="expiryAlert" style="display:none;cursor:pointer;margin-bottom:14px;padding:14px 18px;border-radius:12px;font-size:14px;background:rgba(243,156,18,0.12);border-right:4px solid var(--warning);" onclick="showSection('inventory')"></div>
             <div class="date-filter" style="margin-bottom:15px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                 <label style="font-weight:600;"><i class="fas fa-calendar-alt"></i> فترة عرض الإحصائيات:</label>
                 <select class="form-control" id="dashboardPeriodSelect" style="max-width:220px;" onchange="updateDashboardStats()"></select>
@@ -797,7 +800,7 @@
                 </div>
                 <div class="invoice-table-scroll">
                 <table class="invoice-items-table">
-                    <thead><tr><th style="width:50px">م</th><th>اسم الصنف</th><th style="width:100px">الوحدة</th><th style="width:100px">الكمية</th><th style="width:120px">سعر التكلفة</th><th style="width:120px">الإجمالي</th><th style="width:50px"></th></tr></thead>
+                    <thead><tr><th style="width:50px">م</th><th>اسم الصنف</th><th style="width:100px">الوحدة</th><th style="width:100px">الكمية</th><th style="width:120px">سعر التكلفة</th><th style="width:140px">الصلاحية</th><th style="width:120px">الإجمالي</th><th style="width:50px"></th></tr></thead>
                     <tbody id="purchaseItemsBody"></tbody>
                 </table>
                 </div>
@@ -931,6 +934,19 @@
         </section>
 
         <!-- Sales Tracking Dashboard Section -->
+        <section id="rep-custody-section" class="section">
+            <div class="card">
+                <div class="card-header"><div class="card-title"><i class="fas fa-hand-holding-usd"></i> فلوس مع مناديب التسليم</div>
+                    <button class="btn btn-secondary btn-sm admin-only" onclick="closeLegacyCustody()"><i class="fas fa-history"></i> قفل العهدة القديمة</button></div>
+                <p style="font-size:13px;color:var(--text-light);margin:0 0 12px;">كل طلب مندوب التسليم بيسلّمه بتتسجل فلوسه في عهدته. لما يسلّمك الفلوس، دوس "استلام"، والمبلغ بيدخل الخزنة. ولو سلّم أقل، الفرق بيتسجل عليه عجز لحد ما يسدّه.</p>
+                <div id="repCustodyCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px;"></div>
+            </div>
+            <div class="card">
+                <div class="card-header"><div class="card-title"><i class="fas fa-list"></i> آخر عمليات الاستلام</div></div>
+                <div class="table-container"><table><thead><tr><th>التاريخ</th><th>المندوب</th><th>عدد الطلبات</th><th>المفروض</th><th>اتسلم</th><th>الفرق</th><th>رصيد العجز بعدها</th><th>استلمها</th></tr></thead><tbody id="repSettlementsTable"></tbody></table></div>
+            </div>
+        </section>
+
         <section id="purchase-approvals-section" class="section">
             <div class="card">
                 <div class="card-header"><div class="card-title"><i class="fas fa-clipboard-check"></i> بانتظار المراجعة والاعتماد</div><span id="purchaseApprovalsSummary" style="font-size:13px;color:var(--text-light);"></span></div>
@@ -1224,6 +1240,10 @@
         <!-- Inventory Section -->
         <section id="inventory-section" class="section">
             <div id="myApprovalsPanelInventory" class="no-print"></div>
+            <div class="card" id="expiryCard" style="display:none;border-right:4px solid var(--warning);">
+                <div class="card-header"><div class="card-title"><i class="fas fa-hourglass-end"></i> قرب انتهاء الصلاحية (خلال أسبوعين)</div><span class="sv-muted" style="font-size:12px;">محسوبة على إن الأقدم بيتباع الأول</span></div>
+                <div class="table-container"><table><thead><tr><th>الصنف</th><th>الكمية الباقية من الدفعة</th><th>تاريخ الانتهاء</th><th>فاضل</th><th>من فاتورة شراء</th></tr></thead><tbody id="expiryTable"></tbody></table></div>
+            </div>
             <div class="stats-grid">
                 <div class="stat-card inventory">
                     <div class="stat-icon"><i class="fas fa-warehouse"></i></div>
@@ -1973,6 +1993,11 @@
                 <p style="font-size:13px;color:var(--text-light);margin:0;">بيقرا النسخة القديمة من البيانات اللي كانت متخزنة قبل تقسيم التخزين، ويوريك فواتير الشراء اللي فيها ومش موجودة دلوقتي (زي فواتير سبتمبر). <strong>قراءة بس، مش بيغيّر أي حاجة.</strong></p>
                 <div id="oldDataResult"></div>
             </div>
+            <div class="card" style="border-right:4px solid var(--accent);">
+                <div class="card-header"><div class="card-title"><i class="fas fa-cloud"></i> النسخ الاحتياطية الأوتوماتيك (آخر 14 يوم)</div><button class="btn btn-secondary btn-sm" onclick="renderCloudBackups()"><i class="fas fa-sync"></i> تحديث</button></div>
+                <p style="font-size:13px;color:var(--text-light);margin:0 0 10px;">كل يوم بتتعمل نسخة كاملة من البيانات لوحدها على السحابة، أول ما المدير أو المحاسب يفتح السيستم. الاسترجاع مش أوتوماتيك عشان الأمان.</p>
+                <div class="table-container"><table><thead><tr><th>اليوم</th><th>الساعة</th><th>اتعملت من</th><th>فيها</th><th>الحجم</th><th></th></tr></thead><tbody id="cloudBackupsTable"></tbody></table></div>
+            </div>
             <div class="stats-grid">
                 <div class="stat-card sales">
                     <div class="stat-icon"><i class="fas fa-database"></i></div>
@@ -2475,6 +2500,46 @@
         </div>
     </div>
 
+    <!-- Rep Custody Settle Modal -->
+    <div class="modal-overlay" id="repSettleModal">
+        <div class="modal" style="max-width:720px;">
+            <div class="modal-header"><h3 class="modal-title"><i class="fas fa-hand-holding-usd"></i> استلام فلوس من <span id="repSettleName"></span></h3><button class="modal-close" onclick="closeModal('repSettleModal')">&times;</button></div>
+            <div class="modal-body">
+                <input type="hidden" id="repSettleCode">
+                <div class="table-container" style="max-height:260px;overflow-y:auto;"><table><thead><tr><th><input type="checkbox" id="repSettleAll" checked onchange="document.querySelectorAll('.rs-cb').forEach(c => c.checked = this.checked); recalcRepSettle();"></th><th>التاريخ</th><th>العميل</th><th>الفاتورة</th><th>المبلغ</th></tr></thead><tbody id="repSettleRows"></tbody></table></div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:12px;">
+                    <div style="background:#f8f9fa;border-radius:10px;padding:10px;"><div style="font-size:12px;color:var(--text-light);">فلوس الطلبات المختارة</div><div style="font-size:20px;font-weight:800;" id="repSettleOrders">0</div></div>
+                    <div style="background:#f8f9fa;border-radius:10px;padding:10px;"><div style="font-size:12px;color:var(--text-light);">عجز قديم عليه</div><div style="font-size:20px;font-weight:800;color:var(--danger);" id="repSettleOldShort">0</div></div>
+                    <div style="background:rgba(39,174,96,0.08);border-radius:10px;padding:10px;"><div style="font-size:12px;color:var(--text-light);">المفروض يسلّم</div><div style="font-size:20px;font-weight:800;" id="repSettleExpected">0</div></div>
+                </div>
+                <div class="form-group" style="margin-top:12px;"><label class="form-label">المبلغ اللي استلمته فعلًا</label><input type="number" class="form-control" id="repSettleReceived" min="0" step="any" oninput="recalcRepSettle()" style="font-size:18px;font-weight:700;"></div>
+                <div id="repSettleResult" style="font-size:14px;font-weight:700;"></div>
+                <div class="form-group" style="margin-top:10px;"><label class="form-label">ملاحظات</label><input type="text" class="form-control" id="repSettleNotes"></div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('repSettleModal')">إلغاء</button><button class="btn btn-success" id="repSettleBtn" onclick="saveRepSettlement()"><i class="fas fa-check"></i> تأكيد الاستلام</button></div>
+        </div>
+    </div>
+
+    <!-- Delivery Cash Modal (الفلوس مع مين؟) -->
+    <div class="modal-overlay" id="deliveryCashModal">
+        <div class="modal" style="max-width:520px;">
+            <div class="modal-header"><h3 class="modal-title"><i class="fas fa-money-bill-wave"></i> تسليم <span id="deliveryCashCount"></span> — الفلوس مع مين؟</h3><button class="modal-close" onclick="closeModal('deliveryCashModal')">&times;</button></div>
+            <div class="modal-body">
+                <div id="deliveryCashInfo" style="font-size:13px;color:var(--text-light);margin-bottom:12px;"></div>
+                <label style="display:flex;gap:10px;align-items:flex-start;padding:12px;border:1px solid var(--border);border-radius:10px;cursor:pointer;margin-bottom:10px;">
+                    <input type="radio" name="deliveryCashMode" value="rep" checked onchange="toggleDeliveryCashMode()" style="margin-top:4px;">
+                    <div style="flex:1;"><strong>مع مندوب التسليم</strong><div style="font-size:12px;color:var(--text-light);">الفلوس تتسجل في عهدته، وتدخل الخزنة لما يسلّمها للمحاسب</div>
+                        <select class="form-control" id="deliveryCashRep" style="margin-top:8px;"></select></div>
+                </label>
+                <label style="display:flex;gap:10px;align-items:flex-start;padding:12px;border:1px solid var(--border);border-radius:10px;cursor:pointer;">
+                    <input type="radio" name="deliveryCashMode" value="store" onchange="toggleDeliveryCashMode()" style="margin-top:4px;">
+                    <div><strong>اتدفعت في المخزن</strong><div style="font-size:12px;color:var(--text-light);">الفلوس تدخل الخزنة على طول</div></div>
+                </label>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('deliveryCashModal')">إلغاء</button><button class="btn btn-success" id="deliveryCashBtn" onclick="confirmDeliveryCash()"><i class="fas fa-check-double"></i> تأكيد التسليم</button></div>
+        </div>
+    </div>
+
     <!-- Expense Modal -->
     <div class="modal-overlay" id="expenseModal">
         <div class="modal">
@@ -2630,7 +2695,7 @@
         const ROLES = {
             admin: { label: 'مدير النظام', sections: ['*'] },
             // المحاسب: من غير الربحية خالص، وبيشوف المخزون (وأي تعديل مخزون منه بيحتاج اعتماد المدير)
-            accountant: { label: 'محاسب', sections: ['dashboard', 'invoices', 'purchase-invoice', 'purchase-approvals', 'purchase-returns', 'collections', 'treasury', 'expenses', 'inventory', 'products', 'suppliers', 'reports'] },
+            accountant: { label: 'محاسب', sections: ['dashboard', 'invoices', 'purchase-invoice', 'purchase-approvals', 'purchase-returns', 'collections', 'treasury', 'expenses', 'rep-custody', 'inventory', 'products', 'suppliers', 'reports'] },
             warehouse_keeper: { label: 'أمين مخزن', sections: ['dashboard', 'customer-orders', 'purchase-invoice', 'purchase-returns', 'inventory', 'products', 'suppliers'] },
             // مشرف المبيعات: بيشوف داشبورد المتابعة بس (عرض فقط)، والحاجة الوحيدة اللي بيسجلها هي التارجت
             sales_supervisor: { label: 'مشرف مبيعات', sections: ['sales-supervisor'], home: 'sales-supervisor' }
@@ -2857,6 +2922,7 @@
                     startInvoiceRecordsListener();
                     startPurchaseInvoiceRecordsListener();
                     try { startPurchaseDraftsListener(); } catch (e) { console.error(e); }
+                    try { startRepSettlementsListener(); } catch (e) { console.error(e); }
                     startStockMovementRecordsListener();
                     startAuditLogRecordsListener();
                     startCustomerVisitRecordsListener();
@@ -3407,8 +3473,9 @@
             if (!db || deliveryCollectionRecordsListenerStarted) return;
             deliveryCollectionRecordsListenerStarted = true;
             db.collection('deliveryCollectionRecords').orderBy('date', 'desc').limit(2000).onSnapshot(function(snap) {
-                deliveryCollections = snap.docs.map(function(d) { return d.data(); });
+                deliveryCollections = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
                 localStorage.setItem('deliveryCollections', JSON.stringify(deliveryCollections));
+                try { renderRepCustody(); } catch (e) { console.error(e); }
             }, function(err) { console.error('Delivery collection records listener error:', err); });
         }
 
@@ -4078,6 +4145,7 @@
         // opts.silent = true بيمنع رسالة النجاح الفردية (بنستخدمها في التنفيذ الجماعي عشان نطلع رسالة واحدة مجمّعة)
         function fulfillOrderCore(orderId, opts) {
             opts = opts || {};
+            opts = opts || {};
             const order = customerOrders.find(o => o.id === orderId);
             if (!order) return Promise.resolve(false);
             if (!db) { showToast('لا يوجد اتصال بالسحابة، لا يمكن تنفيذ الطلب الآن', 'error'); return Promise.resolve(false); }
@@ -4243,6 +4311,15 @@
                     db.collection('deliveryCollectionRecords').doc('DLV-ORD-' + order.id)
                         .set({ invoiceId: invoice.id, invoiceNumber: invoice.number, amount: grandTotal }, { merge: true })
                         .catch(function(e) { console.error('custody record update failed:', e); });
+                } else if (opts.cash && opts.cash.mode === 'rep' && db) {
+                    // اتقفل من السيستم والفلوس مع مندوب التسليم: بتتسجل في عهدته، وتدخل الخزنة لما يسلّمها
+                    const rec = { id: 'DLV-ORD-' + order.id, date: new Date().toISOString(), repUsername: opts.cash.code, repFullName: opts.cash.name,
+                        orderId: order.id, invoiceId: invoice.id, invoiceNumber: invoice.number, customerName: order.customerName || '', amount: grandTotal, manual: true };
+                    db.collection('deliveryCollectionRecords').doc(rec.id).set(rec, { merge: true }).catch(function(e) { console.error('custody record create failed:', e); });
+                    deliveryCollections.unshift(rec);
+                } else if (opts.cash && opts.cash.mode === 'store' && grandTotal > 0) {
+                    // الفلوس اتدفعت في المخزن: بتدخل الخزنة على طول
+                    addTreasuryEntry('in', grandTotal, order.customerCode || 'عميل', 'customer', 'تحصيل طلب أبليكشن #' + order.id.slice(-6) + ' في المخزن (فاتورة #' + invoice.number + ')', 'نقدي', false);
                 }
                 return orderRef.update({ invoiceNumber: invoice.number, pointsDeducted: pointsToDeduct, appliedDiscount: appliedDiscount }).catch(function(e) { console.error('order metadata update failed:', e); });
             }).then(function() {
@@ -4274,8 +4351,7 @@
                     }
                 }
             }
-            if (!confirm('تأكيد تسليم هذا الطلب؟ سيتم إنشاء فاتورة البيع وتسجيلها.')) return;
-            fulfillOrderCore(orderId);
+            openDeliveryCashModal([orderId]);
         }
 
         // تجهيز مجموعة طلبات دفعة واحدة (Bulk). بنفّذها بالتتابع (مش كلها مرة واحدة)
@@ -4315,19 +4391,8 @@
                 }
             });
 
-            let warnMsg = 'تأكيد تسليم ' + ids.length + ' طلب دفعة واحدة؟ سيتم إنشاء فاتورة بيع لكل طلب.';
-            if (overLimitNames.length > 0) warnMsg += '\n\n⚠️ تنبيه: العملاء التاليين هيتجاوزوا الحد الائتماني بعد الطلب: ' + overLimitNames.join('، ');
-            if (!confirm(warnMsg)) return;
-
-            let successCount = 0, failCount = 0;
-            ids.reduce(function(chain, id) {
-                return chain.then(function() {
-                    return fulfillOrderCore(id, { silent: true }).then(function(ok) { ok ? successCount++ : failCount++; });
-                });
-            }, Promise.resolve()).then(function() {
-                showToast('تم تسليم ' + successCount + ' طلب بنجاح' + (failCount > 0 ? ' — وفشل ' + failCount + ' طلب' : ''), failCount > 0 ? 'warning' : 'success', 5000);
-                clearBulkSelection();
-            });
+            if (overLimitNames.length > 0 && !confirm('⚠️ تنبيه: العملاء التاليين هيتجاوزوا الحد الائتماني بعد الطلب: ' + overLimitNames.join('، ') + '\n\nتكمل؟')) return;
+            openDeliveryCashModal(ids);
         }
 
         function rejectOrder(orderId) {
@@ -5160,6 +5225,8 @@
             try { renderUsers(); } catch(e) { console.error('renderUsers error:', e); }
             try { renderAuditLog(); } catch(e) { console.error('renderAuditLog error:', e); }
             try { renderSupervisorDashboard(); } catch(e) { console.error('renderSupervisorDashboard error:', e); }
+            try { renderRepCustody(); } catch(e) { console.error('renderRepCustody error:', e); }
+            try { renderExpiry(); } catch(e) { console.error('renderExpiry error:', e); }
         }
 
         // ==================== SIDEBAR & NAVIGATION ====================
@@ -5245,7 +5312,7 @@
                 'customers': 'قاعدة العملاء', 'suppliers': 'قاعدة الموردين', 'salesmen': 'قاعدة المناديب',
                 'reports': 'التقارير والتجميع', 'backup': 'النسخ الاحتياطي',
                 'sales-returns': 'مرتجعات البيع', 'purchase-returns': 'مرتجعات الشراء',
-                'collections': 'متابعة التحصيلات', 'sales-tracking': 'لوحة متابعة المبيعات', 'sales-supervisor': 'داشبورد مشرف المبيعات', 'purchase-approvals': 'المراجعة والاعتماد', 'smart-analytics': 'التحليلات الذكية',
+                'collections': 'متابعة التحصيلات', 'sales-tracking': 'لوحة متابعة المبيعات', 'sales-supervisor': 'داشبورد مشرف المبيعات', 'purchase-approvals': 'المراجعة والاعتماد', 'rep-custody': 'عهدة المناديب', 'smart-analytics': 'التحليلات الذكية',
                 'users': 'المستخدمون والصلاحيات', 'audit-log': 'سجل العمليات'
             };
             document.getElementById('pageTitle').textContent = titles[sectionName] || sectionName;
@@ -7621,7 +7688,7 @@
                 if (!sel || !sel.value) return null;
                 return isSale
                     ? { code: sel.value, unit: (r.querySelector('.unit-field') || {}).value || '', qty: r.querySelector('.qty-field').value }
-                    : { code: sel.value, qty: r.querySelector('.qty-field').value, cost: r.querySelector('.cost-field').value };
+                    : { code: sel.value, qty: r.querySelector('.qty-field').value, cost: r.querySelector('.cost-field').value, expiry: (r.querySelector('.expiry-field') || {}).value || '' };
             }).filter(Boolean);
             if (!rows.length) return null;
             const v = id => (document.getElementById(id) || {}).value || '';
@@ -7688,6 +7755,7 @@
                     updatePurchaseRow(sel);
                     row.querySelector('.qty-field').value = r.qty;
                     row.querySelector('.cost-field').value = r.cost;
+                    if (r.expiry && row.querySelector('.expiry-field')) row.querySelector('.expiry-field').value = r.expiry;
                     calculatePurchaseRow(row.querySelector('.qty-field'));
                 }
             });
@@ -8100,6 +8168,9 @@
             const origShow = showSection;
             showSection = function(name) {
                 const r = origShow.apply(this, arguments);
+                if (name === 'backup') { try { renderCloudBackups(); } catch (e) {} }
+                if (name === 'rep-custody') { try { renderRepCustody(); } catch (e) {} }
+                if (name === 'inventory') { try { renderExpiry(); } catch (e) {} }
                 if (name === 'sales-supervisor') { renderSupervisorDashboard(); setTimeout(() => Object.values(svCharts).forEach(c => { try { c.resize(); } catch (e) {} }), 50); }
                 else if (document.body.classList.contains('sv-tv')) toggleSupervisorTvMode();
                 return r;
@@ -8388,7 +8459,7 @@
                 (d.attachmentUrl ? `<br><a href="${escapeHtml(d.attachmentUrl)}" target="_blank" class="btn btn-info btn-sm" style="margin-top:6px;"><i class="fas fa-image"></i> افتح صورة فاتورة المورد</a>` : '<br><span style="color:var(--text-light);">مفيش صورة لفاتورة المورد</span>') +
                 ((d.history || []).length > 1 ? `<div style="font-size:12px;color:var(--text-light);margin-top:4px;">${(d.history || []).map(h => escapeHtml(h.action + ' — ' + h.by)).join(' ← ')}</div>` : '');
             document.getElementById('purchaseReviewItems').innerHTML = (d.items || []).map((it, k) =>
-                `<tr><td>${escapeHtml(it.productName || it.productCode)}</td><td>${escapeHtml(it.unit || '')}</td><td>${it.qty}</td><td><input type="number" class="form-control pr-cost" data-k="${k}" min="0" step="any" value="${it.cost}" style="width:110px;" oninput="recalcPurchaseReview()"></td><td class="pr-total">${Number(it.total || 0).toFixed(2)}</td></tr>`).join('');
+                `<tr><td>${escapeHtml(it.productName || it.productCode)}${it.expiryDate ? `<div style="font-size:11px;color:var(--text-light);">صلاحية: ${new Date(it.expiryDate).toLocaleDateString('ar-EG')}</div>` : ''}</td><td>${escapeHtml(it.unit || '')}</td><td>${it.qty}</td><td><input type="number" class="form-control pr-cost" data-k="${k}" min="0" step="any" value="${it.cost}" style="width:110px;" oninput="recalcPurchaseReview()"></td><td class="pr-total">${Number(it.total || 0).toFixed(2)}</td></tr>`).join('');
             recalcPurchaseReview();
             const self = isOwnPurchaseDraft(d) && pdRole() !== 'admin';
             document.getElementById('purchaseReviewSelfNote').style.display = self ? 'block' : 'none';
@@ -8518,6 +8589,7 @@
                 sel.value = it.productCode; syncEnhancedSelect(sel); updatePurchaseRow(sel);
                 row.querySelector('.qty-field').value = it.qty;
                 row.querySelector('.cost-field').value = it.cost;
+                if (it.expiryDate && row.querySelector('.expiry-field')) row.querySelector('.expiry-field').value = it.expiryDate;
                 calculatePurchaseRow(row.querySelector('.qty-field'));
             });
             if (!tbody.children.length) addPurchaseRow();
@@ -9047,6 +9119,290 @@
             xlWrite('حركات_المخزون', [{ name: 'حركات المخزون', rows, widths: [20, 12, 30, 12, 10, 12, 22, 34] }]);
         }
 
+
+        // ==================== عهدة مناديب التسليم ====================
+        let repSettlements = [];
+        let repSettlementsListenerStarted = false;
+        function startRepSettlementsListener() {
+            if (!db || repSettlementsListenerStarted) return;
+            repSettlementsListenerStarted = true;
+            db.collection('repSettlements').orderBy('date', 'desc').limit(500).onSnapshot(function(snap) {
+                repSettlements = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+                renderRepCustody();
+            }, function(err) { console.error('rep settlements listener error:', err); });
+            setInterval(renderRepCustody, 60000);
+        }
+        function repShortage(code) {   // موجب = عجز عليه، سالب = زيادة ليه
+            // كل استلام بيزود العجز بـ (فلوس الطلبات − اللي اتسلم)، فالزيادة في مرة بتسد عجز مرة قبلها
+            return repSettlements.filter(s => s.repCode === code && !s.legacy).reduce((t, s) => t + (Number(s.ordersAmount) || 0) - (Number(s.received) || 0), 0);
+        }
+        function unsettledFor(code) { return deliveryCollections.filter(r => r.repUsername === code && !r.settledAt && Number(r.amount) > 0); }
+        function renderRepCustody() {
+            const reps = salesmen.filter(s => s.repType === 'delivery');
+            const known = new Set(reps.map(s => s.code));
+            deliveryCollections.forEach(r => { if (r.repUsername && !known.has(r.repUsername) && !r.settledAt) { known.add(r.repUsername); reps.push({ code: r.repUsername, name: r.repFullName || r.repUsername }); } });
+            let alertTotal = 0, alertReps = 0, withMoney = 0;
+            const cards = reps.map(s => {
+                const list = unsettledFor(s.code);
+                const amount = list.reduce((t, r) => t + (Number(r.amount) || 0), 0);
+                const short = Math.round(repShortage(s.code) * 100) / 100;
+                const oldest = list.length ? Math.min(...list.map(r => new Date(r.date).getTime())) : 0;
+                const late = oldest && Date.now() - oldest > 24 * 3600000;
+                if (amount > 0 || short > 0) withMoney++;
+                if (late) { alertReps++; alertTotal += amount; }
+                return `<div style="border:1px solid var(--border);border-radius:12px;padding:14px;${late ? 'border-color:var(--danger);background:rgba(231,76,60,0.04);' : ''}">
+                    <div style="font-weight:800;font-size:15px;margin-bottom:6px;"><i class="fas fa-motorcycle" style="color:var(--text-light);"></i> ${escapeHtml(s.name)}</div>
+                    <div style="font-size:13px;line-height:2;">معاه: <strong style="font-size:18px;">${amount.toFixed(2)}</strong> ر.س من ${list.length} طلب${oldest ? `<br>أقدم طلب: ${pdAgo(oldest)}${late ? ' <span class="badge badge-danger">متأخر</span>' : ''}` : ''}
+                    ${short > 0 ? `<br><span style="color:var(--danger);font-weight:700;">عجز عليه: ${short.toFixed(2)} ر.س</span>` : short < 0 ? `<br><span style="color:var(--accent);">زيادة ليه: ${Math.abs(short).toFixed(2)} ر.س</span>` : ''}</div>
+                    ${(amount > 0 || short > 0) && ['admin', 'accountant'].includes(xlRole()) ? `<button class="btn btn-success btn-sm" style="margin-top:8px;width:100%;" onclick="openRepSettle('${escapeHtml(s.code)}')"><i class="fas fa-hand-holding-usd"></i> استلام</button>` : '<div class="sv-muted" style="margin-top:8px;">مفيش فلوس معاه</div>'}
+                </div>`;
+            });
+            const box = document.getElementById('repCustodyCards');
+            if (box) box.innerHTML = cards.join('') || '<div class="sv-muted">مفيش مناديب تسليم متسجلين</div>';
+            const tb = document.getElementById('repSettlementsTable');
+            if (tb) tb.innerHTML = repSettlements.filter(s => !s.legacy).slice(0, 60).map(s => {
+                const diff = (Number(s.received) || 0) - (Number(s.expected) || 0);
+                return `<tr><td>${new Date(s.date).toLocaleString('ar-EG')}</td><td>${escapeHtml(s.repName || s.repCode)}</td><td>${(s.recordIds || []).length}</td><td>${Number(s.expected).toFixed(2)}</td><td><strong>${Number(s.received).toFixed(2)}</strong></td><td style="color:${diff < 0 ? 'var(--danger)' : diff > 0 ? 'var(--accent)' : 'inherit'};font-weight:700;">${diff === 0 ? '-' : (diff > 0 ? '+' : '') + diff.toFixed(2)}</td><td>${Number(s.shortageAfter || 0).toFixed(2)}</td><td>${escapeHtml((s.by && s.by.name) || '')}</td></tr>`;
+            }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text-light);padding:20px;">لسه مفيش عمليات استلام</td></tr>';
+            const badge = document.getElementById('repCustodyBadge');
+            if (badge) { badge.textContent = alertReps; badge.style.display = alertReps ? '' : 'none'; }
+            const al = document.getElementById('repCustodyAlert');
+            if (al) {
+                if (alertReps && ['admin', 'accountant'].includes(xlRole())) { al.style.display = 'block'; al.innerHTML = `<i class="fas fa-hand-holding-usd" style="color:var(--danger);"></i> <strong>${alertReps} مندوب تسليم معاهم فلوس من أكتر من يوم</strong> بإجمالي ${alertTotal.toFixed(2)} ر.س · <u>افتح العهدة</u>`; }
+                else al.style.display = 'none';
+            }
+        }
+        function openRepSettle(code) {
+            const rep = salesmen.find(s => s.code === code) || { code, name: (deliveryCollections.find(r => r.repUsername === code) || {}).repFullName || code };
+            document.getElementById('repSettleCode').value = code;
+            document.getElementById('repSettleName').textContent = rep.name;
+            document.getElementById('repSettleAll').checked = true;
+            document.getElementById('repSettleRows').innerHTML = unsettledFor(code).sort((a, b) => String(a.date).localeCompare(String(b.date))).map(r =>
+                `<tr><td><input type="checkbox" class="rs-cb" data-id="${escapeHtml(r.id)}" data-amt="${Number(r.amount) || 0}" checked onchange="recalcRepSettle()"></td><td>${new Date(r.date).toLocaleString('ar-EG')}</td><td>${escapeHtml(r.customerName || '')}</td><td>${escapeHtml(String(r.invoiceNumber || '-'))}</td><td>${Number(r.amount).toFixed(2)}</td></tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-light);">مفيش طلبات، الاستلام ده لسد العجز بس</td></tr>';
+            document.getElementById('repSettleReceived').value = '';
+            document.getElementById('repSettleNotes').value = '';
+            recalcRepSettle();
+            openModal('repSettleModal');
+        }
+        function recalcRepSettle() {
+            const code = document.getElementById('repSettleCode').value;
+            const orders = Array.from(document.querySelectorAll('.rs-cb:checked')).reduce((t, c) => t + Number(c.dataset.amt), 0);
+            const oldShort = Math.max(0, repShortage(code));
+            const expected = orders + oldShort;
+            document.getElementById('repSettleOrders').textContent = orders.toFixed(2);
+            document.getElementById('repSettleOldShort').textContent = oldShort.toFixed(2);
+            document.getElementById('repSettleExpected').textContent = expected.toFixed(2);
+            const recRaw = document.getElementById('repSettleReceived').value;
+            const res = document.getElementById('repSettleResult');
+            if (recRaw === '') { res.textContent = ''; return; }
+            const diff = Number(recRaw) - expected;
+            res.innerHTML = Math.abs(diff) < 0.005 ? '<span style="color:var(--accent);">✓ مظبوط، مفيش فرق</span>'
+                : diff < 0 ? `<span style="color:var(--danger);">عجز ${Math.abs(diff).toFixed(2)} ر.س هيتسجل عليه</span>`
+                : `<span style="color:var(--accent);">زيادة ${diff.toFixed(2)} ر.س هتتسجل ليه</span>`;
+        }
+        function saveRepSettlement() {
+            if (!db) { showToast('لازم يكون فيه إنترنت', 'error'); return; }
+            if (!['admin', 'accountant'].includes(xlRole())) { showToast('الاستلام للمحاسب أو المدير', 'error'); return; }
+            const code = document.getElementById('repSettleCode').value;
+            const received = Number(document.getElementById('repSettleReceived').value);
+            if (document.getElementById('repSettleReceived').value === '' || isNaN(received) || received < 0) { showToast('اكتب المبلغ اللي استلمته', 'error'); return; }
+            const ids = Array.from(document.querySelectorAll('.rs-cb:checked')).map(c => c.dataset.id);
+            const ordersAmt = Array.from(document.querySelectorAll('.rs-cb:checked')).reduce((t, c) => t + Number(c.dataset.amt), 0);
+            const oldShort = Math.max(0, repShortage(code));
+            if (!ids.length && oldShort <= 0) { showToast('اختار طلب واحد على الأقل', 'error'); return; }
+            const expected = ordersAmt + oldShort;
+            const diff = received - expected;
+            if (!confirm(`استلام ${received.toFixed(2)} ر.س من المفروض ${expected.toFixed(2)} ر.س` + (Math.abs(diff) >= 0.005 ? `\n${diff < 0 ? 'عجز' : 'زيادة'}: ${Math.abs(diff).toFixed(2)} ر.س` : '') + '\nالمبلغ هيدخل الخزنة. تأكيد؟')) return;
+            const btn = document.getElementById('repSettleBtn'); btn.disabled = true;
+            const me = pdUser();
+            const rep = salesmen.find(s => s.code === code);
+            const repName = rep ? rep.name : ((deliveryCollections.find(r => r.repUsername === code) || {}).repFullName || code);
+            const sid = 'RS-' + Date.now();
+            const refs = ids.map(id => db.collection('deliveryCollectionRecords').doc(id));
+            // معاملة ذرية: كل الطلبات لازم تكون لسه متسلّمتش، وإلا مفيش حاجة بتتسجل (عشان محدش يستلم نفس الفلوس مرتين)
+            db.runTransaction(function(t) {
+                return Promise.all(refs.map(r => t.get(r))).then(function(snaps) {
+                    snaps.forEach(s => { if (!s.exists || s.data().settledAt) throw new Error('فيه طلبات اتسلمت فلوسها قبل كده، اعمل تحديث'); });
+                    refs.forEach(r => t.update(r, { settledAt: Date.now(), settlementId: sid }));
+                    t.set(db.collection('repSettlements').doc(sid), { date: new Date().toISOString(), repCode: code, repName, recordIds: ids, ordersAmount: ordersAmt,
+                        oldShortage: oldShort, expected, received, shortageAfter: Math.round((repShortage(code) + ordersAmt - received) * 100) / 100, by: me, notes: document.getElementById('repSettleNotes').value.trim() });
+                });
+            }).then(function() {
+                if (received > 0) addTreasuryEntry('in', received, repName, 'delivery_rep', `تسليم عهدة ${repName} (${ids.length} طلب)`, 'عهدة مندوب', false);
+                deliveryCollections.forEach(r => { if (ids.includes(r.id)) { r.settledAt = Date.now(); r.settlementId = sid; } });
+                logAction('استلام عهدة مندوب', `${repName}: المفروض ${expected.toFixed(2)} واتسلم ${received.toFixed(2)}` + (Math.abs(diff) >= 0.005 ? ` — ${diff < 0 ? 'عجز' : 'زيادة'} ${Math.abs(diff).toFixed(2)}` : ''));
+                closeModal('repSettleModal');
+                try { renderTreasury(); updateDashboardStats(); } catch (e) {}
+                renderRepCustody();
+                showToast('تم الاستلام ودخل الخزنة' + (diff < -0.004 ? ` — واتسجل عجز ${Math.abs(diff).toFixed(2)}` : ''));
+            }).catch(function(e) { console.error(e); showToast(e.message || 'تعذر الحفظ', 'error'); })
+              .then(function() { btn.disabled = false; });
+        }
+        // للمدير: الطلبات القديمة اللي فلوسها اتسلمت قبل الشاشة دي ما تتعمل، بتتقفل من غير ما تدخل الخزنة تاني
+        function closeLegacyCustody() {
+            if (xlRole() !== 'admin' || !db) return;
+            const d = prompt('اكتب التاريخ اللي أي طلب قبله فلوسه اتسلمت خلاص (مثال: 2026-09-27):', new Date().toISOString().slice(0, 10));
+            if (!d) return;
+            const cutoff = new Date(d + 'T23:59:59').getTime();
+            if (isNaN(cutoff)) { showToast('التاريخ مش مظبوط', 'error'); return; }
+            const list = deliveryCollections.filter(r => !r.settledAt && new Date(r.date).getTime() <= cutoff);
+            if (!list.length) { showToast('مفيش طلبات قديمة مفتوحة قبل التاريخ ده', 'warning'); return; }
+            if (!confirm(`هيتقفل ${list.length} طلب بإجمالي ${list.reduce((t, r) => t + (Number(r.amount) || 0), 0).toFixed(2)} ر.س على إن فلوسهم اتسلمت قبل كده.\nمش هيدخل حاجة الخزنة. تأكيد؟`)) return;
+            const batch = db.batch();
+            list.slice(0, 450).forEach(r => batch.update(db.collection('deliveryCollectionRecords').doc(r.id), { settledAt: Date.now(), settlementId: 'legacy', legacy: true }));
+            batch.commit().then(() => { list.slice(0, 450).forEach(r => { r.settledAt = Date.now(); }); logAction('قفل عهدة قديمة', `${Math.min(list.length, 450)} طلب قبل ${d}`); renderRepCustody(); showToast('اتقفلت' + (list.length > 450 ? '، وفيه باقي، دوس تاني' : '')); })
+                .catch(e => { console.error(e); showToast('تعذر القفل', 'error'); });
+        }
+
+        // ==================== تواريخ الصلاحية (الأقدم بيتباع الأول) ====================
+        const EXPIRY_ALERT_DAYS = 14;
+        function computeExpiringBatches() {
+            const byProduct = {};
+            purchaseInvoices.forEach(inv => (inv.items || []).forEach(it => {
+                (byProduct[it.productCode] = byProduct[it.productCode] || []).push({ date: inv.date, qty: Number(it.qty) || 0, expiry: it.expiryDate || null, invNo: inv.number, name: it.productName });
+            }));
+            const out = [];
+            Object.keys(byProduct).forEach(code => {
+                let left = Math.max(0, Number((inventory[code] || {}).qty) || 0);
+                // الكمية الموجودة بتتوزع على أحدث الدفعات، والأقدم تعتبر اتباعت
+                byProduct[code].sort((a, b) => String(b.date).localeCompare(String(a.date))).forEach(b => {
+                    if (left <= 0) return;
+                    const inStock = Math.min(left, b.qty); left -= inStock;
+                    if (!b.expiry || inStock <= 0) return;
+                    const days = Math.ceil((new Date(b.expiry + 'T23:59:59').getTime() - Date.now()) / 86400000);
+                    if (days <= EXPIRY_ALERT_DAYS) out.push({ code, name: (products.find(p => p.code === code) || {}).name || b.name, qty: inStock, expiry: b.expiry, days, invNo: b.invNo });
+                });
+            });
+            return out.sort((a, b) => a.days - b.days);
+        }
+        function renderExpiry() {
+            const list = computeExpiringBatches();
+            const card = document.getElementById('expiryCard');
+            if (card) {
+                card.style.display = list.length ? '' : 'none';
+                document.getElementById('expiryTable').innerHTML = list.map(b => `<tr style="${b.days < 0 ? 'background:rgba(231,76,60,0.08);' : ''}"><td><strong>${escapeHtml(b.name)}</strong></td><td>${b.qty}</td><td>${new Date(b.expiry).toLocaleDateString('ar-EG')}</td><td>${b.days < 0 ? `<span class="badge badge-danger">خلصت من ${Math.abs(b.days)} يوم</span>` : b.days === 0 ? '<span class="badge badge-danger">النهارده</span>' : `<span class="badge ${b.days <= 7 ? 'badge-danger' : 'badge-warning'}">${b.days} يوم</span>`}</td><td>#${escapeHtml(String(b.invNo || ''))}</td></tr>`).join('');
+            }
+            const al = document.getElementById('expiryAlert');
+            if (al) {
+                const expired = list.filter(b => b.days < 0).length;
+                if (list.length && ['admin', 'accountant', 'warehouse_keeper'].includes(xlRole())) { al.style.display = 'block'; al.innerHTML = `<i class="fas fa-hourglass-end" style="color:var(--warning);"></i> <strong>${list.length} دفعة قربت صلاحيتها تخلص</strong>${expired ? ` <strong style="color:var(--danger);">(منهم ${expired} خلصت خلاص)</strong>` : ''} · <u>افتح المخزون</u>`; }
+                else al.style.display = 'none';
+            }
+        }
+        setInterval(function() { try { renderExpiry(); } catch (e) {} }, 300000);
+
+        // ==================== نسخة احتياطية أوتوماتيك يومية على السحابة ====================
+        const BACKUP_KEEP = 14, BACKUP_CHUNK = 700000;
+        function backupPayload() {
+            return { invoices, purchaseInvoices, salesReturns, purchaseReturns, supplierAdjustments, products, customers, suppliers, inventory,
+                treasury, expenses, salesmen, stockMovements, customerOrders, deliveryCollections, repSettlements, appBrands, appCategories,
+                deliveryZones, neighborhoodZoneMap, salesTargets, users: (users || []).map(u => ({ username: u.username, fullName: u.fullName, role: u.role, active: u.active })) };
+        }
+        function runDailyBackup() {
+            if (!db || !currentUser || !['admin', 'accountant'].includes(xlRole())) return;
+            if (!products.length || (!invoices.length && !purchaseInvoices.length)) return;   // البيانات لسه ماتحملتش
+            const day = new Date().toISOString().slice(0, 10);
+            if (localStorage.getItem('_lastBackupDay') === day) return;
+            const ref = db.collection('backups').doc(day);
+            ref.get().then(function(snap) {
+                if (snap.exists) { localStorage.setItem('_lastBackupDay', day); return; }
+                const payload = backupPayload();
+                const json = JSON.stringify(payload);
+                const parts = []; for (let i = 0; i < json.length; i += BACKUP_CHUNK) parts.push(json.slice(i, i + BACKUP_CHUNK));
+                const counts = {}; Object.keys(payload).forEach(k => { const v = payload[k]; counts[k] = Array.isArray(v) ? v.length : (v && typeof v === 'object' ? Object.keys(v).length : 0); });
+                const writes = parts.map((p, i) => ref.collection('parts').doc(String(i).padStart(3, '0')).set({ i, data: p }));
+                return Promise.all(writes).then(() => ref.set({ day, createdAt: Date.now(), by: pdUser(), parts: parts.length, sizeKB: Math.round(json.length / 1024), counts, complete: true }))
+                    .then(() => { localStorage.setItem('_lastBackupDay', day); logAction('نسخة احتياطية أوتوماتيك', `${day} — ${Math.round(json.length / 1024)} KB`); pruneOldBackups(); renderCloudBackups(); });
+            }).catch(e => console.error('daily backup failed:', e));
+        }
+        function pruneOldBackups() {
+            db.collection('backups').get().then(snap => {
+                const days = snap.docs.map(d => d.id).sort().reverse();
+                days.slice(BACKUP_KEEP).forEach(day => {
+                    const ref = db.collection('backups').doc(day);
+                    ref.collection('parts').get().then(ps => Promise.all(ps.docs.map(p => p.ref.delete()))).then(() => ref.delete()).catch(e => console.error(e));
+                });
+            }).catch(e => console.error(e));
+        }
+        function renderCloudBackups() {
+            const tb = document.getElementById('cloudBackupsTable');
+            if (!tb || !db) return;
+            db.collection('backups').get().then(snap => {
+                const rows = snap.docs.map(d => d.data()).filter(b => b.complete).sort((a, b) => String(b.day).localeCompare(String(a.day)));
+                tb.innerHTML = rows.map(b => `<tr><td><strong>${escapeHtml(b.day)}</strong></td><td>${new Date(b.createdAt).toLocaleTimeString('ar-EG')}</td><td>${escapeHtml((b.by && b.by.name) || '')}</td><td>${b.counts ? `${b.counts.invoices || 0} بيع · ${b.counts.purchaseInvoices || 0} شراء · ${b.counts.products || 0} صنف` : ''}</td><td>${b.sizeKB} KB</td><td><button class="btn btn-info btn-sm" onclick="downloadCloudBackup('${escapeHtml(b.day)}')"><i class="fas fa-download"></i> تحميل</button></td></tr>`).join('')
+                    || '<tr><td colspan="6" style="text-align:center;color:var(--text-light);padding:15px;">أول نسخة هتتعمل تلقائي النهارده</td></tr>';
+            }).catch(e => { tb.innerHTML = '<tr><td colspan="6" style="color:var(--danger);">تعذر قراءة النسخ: ' + escapeHtml(e.message || '') + '</td></tr>'; });
+        }
+        function downloadCloudBackup(day) {
+            db.collection('backups').doc(day).collection('parts').get().then(ps => {
+                const json = ps.docs.map(d => d.data()).sort((a, b) => a.i - b.i).map(p => p.data).join('');
+                const blob = new Blob([json], { type: 'application/json' });
+                const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `نسخة_المعلم_${day}.json`; a.click();
+                setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+            }).catch(e => { console.error(e); showToast('تعذر تحميل النسخة', 'error'); });
+        }
+        setInterval(function() { try { runDailyBackup(); } catch (e) { console.error(e); } }, 120000);
+        setTimeout(function() { try { runDailyBackup(); } catch (e) {} }, 90000);
+
+
+        // ==================== "تم التسليم" من السيستم: الفلوس مع مين؟ ====================
+        // عشان أي طلب اتسلم فلوسه تعدّي على الخزنة مرة واحدة بالظبط: يا إما عهدة مندوب، يا إما الخزنة على طول
+        let deliveryCashIds = [];
+        function openDeliveryCashModal(ids) {
+            deliveryCashIds = ids.slice();
+            const reps = getDeliveryReps();
+            document.getElementById('deliveryCashCount').textContent = ids.length === 1 ? 'الطلب' : (ids.length + ' طلب');
+            const sel = document.getElementById('deliveryCashRep');
+            sel.innerHTML = (ids.length > 1 ? '<option value="__zone">كل طلب لمندوب منطقته</option>' : '') + reps.map(s => `<option value="${escapeHtml(s.code)}">${escapeHtml(s.name)}</option>`).join('');
+            if (ids.length === 1) {
+                const o = customerOrders.find(x => x.id === ids[0]);
+                const a = o ? getOrderDeliveryAssignment(o) : { reps: [] };
+                if (a.reps[0] && reps.some(s => s.code === a.reps[0].code)) sel.value = a.reps[0].code;
+                const total = o ? (Number(o.total) || 0) : 0;
+                document.getElementById('deliveryCashInfo').textContent = o ? `${o.customerName || ''} — ${total.toFixed(2)} ر.س` : '';
+            } else {
+                const total = ids.reduce((t, id) => t + (Number((customerOrders.find(x => x.id === id) || {}).total) || 0), 0);
+                document.getElementById('deliveryCashInfo').textContent = `إجمالي ${total.toFixed(2)} ر.س تقريبًا (قبل خصم النقاط)`;
+            }
+            const repRadio = document.querySelector('input[name="deliveryCashMode"][value="rep"]');
+            repRadio.checked = !!reps.length;
+            repRadio.disabled = !reps.length;
+            document.querySelector('input[name="deliveryCashMode"][value="store"]').checked = !reps.length;
+            if (!reps.length) document.getElementById('deliveryCashInfo').textContent += ' — مفيش مناديب تسليم متسجلين';
+            toggleDeliveryCashMode();
+            openModal('deliveryCashModal');
+        }
+        function toggleDeliveryCashMode() {
+            const mode = (document.querySelector('input[name="deliveryCashMode"]:checked') || {}).value;
+            document.getElementById('deliveryCashRep').disabled = mode !== 'rep';
+        }
+        function confirmDeliveryCash() {
+            const mode = (document.querySelector('input[name="deliveryCashMode"]:checked') || {}).value;
+            if (!mode) return;
+            const pick = document.getElementById('deliveryCashRep').value;
+            const btn = document.getElementById('deliveryCashBtn'); btn.disabled = true;
+            const cashFor = function(id) {
+                if (mode === 'store') return { mode: 'store' };
+                let code = pick;
+                if (pick === '__zone') {
+                    const o = customerOrders.find(x => x.id === id);
+                    const a = o ? getOrderDeliveryAssignment(o) : { reps: [] };
+                    code = a.reps[0] ? a.reps[0].code : (getDeliveryReps()[0] || {}).code;
+                }
+                const s = salesmen.find(x => x.code === code);
+                return s ? { mode: 'rep', code: s.code, name: s.name } : { mode: 'store' };
+            };
+            const ids = deliveryCashIds.slice();
+            closeModal('deliveryCashModal');
+            let ok = 0, fail = 0;
+            ids.reduce((chain, id) => chain.then(() => fulfillOrderCore(id, { silent: ids.length > 1, cash: cashFor(id) }).then(r => { r ? ok++ : fail++; })), Promise.resolve())
+                .then(() => {
+                    btn.disabled = false;
+                    if (ids.length > 1) { showToast('تم تسليم ' + ok + ' طلب' + (fail ? ' — وفشل ' + fail : ''), fail ? 'warning' : 'success', 5000); try { clearBulkSelection(); } catch (e) {} }
+                    try { renderRepCustody(); renderTreasury(); } catch (e) {}
+                });
+        }
+
         // إضافة مورد جديد من جوه فاتورة الشراء، وبعد الحفظ بيتختار في الفاتورة على طول
         let pendingPurchaseSupplierSelect = false;
         function quickAddPurchaseSupplier(name) {
@@ -9310,6 +9666,7 @@
                 <td><input type="text" class="form-control unit-field" readonly style="background:#f8f9fa"></td>
                 <td><input type="number" class="form-control qty-field" value="1" min="1" onchange="calculatePurchaseRow(this)"></td>
                 <td><input type="number" class="form-control cost-field" min="0" step="any" onchange="calculatePurchaseRow(this)"><div class="cost-hint" style="font-size:11px;color:var(--text-light);margin-top:3px;"></div></td>
+                <td><input type="date" class="form-control expiry-field" title="تاريخ انتهاء الصلاحية (اختياري)"></td>
                 <td><input type="number" class="form-control total-field" readonly style="background:#f8f9fa;font-weight:700;color:var(--teal)"></td>
                 <td><button class="btn btn-danger btn-icon btn-sm btn-delete-row" onclick="removePurchaseRow(this)"><i class="fas fa-times"></i></button></td>`;
             tbody.appendChild(row);
@@ -9372,8 +9729,9 @@
                     const cost = parseFloat(row.querySelector('.cost-field').value) || 0;
                     if (qty <= 0) badQty = true;
                     if (cost < 0) badCost = true; else if (cost === 0) zeroCost++;
+                    const expiryEl = row.querySelector('.expiry-field');
                     items.push({ productCode: select.value, productName: product.name, unit: row.querySelector('.unit-field').value,
-                        qty: qty, cost: cost, total: qty * cost });
+                        qty: qty, cost: cost, total: qty * cost, expiryDate: (expiryEl && expiryEl.value) || null });
                 }
             });
             if (!hasItems) { showToast('الرجاء إضافة أصناف للفاتورة', 'error'); return; }
