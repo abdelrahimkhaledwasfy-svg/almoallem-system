@@ -818,6 +818,7 @@
                     <div style="display:flex;gap:10px;">
                         <button class="btn btn-success btn-sm" onclick="showSection('invoice')"><i class="fas fa-plus"></i> بيع جديد</button>
                         <button class="btn btn-teal btn-sm" onclick="showSection('purchase-invoice')"><i class="fas fa-plus"></i> شراء جديد</button>
+                        <button class="btn btn-info btn-sm" onclick="exportInvoicesExcel()"><i class="fas fa-file-export"></i> تصدير Excel</button>
                     </div>
                 </div>
                 <div class="search-box"><i class="fas fa-search"></i><input type="text" id="invoiceSearch" placeholder="بحث في الفواتير..." oninput="filterInvoices()"></div>
@@ -980,6 +981,8 @@
                         <strong>تارجت شهر:</strong>
                         <select class="form-control" id="svTargetMonth" style="width:auto;" onchange="fillSupervisorTargetInputs()"></select>
                         <span class="sv-muted">اكتب المبلغ لكل مندوب، وسيب الخانة فاضية لو مفيش تارجت</span>
+                        <button class="btn btn-info btn-sm" onclick="exportTargetsExcel()"><i class="fas fa-file-export"></i> شيت Excel</button>
+                        <button class="btn btn-primary btn-sm" onclick="document.getElementById('targetsFileInput').click()"><i class="fas fa-file-excel"></i> رفع شيت</button><input type="file" id="targetsFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importTargetsExcel(event)">
                     </div>
                     <div id="svTargetRows"></div>
                     <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap;">
@@ -1148,6 +1151,7 @@
                         <button class="btn btn-success btn-sm" onclick="openTreasuryInModal()"><i class="fas fa-arrow-down"></i> سند قبض</button>
                         <button class="btn btn-danger btn-sm" onclick="openTreasuryOutModal()"><i class="fas fa-arrow-up"></i> سند صرف</button>
                         <button class="btn btn-warning btn-sm" onclick="openTreasuryOpeningModal()"><i class="fas fa-cog"></i> رصيد افتتاحي</button>
+                        <button class="btn btn-info btn-sm" onclick="exportTreasuryExcel()"><i class="fas fa-file-export"></i> تصدير Excel</button>
                         <button class="btn btn-secondary btn-sm" onclick="undoLastTreasuryEntry()"><i class="fas fa-undo"></i> تراجع عن آخر حركة</button>
                     </div>
                 </div>
@@ -1192,6 +1196,7 @@
                     <div style="display:flex;gap:10px;">
                         <button class="btn btn-success btn-sm" onclick="openExpenseModal()"><i class="fas fa-plus"></i> مصروف جديد</button>
                         <button class="btn btn-primary btn-sm" onclick="showExpenseSummary()"><i class="fas fa-chart-pie"></i> تجميع حسب النوع</button>
+                        <button class="btn btn-info btn-sm" onclick="exportExpensesExcel()"><i class="fas fa-file-export"></i> تصدير Excel</button>
                     </div>
                 </div>
                 <div class="date-filter" style="margin-bottom:20px;">
@@ -1247,6 +1252,8 @@
                     <div class="card-title"><i class="fas fa-warehouse"></i> إدارة المخزون</div>
                     <div style="display:flex;gap:10px;">
                         <button class="btn btn-success btn-sm" onclick="openStockAdjustmentModal()"><i class="fas fa-sliders-h"></i> تعديل مخزون</button>
+                        <button class="btn btn-info btn-sm" onclick="exportInventoryCountSheet()"><i class="fas fa-file-export"></i> شيت الجرد Excel</button>
+                        <button class="btn btn-primary btn-sm" onclick="document.getElementById('invCountFileInput').click()"><i class="fas fa-file-excel"></i> رفع شيت الجرد</button><input type="file" id="invCountFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importInventoryCountSheet(event)">
                         <button class="btn btn-teal btn-sm" onclick="showSection('purchase-invoice')"><i class="fas fa-cart-plus"></i> فاتورة شراء</button>
                     </div>
                 </div>
@@ -1260,7 +1267,7 @@
             </div>
 
             <div class="card">
-                <div class="card-header"><div class="card-title"><i class="fas fa-exchange-alt"></i> حركات المخزون</div></div>
+                <div class="card-header"><div class="card-title"><i class="fas fa-exchange-alt"></i> حركات المخزون</div><button class="btn btn-info btn-sm" onclick="exportMovementsExcel()"><i class="fas fa-file-export"></i> تصدير Excel</button></div>
                 <div class="search-box"><i class="fas fa-search"></i><input type="text" id="movementSearch" placeholder="بحث في الحركات..." oninput="filterMovements()"></div>
                 <div class="table-container">
                     <table>
@@ -1549,7 +1556,7 @@
 
             <!-- الأقسام -->
             <div class="card" id="appMgmtTab-categories">
-                <div class="card-header"><div class="card-title"><i class="fas fa-th-large"></i> أقسام الأبليكشن</div><button class="btn btn-success btn-sm" onclick="openAppCategoryModal()"><i class="fas fa-plus"></i> إضافة قسم</button></div>
+                <div class="card-header"><div class="card-title"><i class="fas fa-th-large"></i> أقسام الأبليكشن</div><div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn btn-success btn-sm" onclick="openAppCategoryModal()"><i class="fas fa-plus"></i> إضافة قسم</button><button class="btn btn-info btn-sm" onclick="exportCategoriesExcel()"><i class="fas fa-file-export"></i> تصدير Excel</button><button class="btn btn-primary btn-sm" onclick="document.getElementById('categoriesFileInput').click()"><i class="fas fa-file-excel"></i> رفع Excel</button><input type="file" id="categoriesFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importCategoriesExcel(event)"></div></div>
                 <div class="table-container">
                     <table><thead><tr><th>الصورة</th><th>اسم القسم</th><th>الترتيب</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="appCategoriesTable"></tbody></table>
                 </div>
@@ -1653,7 +1660,7 @@
                     كل منطقة تسليم بتضم كذا حي بيع مع بعض (نفس الأحياء اللي العميل بيختار منها وقت التسجيل في الأبليكشن). التقارير المجمّعة هتتقسم على أساس المناطق دي.
                 </div>
                 <div class="table-container"><table><thead><tr><th>اسم منطقة التسليم</th><th>الإجراءات</th></tr></thead><tbody id="deliveryZonesTable"></tbody></table></div>
-                <div class="card-header" style="border-top:2px solid var(--bg);margin-top:10px;"><div class="card-title" style="font-size:15px;"><i class="fas fa-map-pin"></i> توزيع أحياء البيع على مناطق التسليم</div></div>
+                <div class="card-header" style="border-top:2px solid var(--bg);margin-top:10px;"><div class="card-title" style="font-size:15px;"><i class="fas fa-map-pin"></i> توزيع أحياء البيع على مناطق التسليم</div><div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn btn-info btn-sm" onclick="exportZonesExcel()"><i class="fas fa-file-export"></i> تصدير Excel</button><button class="btn btn-primary btn-sm" onclick="document.getElementById('zonesFileInput').click()"><i class="fas fa-file-excel"></i> رفع Excel</button><input type="file" id="zonesFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importZonesExcel(event)"></div></div>
                 <div class="table-container"><table><thead><tr><th>حي البيع</th><th>منطقة التسليم</th></tr></thead><tbody id="neighborhoodZoneAssignTable"></tbody></table></div>
             </div>
 
@@ -1755,7 +1762,7 @@
             <div class="card">
                 <div class="card-header">
                     <div class="card-title"><i class="fas fa-truck"></i> قاعدة بيانات الموردين</div>
-                    <button class="btn btn-success btn-sm" onclick="openSupplierModal()"><i class="fas fa-plus"></i> إضافة مورد</button>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn btn-success btn-sm" onclick="openSupplierModal()"><i class="fas fa-plus"></i> إضافة مورد</button><button class="btn btn-info btn-sm" onclick="exportSuppliersExcel()"><i class="fas fa-file-export"></i> تصدير Excel</button><button class="btn btn-primary btn-sm" onclick="document.getElementById('suppliersFileInput').click()"><i class="fas fa-file-excel"></i> رفع Excel</button><input type="file" id="suppliersFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importSuppliersExcel(event)"></div>
                 </div>
                 <div class="search-box"><i class="fas fa-search"></i><input type="text" id="supplierSearch" placeholder="بحث في الموردين..." oninput="filterSuppliers()"></div>
                 <div class="table-container">
@@ -1783,7 +1790,7 @@
         <!-- Salesmen Section -->
         <section id="salesmen-section" class="section">
             <div class="card">
-                <div class="card-header"><div class="card-title"><i class="fas fa-user-tie"></i> قاعدة بيانات المناديب</div><button class="btn btn-success btn-sm" onclick="openSalesmanModal()"><i class="fas fa-plus"></i> إضافة مندوب</button></div>
+                <div class="card-header"><div class="card-title"><i class="fas fa-user-tie"></i> قاعدة بيانات المناديب</div><div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn btn-success btn-sm" onclick="openSalesmanModal()"><i class="fas fa-plus"></i> إضافة مندوب</button><button class="btn btn-info btn-sm" onclick="exportSalesmenExcel()"><i class="fas fa-file-export"></i> تصدير Excel</button><button class="btn btn-primary btn-sm" onclick="document.getElementById('salesmenFileInput').click()"><i class="fas fa-file-excel"></i> رفع Excel</button><input type="file" id="salesmenFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importSalesmenExcel(event)"></div></div>
                 <div class="search-box"><i class="fas fa-search"></i><input type="text" id="salesmanSearch" placeholder="بحث في المناديب..." oninput="filterSalesmen()"></div>
                 <div class="table-container">
                     <table><thead><tr><th>الكود</th><th>اسم المندوب</th><th>النوع</th><th>رقم الهاتف</th><th>المنطقة</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="salesmenTable"></tbody></table>
@@ -2452,6 +2459,19 @@
                 <button class="btn btn-danger" onclick="rejectGenericDraft()"><i class="fas fa-times"></i> رفض</button>
                 <button class="btn btn-success" id="approvalApproveBtn" onclick="approveGenericDraft()"><i class="fas fa-check-double"></i> اعتماد</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Generic Excel Preview Modal -->
+    <div class="modal-overlay" id="xlPreviewModal">
+        <div class="modal" style="max-width:960px;">
+            <div class="modal-header"><h3 class="modal-title"><i class="fas fa-file-excel" style="color:var(--accent);"></i> <span id="xlPreviewTitle">مراجعة الملف</span></h3><button class="modal-close" onclick="closeModal('xlPreviewModal')">&times;</button></div>
+            <div class="modal-body">
+                <div id="xlPreviewInfo" style="margin-bottom:12px;padding:12px 15px;background:rgba(39,174,96,0.08);border-radius:10px;border-right:4px solid var(--accent);font-size:13px;"></div>
+                <div id="xlPreviewSummary" style="margin-bottom:10px;font-size:13px;"></div>
+                <div class="table-container" style="max-height:380px;overflow-y:auto;"><table><thead id="xlPreviewHead"></thead><tbody id="xlPreviewBody"></tbody></table></div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('xlPreviewModal')">إلغاء</button><button class="btn btn-success" id="xlPreviewConfirm" onclick="xlConfirm()"><i class="fas fa-save"></i> <span id="xlPreviewConfirmLabel">تأكيد وحفظ</span></button></div>
         </div>
     </div>
 
@@ -8328,9 +8348,9 @@
                     const waitLate = d.status === 'pending' && Date.now() - (d.submittedAt || 0) > 3 * 3600000;
                     const st = d.status === 'pending' ? `<span class="badge ${waitLate ? 'badge-danger' : 'badge-warning'}">بانتظار المراجعة</span>` : `<span class="badge badge-info">رجعت لأمين المخزن</span><div style="font-size:11px;color:var(--text-light);">${escapeHtml(d.returnReason || '')}</div>`;
                     const k = draftKind(d);
-                    const kindBadge = `<span class="badge" style="background:${k === 'purchase' ? '#E6F1FB;color:#0C447C' : k === 'purchase_return' ? '#FAEEDA;color:#633806' : '#EEEDFE;color:#3C3489'};">${APPROVAL_KIND_LABEL[k]}</span>`;
-                    const who = k === 'stock_adjust' ? escapeHtml(d.productName || '') : escapeHtml(d.supplier || '');
-                    const detail = k === 'stock_adjust' ? `${d.qtyAtRequest} ← ${d.requestedNewQty} (${d.delta > 0 ? '+' : ''}${d.delta}) · ${escapeHtml(d.reason || '')}`
+                    const kindBadge = `<span class="badge" style="background:${k === 'purchase' ? '#E6F1FB;color:#0C447C' : k === 'purchase_return' ? '#FAEEDA;color:#633806' : k === 'stock_count' ? '#E1F5EE;color:#085041' : '#EEEDFE;color:#3C3489'};">${APPROVAL_KIND_LABEL[k]}</span>`;
+                    const who = k === 'stock_count' ? `${(d.items || []).length} صنف` : k === 'stock_adjust' ? escapeHtml(d.productName || '') : escapeHtml(d.supplier || '');
+                    const detail = k === 'stock_count' ? escapeHtml(d.reason || '') : k === 'stock_adjust' ? `${d.qtyAtRequest} ← ${d.requestedNewQty} (${d.delta > 0 ? '+' : ''}${d.delta}) · ${escapeHtml(d.reason || '')}`
                         : k === 'purchase_return' ? `على فاتورة #${escapeHtml(String(d.originalInvoiceNumber || ''))}`
                         : `${escapeHtml(d.supplierInvoice || '-')}${d.attachmentUrl ? ` <a href="${escapeHtml(d.attachmentUrl)}" target="_blank" title="صورة فاتورة المورد"><i class="fas fa-image"></i></a>` : ''}`;
                     return `<tr><td>${kindBadge}</td><td style="${waitLate ? 'color:var(--danger);font-weight:700;' : ''}">${pdAgo(d.submittedAt || Date.now())}</td><td>${who}</td><td style="font-size:12px;">${detail}</td><td>${escapeHtml((d.createdBy && d.createdBy.name) || '-')}</td><td>${k === 'stock_adjust' ? 1 : (d.items || []).length}</td><td><strong>${Number(d.grandTotal || 0).toFixed(2)}</strong></td><td>${st}</td><td>${d.status === 'pending' && canApprovePurchases() ? `<button class="btn btn-primary btn-sm" onclick="openApprovalReview('${d.id}')"><i class="fas fa-search"></i> مراجعة</button>` : ''}</td></tr>`;
@@ -8517,17 +8537,17 @@
 
 
         // ==================== طلبات اعتماد عامة: مرتجع شراء + تعديل مخزون ====================
-        const APPROVAL_KIND_LABEL = { purchase: 'فاتورة شراء', purchase_return: 'مرتجع شراء', stock_adjust: 'تعديل مخزون' };
+        const APPROVAL_KIND_LABEL = { purchase: 'فاتورة شراء', purchase_return: 'مرتجع شراء', stock_adjust: 'تعديل مخزون', stock_count: 'جرد مخزون (Excel)' };
         const draftKind = d => d.kind || 'purchase';
         function submitApprovalRequest(kind, data, onDone) {
             if (!db) { showToast('لازم يكون فيه إنترنت عشان الطلب يتبعت للاعتماد', 'error'); return; }
             if (submitApprovalRequest.busy) return;
             submitApprovalRequest.busy = true;
-            const me = pdUser(), now = Date.now(), id = (kind === 'purchase_return' ? 'PR-' : 'SA-') + now;
+            const me = pdUser(), now = Date.now(), id = (kind === 'purchase_return' ? 'PR-' : kind === 'stock_count' ? 'SC-' : 'SA-') + now;
             const doc = Object.assign({}, data, { kind, status: 'pending', submittedAt: now, createdAt: now, createdBy: me, returnReason: null,
                 history: [{ action: 'اتعمل واتبعت للاعتماد', by: me.name, at: now }] });
             db.collection('purchaseDrafts').doc(id).set(doc).then(function() {
-                logAction('طلب اعتماد: ' + APPROVAL_KIND_LABEL[kind], kind === 'stock_adjust'
+                logAction('طلب اعتماد: ' + APPROVAL_KIND_LABEL[kind], kind === 'stock_count' ? `${data.items.length} صنف فيهم فروق` : kind === 'stock_adjust'
                     ? `${data.productName}: من ${data.qtyAtRequest} إلى ${data.requestedNewQty} — السبب: ${data.reason}`
                     : `لفاتورة شراء #${data.originalInvoiceNumber} من ${data.supplier} بقيمة ${Number(data.grandTotal).toFixed(2)} ر.س`);
                 showToast('اتبعت للاعتماد. مفيش أي تغيير هيحصل غير بعد الموافقة', 'success', 4000);
@@ -8545,7 +8565,13 @@
             document.getElementById('approvalReviewTitle').textContent = 'مراجعة ' + APPROVAL_KIND_LABEL[draftKind(d)];
             const who = `<strong>عمله:</strong> ${escapeHtml((d.createdBy && d.createdBy.name) || '-')} · ${new Date(d.createdAt || d.submittedAt).toLocaleString('ar-EG')}`;
             let html = '';
-            if (draftKind(d) === 'stock_adjust') {
+            if (draftKind(d) === 'stock_count') {
+                html = `<div style="font-size:14px;line-height:2;"><strong>${escapeHtml(d.reason || 'جرد')}</strong><br>${who}</div>
+                    <div class="table-container" style="max-height:340px;overflow-y:auto;margin-top:8px;"><table><thead><tr><th>الصنف</th><th>وقت التصدير</th><th>الفعلية</th><th>الفرق</th><th>دلوقتي</th><th>بعد الاعتماد</th><th>السبب</th></tr></thead><tbody>${(d.items || []).map(it => {
+                        const now = inventory[it.productCode] ? (Number(inventory[it.productCode].qty) || 0) : 0, after = now + Number(it.delta || 0);
+                        return `<tr><td>${escapeHtml(it.productName)}</td><td>${it.qtyAtExport}</td><td>${it.counted}</td><td style="font-weight:700;color:${it.delta >= 0 ? 'var(--accent)' : 'var(--danger)'};">${it.delta > 0 ? '+' : ''}${it.delta}</td><td>${now}</td><td style="${after < 0 ? 'color:var(--danger);font-weight:700;' : ''}">${after}</td><td style="font-size:12px;">${escapeHtml(it.reason || '')}</td></tr>`; }).join('')}</tbody></table></div>
+                    <div style="font-size:12px;color:var(--text-light);margin-top:8px;">الفرق بيتطبق على الكمية الحالية. قيمة الفروق تقريبًا ${Number(d.grandTotal || 0).toFixed(2)} ر.س</div>`;
+            } else if (draftKind(d) === 'stock_adjust') {
                 const nowQty = inventory[d.productCode] ? (Number(inventory[d.productCode].qty) || 0) : 0;
                 const after = nowQty + Number(d.delta || 0);
                 const typeLabel = d.adjType === 'in' ? 'إضافة' : d.adjType === 'out' ? 'خصم' : 'جرد (تحديد الكمية)';
@@ -8579,7 +8605,10 @@
             if (isOwnPurchaseDraft(d) && pdRole() !== 'admin') { showToast('مينفعش تعتمد حاجة إنت اللي عاملها', 'error'); return; }
             const kind = draftKind(d);
             // نتأكد قبل الاعتماد إن المخزون يسمح
-            if (kind === 'stock_adjust') {
+            if (kind === 'stock_count') {
+                const neg = (d.items || []).find(it => (inventory[it.productCode] ? Number(inventory[it.productCode].qty) || 0 : 0) + Number(it.delta || 0) < 0);
+                if (neg) { showToast(`${neg.productName}: الخصم أكبر من المخزون الحالي. ارفض الطلب يتعمل تاني`, 'error'); return; }
+            } else if (kind === 'stock_adjust') {
                 const nowQty = inventory[d.productCode] ? (Number(inventory[d.productCode].qty) || 0) : 0;
                 if (nowQty + Number(d.delta || 0) < 0) { showToast('الخصم أكبر من المخزون الحالي. رجّع الطلب يتعمل تاني', 'error'); return; }
             } else {
@@ -8596,7 +8625,15 @@
                     t.update(ref, { status: 'approved', approvedAt: Date.now(), approvedBy: me, history: (snap.data().history || []).concat([{ action: 'اتعتمد', by: me.name, at: Date.now() }]) });
                 });
             }).then(function() {
-                if (kind === 'stock_adjust') {
+                if (kind === 'stock_count') {
+                    (d.items || []).forEach(it => {
+                        const inv = inventory[it.productCode] || (inventory[it.productCode] = { code: it.productCode, qty: 0, cost: it.cost || 0, minStock: 0 });
+                        inv.qty = (Number(inv.qty) || 0) + Number(it.delta || 0);
+                        addStockMovement(it.productCode, it.productName, 'adjustment', Number(it.delta || 0), inv.qty, 'جرد Excel', `${it.reason || 'جرد'} (طلبه ${(d.createdBy && d.createdBy.name) || '-'} واعتمده ${me.name})`);
+                    });
+                    saveInventory();
+                    logAction('اعتماد جرد مخزون', `${(d.items || []).length} صنف — طلبه ${(d.createdBy && d.createdBy.name) || '-'} واعتمده ${me.name}`);
+                } else if (kind === 'stock_adjust') {
                     const inv = inventory[d.productCode] || (inventory[d.productCode] = { code: d.productCode, qty: 0, cost: 0, minStock: 0 });
                     inv.qty = (Number(inv.qty) || 0) + Number(d.delta || 0);
                     saveInventory();
@@ -8643,6 +8680,371 @@
         function dismissReturnedDraft(id) {
             if (!db) return;
             db.collection('purchaseDrafts').doc(id).update({ status: 'closed', closedAt: Date.now() }).catch(e => console.error(e));
+        }
+
+
+        // ==================== Excel: أداة عامة (تصدير / رفع / شاشة مراجعة) ====================
+        const xlToday = () => new Date().toISOString().slice(0, 10);
+        function xlWrite(filename, sheets) {
+            const wb = XLSX.utils.book_new();
+            sheets.forEach(s => {
+                const ws = XLSX.utils.aoa_to_sheet(s.rows);
+                ws['!cols'] = (s.widths || s.rows[0].map(() => 16)).map(w => ({ wch: w }));
+                XLSX.utils.book_append_sheet(wb, ws, s.name.slice(0, 31));
+            });
+            XLSX.writeFile(wb, filename + '_' + xlToday() + '.xlsx');
+        }
+        // بيقرا الملف ويلاقي صف العناوين لوحده (في أول 5 صفوف)، ويرجّع كل صف كـ {عمود: قيمة}
+        function xlRead(event, fields, required, onRows) {
+            const file = event.target.files[0];
+            event.target.value = '';
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+                    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
+                    let head = -1, map = null;
+                    for (let i = 0; i < Math.min(rows.length, 5) && !map; i++) {
+                        const hdr = (rows[i] || []).map(normalizeArabicText);
+                        const m = {};
+                        Object.keys(fields).forEach(k => { const idx = hdr.findIndex(h => h && fields[k].map(normalizeArabicText).includes(h)); if (idx !== -1) m[k] = idx; });
+                        if (required.every(k => m[k] !== undefined)) { head = i; map = m; }
+                    }
+                    if (!map) { showToast('الأعمدة مش مظبوطة. لازم يكون فيه: ' + required.map(k => fields[k][0]).join('، '), 'error'); return; }
+                    const out = [];
+                    for (let i = head + 1; i < rows.length; i++) {
+                        const r = rows[i] || [];
+                        const o = { __row: i + 1 };
+                        let any = false;
+                        Object.keys(map).forEach(k => { const v = r[map[k]]; o[k] = (v === undefined || v === null) ? '' : String(v).trim(); if (o[k] !== '') any = true; });
+                        if (any) out.push(o);
+                    }
+                    if (!out.length) { showToast('الملف فاضي', 'error'); return; }
+                    onRows(out, map);
+                } catch (err) { console.error(err); showToast('تعذر قراءة الملف: ' + err.message, 'error'); }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+        // شاشة المراجعة: كل صف {cells, status: new|update|same|error|info, note}
+        let xlPending = null;
+        function xlPreview(opts) {
+            xlPending = opts;
+            const badge = { new: ['badge-success', 'جديد'], update: ['badge-warning', 'هيتعدل'], same: ['', 'بدون تغيير'], error: ['badge-danger', 'مش هيتسجل'], request: ['badge-info', 'هيتبعت للاعتماد'] };
+            const counts = {};
+            document.getElementById('xlPreviewTitle').textContent = opts.title;
+            document.getElementById('xlPreviewInfo').innerHTML = opts.info;
+            document.getElementById('xlPreviewHead').innerHTML = '<tr><th>الصف</th>' + opts.headers.map(h => `<th>${h}</th>`).join('') + '<th>النتيجة</th></tr>';
+            const order = { error: 0, request: 1, new: 2, update: 3, same: 4 };
+            document.getElementById('xlPreviewBody').innerHTML = opts.entries.slice().sort((a, b) => order[a.status] - order[b.status]).map(e => {
+                counts[e.status] = (counts[e.status] || 0) + 1;
+                const b = badge[e.status];
+                return `<tr style="${e.status === 'error' ? 'background:rgba(231,76,60,0.07);' : ''}"><td>${e.row}</td>${e.cells.map(c => `<td>${c === '' || c === undefined || c === null ? '<span style="color:#ccc;">-</span>' : escapeHtml(String(c))}</td>`).join('')}<td><span class="badge ${b[0]}" ${!b[0] ? 'style="background:#f0f2f5;color:var(--text-light);"' : ''}>${b[1]}</span>${e.note ? `<div style="font-size:11px;color:${e.status === 'error' ? 'var(--danger)' : 'var(--text-light)'};margin-top:2px;">${escapeHtml(e.note)}</div>` : ''}</td></tr>`;
+            }).join('');
+            document.getElementById('xlPreviewSummary').innerHTML = Object.keys(badge).filter(k => counts[k]).map(k => `<span style="margin-left:14px;">${badge[k][1]}: <strong>${counts[k]}</strong></span>`).join('');
+            document.getElementById('xlPreviewConfirmLabel').textContent = opts.confirmLabel || 'تأكيد وحفظ';
+            document.getElementById('xlPreviewConfirm').disabled = !opts.entries.some(e => e.status !== 'error' && e.status !== 'same');
+            openModal('xlPreviewModal');
+        }
+        function xlConfirm() {
+            if (!xlPending) return;
+            const p = xlPending; xlPending = null;
+            closeModal('xlPreviewModal');
+            p.onConfirm(p.entries.filter(e => e.status !== 'error' && e.status !== 'same'));
+        }
+        const xlNum = v => { if (v === '' || v === undefined) return null; const n = Number(String(v).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/,/g, '')); return isNaN(n) ? NaN : n; };
+        const xlRole = () => String((currentUser && currentUser.role) || '').toLowerCase();
+
+        // ==================== 1) جرد المخزون بالإكسل ====================
+        function exportInventoryCountSheet() {
+            const rows = [['كود الصنف', 'اسم الصنف', 'الوحدة', 'الكمية في السيستم', 'الكمية الفعلية', 'حد الطلب', 'السبب']];
+            products.forEach(p => { const inv = inventory[p.code] || {}; rows.push([p.code, p.name, p.unit || '', Number(inv.qty) || 0, '', inv.minStock || p.minStock || 0, '']); });
+            xlWrite('جرد_مخزون', [{ name: 'الجرد', rows, widths: [12, 34, 10, 16, 16, 10, 24] }]);
+            showToast('اكتب "الكمية الفعلية" بس للأصناف اللي فيها فرق، وارفع الشيت');
+        }
+        function importInventoryCountSheet(event) {
+            xlRead(event, {
+                code: ['كود الصنف', 'الكود', 'code'], name: ['اسم الصنف', 'الصنف'], sys: ['الكمية في السيستم', 'الكمية الحالية'],
+                counted: ['الكمية الفعلية', 'الجرد', 'الكمية بعد الجرد'], min: ['حد الطلب', 'الحد الأدنى', 'minStock'], reason: ['السبب', 'ملاحظات']
+            }, ['code'], function(rows) {
+                const entries = [];
+                rows.forEach(r => {
+                    const p = products.find(x => String(x.code) === r.code);
+                    const e = { row: r.__row, cells: [r.code, p ? p.name : r.name, '', '', '', ''], status: 'same', note: '' };
+                    if (!p) { e.status = 'error'; e.note = 'كود مش موجود في الأصناف'; entries.push(e); return; }
+                    const inv = inventory[p.code] || {};
+                    const nowQty = Number(inv.qty) || 0;
+                    const snap = xlNum(r.sys); const counted = xlNum(r.counted); const min = xlNum(r.min);
+                    const base = (snap === null || isNaN(snap)) ? nowQty : snap;
+                    e.cells[2] = base;
+                    if (counted !== null) {
+                        if (isNaN(counted) || counted < 0) { e.status = 'error'; e.note = 'الكمية الفعلية مش رقم صحيح'; entries.push(e); return; }
+                        e.cells[3] = counted;
+                        e.delta = counted - base;
+                        e.cells[4] = e.delta ? ((e.delta > 0 ? '+' : '') + e.delta) : 0;
+                        if (e.delta !== 0) { e.status = 'request'; e.reason = r.reason || 'جرد بالإكسل'; e.note = 'السبب: ' + e.reason; }
+                    }
+                    if (min !== null) {
+                        if (isNaN(min) || min < 0) { e.status = 'error'; e.note = 'حد الطلب مش رقم صحيح'; entries.push(e); return; }
+                        const curMin = inv.minStock || p.minStock || 0;
+                        if (min !== curMin) { e.newMin = min; e.cells[5] = `${curMin} ← ${min}`; if (e.status === 'same') e.status = 'update'; }
+                    }
+                    e.product = p; e.base = base; e.counted = counted;
+                    entries.push(e);
+                });
+                xlPreview({
+                    title: 'مراجعة شيت الجرد',
+                    info: '<strong>فروق الكميات مش هتتطبق على طول:</strong> هتتبعت كطلب جرد واحد للاعتماد في "المراجعة والاعتماد". الفرق محسوب من الكمية اللي كانت في الشيت وقت التصدير، عشان أي بيع حصل بعدها يتحسب صح. <strong>حد الطلب</strong> بيتعدل على طول.',
+                    headers: ['الكود', 'الصنف', 'في الشيت', 'الفعلية', 'الفرق', 'حد الطلب'],
+                    entries, confirmLabel: 'إرسال الجرد للاعتماد',
+                    onConfirm: function(list) {
+                        const mins = list.filter(e => e.newMin !== undefined);
+                        mins.forEach(e => {
+                            if (!inventory[e.product.code]) inventory[e.product.code] = { code: e.product.code, qty: 0, cost: e.product.cost || 0, minStock: 0 };
+                            inventory[e.product.code].minStock = e.newMin;
+                            e.product.minStock = e.newMin;
+                        });
+                        if (mins.length) {
+                            saveInventory(); localStorage.setItem('products', JSON.stringify(products));
+                            logAction('تعديل حد الطلب من Excel', `${mins.length} صنف`);
+                            try { renderInventory(); renderLowStock(); } catch (err) {}
+                        }
+                        const counts = list.filter(e => e.status === 'request');
+                        if (counts.length) {
+                            const items = counts.map(e => ({ productCode: e.product.code, productName: e.product.name, unit: e.product.unit || '', qtyAtExport: e.base, counted: e.counted, delta: e.delta, reason: e.reason, cost: (inventory[e.product.code] || {}).cost || e.product.cost || 0 }));
+                            submitApprovalRequest('stock_count', { items, reason: 'جرد بالإكسل (' + items.length + ' صنف)', grandTotal: items.reduce((s, it) => s + Math.abs(it.delta) * it.cost, 0) });
+                        } else if (mins.length) showToast(`اتعدل حد الطلب لـ ${mins.length} صنف`);
+                    }
+                });
+            });
+        }
+
+        // ==================== 2) الموردين ====================
+        function exportSuppliersExcel() {
+            const rows = [['كود المورد', 'اسم المورد', 'التليفون', 'العنوان']];
+            suppliers.forEach(s => rows.push([s.code, s.name, s.phone || '', s.address || '']));
+            xlWrite('موردين', [{ name: 'الموردين', rows, widths: [12, 30, 16, 34] }]);
+        }
+        function importSuppliersExcel(event) {
+            const warehouse = xlRole() === 'warehouse_keeper';
+            xlRead(event, { code: ['كود المورد', 'الكود', 'code'], name: ['اسم المورد', 'المورد', 'الاسم', 'name'], phone: ['التليفون', 'رقم الهاتف', 'الهاتف', 'phone'], address: ['العنوان', 'address'] }, ['name'], function(rows) {
+                const coder = makeAutoCoder(suppliers.map(s => s.code).concat(rows.map(r => r.code)), 'V');
+                const seen = new Set();
+                const entries = rows.map(r => {
+                    const e = { row: r.__row, cells: [r.code, r.name, r.phone, r.address], status: 'new', note: '', data: r };
+                    const k = normalizeArabicText(r.name);
+                    if (!r.name) { e.status = 'error'; e.note = 'من غير اسم'; return e; }
+                    if (seen.has(k)) { e.status = 'error'; e.note = 'مكرر في الشيت'; return e; }
+                    seen.add(k);
+                    const ex = r.code ? suppliers.find(s => String(s.code) === r.code) : null;
+                    if (ex) {
+                        const changed = ex.name !== r.name || (ex.phone || '') !== r.phone || (ex.address || '') !== r.address;
+                        if (!changed) { e.status = 'same'; return e; }
+                        if (warehouse) { e.status = 'error'; e.note = 'أمين المخزن يضيف بس، التعديل للمحاسب'; return e; }
+                        e.status = 'update'; e.existing = ex; return e;
+                    }
+                    const byName = suppliers.find(s => normalizeArabicText(s.name) === k);
+                    if (byName) { e.status = 'error'; e.note = `المورد موجود بالفعل بكود ${byName.code}`; return e; }
+                    e.newCode = r.code || coder(); e.cells[0] = e.newCode + (r.code ? '' : ' (تلقائي)');
+                    return e;
+                });
+                xlPreview({ title: 'مراجعة شيت الموردين', info: 'الموردين الموجودين بيتعدلوا بالكود، والجداد بيتضافوا (الكود الفاضي بيتعمل تلقائي). <strong>مفيش أي مورد بيتمسح</strong>، وأرصدة الموردين مش في الشيت لأنها بتتحسب من الفواتير.',
+                    headers: ['الكود', 'الاسم', 'التليفون', 'العنوان'], entries,
+                    onConfirm: function(list) {
+                        let a = 0, u = 0;
+                        list.forEach(e => {
+                            if (e.status === 'update') { Object.assign(e.existing, { name: e.data.name, phone: e.data.phone, address: e.data.address }); u++; }
+                            else if (e.status === 'new') { suppliers.push({ code: e.newCode, name: e.data.name, phone: e.data.phone, address: e.data.address }); a++; }
+                        });
+                        saveSuppliers(); logAction('استيراد موردين من Excel', `إضافة ${a} وتعديل ${u}`);
+                        try { renderSuppliers(); updatePurchaseDropdowns(); updateDashboardStats(); } catch (err) {}
+                        showToast(`تم إضافة ${a} مورد وتعديل ${u}`);
+                    } });
+            });
+        }
+
+        // ==================== 3) المناديب ====================
+        const repTypeLabel = t => t === 'delivery' ? 'تسليم' : 'مبيعات';
+        function exportSalesmenExcel() {
+            const rows = [['كود المندوب', 'الاسم', 'التليفون', 'المنطقة', 'النوع (مبيعات/تسليم)', 'الحالة (نشط/غير نشط)', 'مناطق التسليم (لمندوب التسليم)']];
+            salesmen.forEach(s => rows.push([s.code, s.name, s.phone || '', s.area || '', repTypeLabel(s.repType), s.status || 'نشط',
+                (s.deliveryZoneIds || []).map(id => (deliveryZones.find(z => z.id === id) || {}).name).filter(Boolean).join('، ')]));
+            xlWrite('مناديب', [{ name: 'المناديب', rows, widths: [12, 26, 16, 18, 18, 18, 34] }]);
+        }
+        function importSalesmenExcel(event) {
+            xlRead(event, { code: ['كود المندوب', 'الكود', 'code'], name: ['الاسم', 'اسم المندوب', 'name'], phone: ['التليفون', 'الهاتف', 'phone'], area: ['المنطقة', 'area'],
+                type: ['النوع (مبيعات/تسليم)', 'النوع', 'نوع المندوب'], status: ['الحالة (نشط/غير نشط)', 'الحالة'], zones: ['مناطق التسليم (لمندوب التسليم)', 'مناطق التسليم'] }, ['name'], function(rows) {
+                const coder = makeAutoCoder(salesmen.map(s => s.code).concat(rows.map(r => r.code)), 'S');
+                const entries = rows.map(r => {
+                    const e = { row: r.__row, cells: [r.code, r.name, r.phone, r.type, r.status, r.zones], status: 'new', note: '', data: r };
+                    const t = normalizeArabicText(r.type);
+                    const type = !t ? null : (t.includes('تسليم') || t === 'delivery') ? 'delivery' : (t.includes('مبيع') || t === 'sales') ? 'sales' : 'bad';
+                    if (type === 'bad') { e.status = 'error'; e.note = 'النوع لازم "مبيعات" أو "تسليم"'; return e; }
+                    const st = normalizeArabicText(r.status);
+                    const status = !st ? null : st === 'نشط' ? 'نشط' : (st === 'غير نشط' || st === 'متوقف') ? 'غير نشط' : 'bad';
+                    if (status === 'bad') { e.status = 'error'; e.note = 'الحالة لازم "نشط" أو "غير نشط"'; return e; }
+                    let zoneIds = null;
+                    if (r.zones) {
+                        const names = r.zones.split(/[،,]/).map(x => x.trim()).filter(Boolean);
+                        const bad = names.filter(n => !deliveryZones.some(z => normalizeArabicText(z.name) === normalizeArabicText(n)));
+                        if (bad.length) { e.status = 'error'; e.note = 'مناطق مش موجودة: ' + bad.join('، '); return e; }
+                        zoneIds = names.map(n => deliveryZones.find(z => normalizeArabicText(z.name) === normalizeArabicText(n)).id);
+                    }
+                    e.upd = { name: r.name, phone: r.phone, area: r.area };
+                    if (type) e.upd.repType = type;
+                    if (status) e.upd.status = status;
+                    if (zoneIds) e.upd.deliveryZoneIds = zoneIds;
+                    const ex = r.code ? salesmen.find(s => String(s.code) === r.code) : null;
+                    if (ex) {
+                        const changed = Object.keys(e.upd).some(k => JSON.stringify(ex[k] || (k === 'deliveryZoneIds' ? [] : '')) !== JSON.stringify(e.upd[k]));
+                        e.status = changed ? 'update' : 'same'; e.existing = ex; return e;
+                    }
+                    e.newCode = r.code || coder(); e.cells[0] = e.newCode + (r.code ? '' : ' (تلقائي)');
+                    e.note = 'اليوزر والباسورد بتوعه للأبليكشن بيتعملوا من شاشة المندوب';
+                    return e;
+                });
+                xlPreview({ title: 'مراجعة شيت المناديب', info: 'المناديب بيتعدلوا بالكود، والجداد بيتضافوا. <strong>مفيش مندوب بيتمسح</strong>، واليوزر والباسورد مش في الشيت عشان الأمان.',
+                    headers: ['الكود', 'الاسم', 'التليفون', 'النوع', 'الحالة', 'مناطق التسليم'], entries,
+                    onConfirm: function(list) {
+                        let a = 0, u = 0;
+                        list.forEach(e => {
+                            if (e.status === 'update') { Object.assign(e.existing, e.upd); u++; }
+                            else if (e.status === 'new') { salesmen.push(Object.assign({ code: e.newCode, status: 'نشط', repType: 'sales', repUsername: '', repPasswordHash: '', deliveryZoneIds: [] }, e.upd)); a++; }
+                        });
+                        localStorage.setItem('salesmen', JSON.stringify(salesmen));
+                        logAction('استيراد مناديب من Excel', `إضافة ${a} وتعديل ${u}`);
+                        try { renderSalesmen(); updateInvoiceDropdowns(); } catch (err) {}
+                        showToast(`تم إضافة ${a} مندوب وتعديل ${u}`);
+                    } });
+            });
+        }
+
+        // ==================== 4) توزيع الأحياء على مناطق التسليم ====================
+        function zoneNeighborhoodNames() { return appNeighborhoods.length > 0 ? appNeighborhoods.map(n => n.name) : SALES_NEIGHBORHOODS; }
+        function exportZonesExcel() {
+            const rows = [['الحي', 'منطقة التسليم']];
+            zoneNeighborhoodNames().forEach(n => rows.push([n, (deliveryZones.find(z => z.id === neighborhoodZoneMap[n]) || {}).name || '']));
+            const zrows = [['مناطق التسليم المتاحة']].concat(deliveryZones.map(z => [z.name]));
+            xlWrite('توزيع_الأحياء', [{ name: 'الأحياء', rows, widths: [28, 24] }, { name: 'المناطق المتاحة', rows: zrows, widths: [28] }]);
+        }
+        function importZonesExcel(event) {
+            xlRead(event, { nb: ['الحي', 'الأحياء'], zone: ['منطقة التسليم', 'المنطقة'] }, ['nb'], function(rows) {
+                const names = zoneNeighborhoodNames();
+                const entries = rows.map(r => {
+                    const nb = names.find(n => normalizeArabicText(n) === normalizeArabicText(r.nb));
+                    const e = { row: r.__row, cells: [r.nb, r.zone], status: 'same', note: '' };
+                    if (!nb) { e.status = 'error'; e.note = 'الحي مش موجود في المناطق الجغرافية'; return e; }
+                    const z = r.zone ? deliveryZones.find(x => normalizeArabicText(x.name) === normalizeArabicText(r.zone)) : null;
+                    if (r.zone && !z) { e.status = 'error'; e.note = 'منطقة التسليم مش موجودة'; return e; }
+                    const newId = z ? z.id : '';
+                    if ((neighborhoodZoneMap[nb] || '') !== newId) { e.status = 'update'; e.note = newId ? '' : 'هيتشال من أي منطقة'; }
+                    e.nb = nb; e.zoneId = newId;
+                    return e;
+                });
+                xlPreview({ title: 'مراجعة توزيع الأحياء', info: 'كل حي بياخد منطقة التسليم المكتوبة قدامه. ولو الخانة فاضية، الحي بيتشال من أي منطقة، وطلباته هتظهر لكل مناديب التسليم.',
+                    headers: ['الحي', 'منطقة التسليم'], entries,
+                    onConfirm: function(list) {
+                        list.forEach(e => { if (e.zoneId) neighborhoodZoneMap[e.nb] = e.zoneId; else delete neighborhoodZoneMap[e.nb]; });
+                        saveDeliveryZonesData(); logAction('توزيع الأحياء من Excel', `${list.length} حي`);
+                        try { renderNeighborhoodZoneAssignments(); } catch (err) {}
+                        showToast(`اتحدث توزيع ${list.length} حي`);
+                    } });
+            });
+        }
+
+        // ==================== 5) أقسام الأبليكشن ====================
+        function exportCategoriesExcel() {
+            const rows = [['اسم القسم', 'الترتيب', 'الحالة (نشط/متوقف)']];
+            appCategories.forEach(c => rows.push([c.name, c.order || 0, c.active !== false ? 'نشط' : 'متوقف']));
+            xlWrite('أقسام_الأبليكشن', [{ name: 'الأقسام', rows, widths: [28, 10, 18] }]);
+        }
+        function importCategoriesExcel(event) {
+            xlRead(event, { name: ['اسم القسم', 'القسم', 'الاسم'], order: ['الترتيب'], status: ['الحالة (نشط/متوقف)', 'الحالة'] }, ['name'], function(rows) {
+                const seen = new Set();
+                const entries = rows.map(r => {
+                    const e = { row: r.__row, cells: [r.name, r.order, r.status], status: 'new', note: '', data: r };
+                    const k = normalizeArabicText(r.name);
+                    if (seen.has(k)) { e.status = 'error'; e.note = 'مكرر في الشيت'; return e; }
+                    seen.add(k);
+                    const ord = xlNum(r.order);
+                    if (ord !== null && isNaN(ord)) { e.status = 'error'; e.note = 'الترتيب لازم رقم'; return e; }
+                    const act = r.status ? parseBrandStatus(r.status) : undefined;
+                    if (act === null) { e.status = 'error'; e.note = 'الحالة لازم "نشط" أو "متوقف"'; return e; }
+                    e.ord = ord; e.act = act;
+                    const ex = appCategories.find(c => normalizeArabicText(c.name) === k);
+                    if (ex) {
+                        const changed = (ord !== null && ord !== (ex.order || 0)) || (act !== undefined && act !== (ex.active !== false));
+                        e.status = changed ? 'update' : 'same'; e.existing = ex;
+                    } else e.note = 'من غير صورة، حطها من الشاشة';
+                    return e;
+                });
+                xlPreview({ title: 'مراجعة أقسام الأبليكشن', info: 'الأقسام الموجودة بيتعدل ترتيبها وحالتها، والجديدة بتتضاف من غير صورة. <strong>مفيش قسم بيتمسح</strong>، وتغيير اسم القسم بيفضل من جوه السيستم.',
+                    headers: ['القسم', 'الترتيب', 'الحالة'], entries,
+                    onConfirm: function(list) {
+                        let a = 0, u = 0;
+                        list.forEach((e, i) => {
+                            if (e.status === 'update') { if (e.ord !== null) e.existing.order = e.ord; if (e.act !== undefined) e.existing.active = e.act; u++; }
+                            else if (e.status === 'new') { appCategories.push({ id: 'cat_' + Date.now() + '_' + i, name: e.data.name, order: e.ord || 0, active: e.act !== undefined ? e.act : true, imageUrl: null }); a++; }
+                        });
+                        localStorage.setItem('appCategories', JSON.stringify(appCategories));
+                        logAction('استيراد أقسام من Excel', `إضافة ${a} وتعديل ${u}`);
+                        try { renderAppCategories(); } catch (err) {}
+                        showToast(`تم إضافة ${a} قسم وتعديل ${u}`);
+                    } });
+            });
+        }
+
+        // ==================== 6) التارجت (من شاشة التارجت في داشبورد المشرف) ====================
+        function exportTargetsExcel() {
+            const key = document.getElementById('svTargetMonth').value;
+            const tg = svTargetsFor(key);
+            const rows = [['كود المندوب', 'اسم المندوب', 'التارجت']];
+            salesmen.filter(s => s.repType !== 'delivery' && (s.status !== 'غير نشط' || tg[s.code])).forEach(s => rows.push([s.code, s.name, tg[s.code] || '']));
+            xlWrite('تارجت_' + key, [{ name: 'التارجت', rows, widths: [14, 26, 14] }]);
+        }
+        function importTargetsExcel(event) {
+            xlRead(event, { code: ['كود المندوب', 'الكود'], name: ['اسم المندوب', 'الاسم'], target: ['التارجت', 'المبلغ'] }, ['code', 'target'], function(rows) {
+                let filled = 0; const bad = [];
+                rows.forEach(r => {
+                    const inp = document.querySelector(`#svTargetRows .sv-target-input[data-code="${CSS.escape(r.code)}"]`);
+                    const v = xlNum(r.target);
+                    if (!inp) { bad.push(r.code); return; }
+                    if (v !== null && (isNaN(v) || v < 0)) { bad.push(r.code); return; }
+                    inp.value = v ? Math.round(v) : ''; filled++;
+                });
+                showToast(`اتملى ${filled} مندوب من الشيت${bad.length ? ' — مش مظبوط: ' + bad.join('، ') : ''}. راجع ودوس "حفظ التارجت"`, bad.length ? 'warning' : 'success', 5000);
+            });
+        }
+
+        // ==================== 7) تصدير بس (فواتير / خزنة / مصروفات / حركات مخزون) ====================
+        const xlDate = d => d ? new Date(d).toLocaleString('ar-EG') : '';
+        function exportInvoicesExcel() {
+            const all = invoices.map(i => Object.assign({}, i, { _k: 'بيع' })).concat(purchaseInvoices.map(i => Object.assign({}, i, { _k: 'شراء' })))
+                .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+            const head = [['رقم الفاتورة', 'النوع', 'التاريخ', 'العميل / المورد', 'المندوب', 'طريقة الدفع', 'الإجمالي']];
+            const lines = [['رقم الفاتورة', 'النوع', 'التاريخ', 'العميل / المورد', 'كود الصنف', 'الصنف', 'الوحدة', 'الكمية', 'السعر', 'الإجمالي']];
+            all.forEach(i => {
+                const party = i._k === 'بيع' ? (i.customerName || i.customerCode || '') : (i.supplier || i.supplierCode || '');
+                head.push([i.number, i._k, xlDate(i.date), party, i.salesmanName || '', i.paymentMethod || '', Number(i.grandTotal) || 0]);
+                (i.items || []).forEach(it => lines.push([i.number, i._k, xlDate(i.date), party, it.productCode, it.productName, it.unit || '', it.qty, i._k === 'شراء' ? it.cost : (it.price != null ? it.price : it.cost), Number(it.total) || 0]));
+            });
+            xlWrite('الفواتير', [{ name: 'الفواتير', rows: head, widths: [12, 8, 20, 28, 18, 14, 14] }, { name: 'تفاصيل الأصناف', rows: lines, widths: [12, 8, 20, 28, 12, 30, 10, 8, 10, 12] }]);
+        }
+        function exportTreasuryExcel() {
+            const rows = [['التاريخ', 'النوع', 'المبلغ', 'الجهة', 'البيان', 'المرجع', 'الرصيد بعدها']];
+            treasury.forEach(t => rows.push([xlDate(t.date), t.type === 'in' ? 'قبض' : 'صرف', Number(t.amount) || 0, t.party || '', t.notes || '', t.reference || '', Number(t.balanceAfter) || 0]));
+            xlWrite('الخزنة', [{ name: 'حركات الخزنة', rows, widths: [20, 8, 12, 22, 34, 18, 14] }]);
+        }
+        function exportExpensesExcel() {
+            const rows = [['التاريخ', 'النوع', 'المبلغ', 'مركز التكلفة', 'الوصف']];
+            expenses.forEach(e => rows.push([xlDate(e.date), e.type || '', Number(e.amount) || 0, e.costCenter || '', e.description || '']));
+            xlWrite('المصروفات', [{ name: 'المصروفات', rows, widths: [20, 18, 12, 18, 36] }]);
+        }
+        function exportMovementsExcel() {
+            const label = { purchase: 'شراء', sale: 'بيع', in: 'إضافة', out: 'خصم', adjustment: 'تعديل/جرد', return: 'مرتجع' };
+            const rows = [['التاريخ', 'كود الصنف', 'الصنف', 'نوع الحركة', 'الكمية', 'الرصيد بعدها', 'المرجع', 'ملاحظات']];
+            stockMovements.forEach(m => rows.push([xlDate(m.date), m.productCode, m.productName, label[m.type] || m.type, m.qty, m.balanceAfter, m.reference || '', m.notes || '']));
+            xlWrite('حركات_المخزون', [{ name: 'حركات المخزون', rows, widths: [20, 12, 30, 12, 10, 12, 22, 34] }]);
         }
 
         // إضافة مورد جديد من جوه فاتورة الشراء، وبعد الحفظ بيتختار في الفاتورة على طول
