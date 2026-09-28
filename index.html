@@ -7567,10 +7567,11 @@
             const area = document.getElementById('salesmanArea').value.trim();
             const status = document.getElementById('salesmanStatus').value;
             const repType = document.getElementById('salesmanRepType').value;
-            const repUsername = document.getElementById('salesmanRepUsername').value.trim();
-            const repPasswordInput = document.getElementById('salesmanRepPassword').value;
+            const normDigits = v => String(v || '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
+            const repUsername = normDigits(document.getElementById('salesmanRepUsername').value).trim().toLowerCase();
+            const repPasswordInput = normDigits(document.getElementById('salesmanRepPassword').value).trim();
             if (!code || !name) { showToast('الرجاء ملء الحقول الإلزامية', 'error'); return; }
-            if (repUsername && salesmen.find(s => s.repUsername === repUsername && (!editingSalesman || s.code !== editingSalesman.code))) {
+            if (repUsername && salesmen.find(s => String(s.repUsername || '').trim().toLowerCase() === repUsername && (!editingSalesman || s.code !== editingSalesman.code))) {
                 showToast('يوزر الدخول ده مستخدم بالفعل لمندوب تاني', 'error'); return;
             }
             let repPasswordHash = editingSalesman ? editingSalesman.repPasswordHash : undefined;
