@@ -483,6 +483,7 @@
             <li class="nav-item" data-section="customers"><a class="nav-link" href="javascript:void(0)" onclick="showSection('customers')"><i class="fas fa-users"></i><span class="menu-text">قاعدة العملاء</span></a></li>
             <li class="nav-item" data-section="suppliers"><a class="nav-link" href="javascript:void(0)" onclick="showSection('suppliers')"><i class="fas fa-truck"></i><span class="menu-text">قاعدة الموردين</span></a></li>
             <li class="nav-item" data-section="salesmen"><a class="nav-link" href="javascript:void(0)" onclick="showSection('salesmen')"><i class="fas fa-user-tie"></i><span class="menu-text">قاعدة المناديب</span></a></li>
+            <li class="nav-item" data-section="daily-sales"><a class="nav-link" href="javascript:void(0)" onclick="showSection('daily-sales')"><i class="fas fa-calendar-day"></i><span class="menu-text">التقرير اليومي للمبيعات</span></a></li>
             <li class="nav-item" data-section="reports"><a class="nav-link" href="javascript:void(0)" onclick="showSection('reports')"><i class="fas fa-chart-pie"></i><span class="menu-text">التقارير والتجميع</span></a></li>
             <li class="nav-item" data-section="users"><a class="nav-link" href="javascript:void(0)" onclick="showSection('users')"><i class="fas fa-user-shield"></i><span class="menu-text">المستخدمون والصلاحيات</span></a></li>
             <li class="nav-item" data-section="audit-log"><a class="nav-link" href="javascript:void(0)" onclick="showSection('audit-log')"><i class="fas fa-history"></i><span class="menu-text">سجل العمليات</span></a></li>
@@ -1524,7 +1525,7 @@
                     #ordersTodayBreakdown span.b-fulfilled { background:rgba(39,174,96,0.15); color:var(--accent); }
                 </style>
                 <div style="padding:12px 20px 0;display:flex;justify-content:flex-end;gap:10px;">
-                    <button class="btn btn-secondary btn-sm" onclick="openPrepZonesReport()"><i class="fas fa-boxes"></i> تقرير الأصناف المجمّع (حسب المنطقة)</button>
+                    <button class="btn btn-secondary btn-sm" onclick="openPrepZonesReport()"><i class="fas fa-route"></i> خطوط السير: التجميع والبيان</button>
                     <button class="btn btn-primary btn-sm" onclick="batchIssueForPreparation()"><i class="fas fa-receipt"></i> إصدار الفواتير (تحويل الطلبات الجديدة لقيد التجهيز دفعة واحدة)</button>
                 </div>
                 <div style="padding:0 20px;display:flex;gap:4px;border-bottom:2px solid var(--border);flex-wrap:wrap;">
@@ -1840,6 +1841,29 @@
         </section>
 
         <!-- Reports Section -->
+        <section id="daily-sales-section" class="section">
+            <div class="card">
+                <div class="card-header"><div class="card-title"><i class="fas fa-calendar-day"></i> التقرير اليومي للمبيعات</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <button class="btn btn-primary btn-sm" onclick="printDailySales('invoices')"><i class="fas fa-print"></i> طباعة حسب الفواتير</button>
+                        <button class="btn btn-primary btn-sm" onclick="printDailySales('products')"><i class="fas fa-print"></i> طباعة حسب المنتجات</button>
+                        <button class="btn btn-info btn-sm" onclick="exportDailySales()"><i class="fas fa-file-export"></i> Excel</button>
+                    </div></div>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+                    <label>يوم البيع: <input type="date" class="form-control" id="dsDate" style="width:auto;display:inline-block;" onchange="renderDailySales()"></label>
+                    <span class="sv-muted" id="dsWindow"></span>
+                    <label>خط السير: <select class="form-control" id="dsRoute" style="width:auto;display:inline-block;" onchange="renderDailySales()"></select></label>
+                </div>
+                <div id="dsKpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px;"></div>
+                <div style="display:flex;gap:8px;margin-bottom:10px;">
+                    <button class="btn btn-sm" id="dsTabInv" onclick="dsTab='invoices';renderDailySales()">حسب الفواتير</button>
+                    <button class="btn btn-sm" id="dsTabProd" onclick="dsTab='products';renderDailySales()">حسب المنتجات</button>
+                </div>
+                <div id="dsCheck" style="font-size:12.5px;margin-bottom:8px;"></div>
+                <div class="table-container"><table><thead id="dsHead"></thead><tbody id="dsBody"></tbody></table></div>
+            </div>
+        </section>
+
         <section id="reports-section" class="section">
             <div style="display:flex;justify-content:flex-end;margin-bottom:15px;">
                 <button class="btn btn-success" onclick="exportAllReportsToExcel()"><i class="fas fa-file-excel"></i> تصدير كل التقارير في ملف إكسيل واحد</button>
@@ -2357,7 +2381,7 @@
     <!-- تقرير الأصناف المجمّع لمرحلة "قيد التجهيز"، مقسّم حسب منطقة التسليم -->
     <div class="modal-overlay" id="prepZonesReportModal">
         <div class="modal wide">
-            <div class="modal-header"><h3 class="modal-title">تقرير الأصناف المجمّع (قيد التجهيز) - حسب منطقة التسليم</h3><button class="modal-close" onclick="closeModal('prepZonesReportModal')">&times;</button></div>
+            <div class="modal-header"><h3 class="modal-title">خطوط السير: التجميع وبيان المتحصلات (طلبات يوم البيع اللي لسه متسلمتش)</h3><button class="modal-close" onclick="closeModal('prepZonesReportModal')">&times;</button></div>
             <div class="modal-body">
                 <div id="prepZonesReportContent"></div>
             </div>
@@ -2769,7 +2793,7 @@
         const ROLES = {
             admin: { label: 'مدير النظام', sections: ['*'] },
             // المحاسب: من غير الربحية خالص، وبيشوف المخزون (وأي تعديل مخزون منه بيحتاج اعتماد المدير)
-            accountant: { label: 'محاسب', sections: ['dashboard', 'invoices', 'purchase-invoice', 'purchase-approvals', 'purchase-returns', 'collections', 'treasury', 'expenses', 'rep-custody', 'inventory', 'products', 'suppliers', 'reports'] },
+            accountant: { label: 'محاسب', sections: ['dashboard', 'invoices', 'purchase-invoice', 'purchase-approvals', 'purchase-returns', 'collections', 'treasury', 'expenses', 'rep-custody', 'inventory', 'products', 'suppliers', 'daily-sales', 'reports'] },
             warehouse_keeper: { label: 'أمين مخزن', sections: ['dashboard', 'customer-orders', 'purchase-invoice', 'purchase-returns', 'inventory', 'products', 'suppliers'] },
             // مشرف المبيعات: بيشوف داشبورد المتابعة بس (عرض فقط)، والحاجة الوحيدة اللي بيسجلها هي التارجت
             sales_supervisor: { label: 'مشرف مبيعات', sections: ['sales-supervisor'], home: 'sales-supervisor' }
@@ -4774,36 +4798,130 @@
 
         // تقرير مجمّع للأصناف المطلوبة في الطلبات "قيد التجهيز"، مقسّم حسب منطقة التسليم بتاعة كل طلب -
         // كل منطقة بجدول منفصل بإجمالي كمية كل صنف عبرها، عشان أمين المخزن يجهّز منطقة لوحدها في كل مرة
-        function buildPrepZonesReportHtml() {
-            const preparingOrders = customerOrders.filter(o => o.status === 'preparing');
-            if (preparingOrders.length === 0) {
-                return `<div class="empty-state"><i class="fas fa-boxes"></i><h3>لا توجد طلبات قيد التجهيز حاليًا</h3></div>`;
-            }
+        // ==================== خطوط السير: التجميع (بالوحدتين) + بيان المتحصلات + الفواتير ====================
+        // خط السير = منطقة التسليم. الطلبات = كل طلبات يوم البيع اللي لسه متسلمتش (جديد / قيد التجهيز / خرج للتسليم)
+        function routeOrders() {
+            const start = svSalesDayStart().getTime();
+            return customerOrders.filter(o => ['pending', 'preparing', 'ready'].includes(o.status) && (o.createdAt || 0) >= start);
+        }
+        function buildRoutesData() {
             const byZone = {};
-            preparingOrders.forEach(function(order) {
-                const zoneName = getOrderZoneName(order);
-                if (!byZone[zoneName]) byZone[zoneName] = { orderCount: 0, products: {} };
-                byZone[zoneName].orderCount++;
-                (order.items || []).forEach(function(item) {
-                    const p = byZone[zoneName].products;
-                    if (!p[item.productCode]) p[item.productCode] = { name: item.productName, unit: item.unit, qty: 0 };
-                    p[item.productCode].qty += item.qty;
+            routeOrders().forEach(o => {
+                const zone = getOrderZoneName(o);
+                const z = byZone[zone] || (byZone[zone] = { name: zone, orders: [], products: {} });
+                z.orders.push(o);
+                (o.items || []).forEach(it => {
+                    const p = products.find(x => x.code === it.productCode) || {};
+                    const sec = p.secondaryUnit && p.secondaryUnit.name ? p.secondaryUnit : null;
+                    const inPrimary = sec && it.unit === sec.name ? (Number(it.qty) || 0) / (Number(sec.factor) || 1) : (Number(it.qty) || 0);
+                    const e = z.products[it.productCode] || (z.products[it.productCode] = { code: it.productCode, name: it.productName || p.name, brand: p.brand || '', unit: p.unit || it.unit || '', sec, total: 0 });
+                    e.total += inPrimary;
                 });
             });
-            const zoneNames = Object.keys(byZone).sort(function(a, b) { return byZone[b].orderCount - byZone[a].orderCount; });
-            return zoneNames.map(function(zoneName) {
-                const zoneData = byZone[zoneName];
-                const rows = Object.values(zoneData.products).sort(function(a, b) { return b.qty - a.qty; }).map(function(p) {
-                    return `<tr><td>${p.name}</td><td style="text-align:center;">${p.qty}</td><td style="text-align:center;">${p.unit || '-'}</td></tr>`;
-                }).join('');
-                return `<div style="margin-bottom:25px;">
-                    <h3 style="background:var(--bg);padding:10px 15px;border-radius:8px;margin-bottom:10px;">📍 ${zoneName} <span style="font-weight:400;color:var(--text-light);font-size:13px;">(${zoneData.orderCount} طلب)</span></h3>
-                    <table style="width:100%;border-collapse:collapse;font-size:14px;">
-                        <thead><tr style="background:#f5f0e8;"><th style="padding:8px;border:1px solid #ddd;">الصنف</th><th style="padding:8px;border:1px solid #ddd;">الإجمالي المطلوب</th><th style="padding:8px;border:1px solid #ddd;">الوحدة</th></tr></thead>
-                        <tbody>${rows}</tbody>
-                    </table>
-                </div>`;
+            return Object.values(byZone).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+        }
+        // "10 كرتونة + 3 علبة" بدل ما الكراتين والعلب يتجمعوا كأنهم نفس الوحدة
+        function formatTwoUnits(total, unit, sec) {
+            const eps = 1e-6;
+            if (!sec) return `${Math.round(total * 1000) / 1000} ${unit || ''}`;
+            const f = Number(sec.factor) || 1;
+            let whole = Math.floor(total + eps), rest = Math.round((total - whole) * f);
+            if (rest >= f) { whole += 1; rest -= f; }
+            const parts = []; if (whole) parts.push(`${whole} ${unit || ''}`); if (rest) parts.push(`${rest} ${sec.name}`);
+            return parts.join(' + ') || `0 ${unit || ''}`;
+        }
+        function zoneRepsNames(zoneName) {
+            const z = deliveryZones.find(x => x.name === zoneName);
+            return z ? getDeliveryReps().filter(s => (s.deliveryZoneIds || []).includes(z.id)).map(s => s.name).join(' / ') : '';
+        }
+        function prepTableHtml(z, title) {
+            const list = Object.values(z.products).sort((a, b) => (a.brand || 'ي').localeCompare(b.brand || 'ي', 'ar') || a.name.localeCompare(b.name, 'ar'));
+            let lastBrand = null;
+            const rows = list.map((p, i) => {
+                const brandRow = p.brand !== lastBrand ? `<tr><td colspan="3" style="background:#f0f0f0;font-weight:800;padding:4px 8px;border:1px solid #000;">${escapeHtml(p.brand || 'بدون شركة')}</td></tr>` : '';
+                lastBrand = p.brand;
+                return brandRow + `<tr><td style="border:1px solid #555;padding:5px;text-align:center;width:30px;">${i + 1}</td><td style="border:1px solid #555;padding:5px;">${escapeHtml(p.name)}</td><td style="border:1px solid #555;padding:5px;text-align:center;font-weight:800;font-size:14px;">${escapeHtml(formatTwoUnits(p.total, p.unit, p.sec))}</td></tr>`;
             }).join('');
+            return `<div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;color:#000;">
+                <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:3px double #000;padding-bottom:6px;margin-bottom:8px;">
+                  <img src="${invoiceSettings.logo || DEFAULT_INVOICE_LOGO}" style="width:70px;height:70px;object-fit:contain;">
+                  <div style="text-align:center;"><div style="font-size:18px;font-weight:900;">${title}</div><div style="font-size:13px;">خط السير: <b>${escapeHtml(z.name)}</b> · ${z.orders.length} طلب${zoneRepsNames(z.name) ? ' · المندوب: ' + escapeHtml(zoneRepsNames(z.name)) : ''}</div></div>
+                  <div style="font-size:12px;text-align:left;">${new Date().toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div></div>
+                <table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr><th style="border:1.5px solid #000;padding:6px;">#</th><th style="border:1.5px solid #000;padding:6px;text-align:right;">الصنف</th><th style="border:1.5px solid #000;padding:6px;">الكمية المطلوبة</th></tr></thead><tbody>${rows}</tbody></table>
+                <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px;font-size:12px;"><div>جهّزه (أمين المخزن)<div style="border-bottom:1px dotted #000;height:24px;"></div></div><div>استلمه (المندوب)<div style="border-bottom:1px dotted #000;height:24px;"></div></div></div></div>`;
+        }
+        // بيان المتحصلات اليومية (وش ورق كل خط سير) - بنفس شكل دفتر المعلم الكلاسيكي، من غير "تحصيلات سابقة" و"الباقي"
+        function collectionsStatementHtml(z) {
+            const split = n => { const v = Math.round((Number(n) || 0) * 100); return [Math.floor(v / 100).toLocaleString('en-US'), String(v % 100).padStart(2, '0')]; };
+            const B = '1.5px solid #000';
+            const cell = `border-left:${B};border-right:${B};border-bottom:1px dotted #555;height:19px;padding:1px 4px;`;
+            const th = `border:${B};padding:4px 2px;font-weight:900;font-size:12px;text-align:center;`;
+            const rows = z.orders.map((o, i) => {
+                const inv = orderAsInvoice(o); const [le, pt] = split(inv.grandTotal);
+                return `<tr><td style="${cell}text-align:center;">${i + 1}</td><td style="${cell}">${escapeHtml(inv.shopName || inv.customerName || '')}</td><td style="${cell}text-align:center;">${escapeHtml(inv.customerPhone || '')}</td>
+                    <td style="${cell}"></td><td style="${cell}"></td><td style="${cell}"></td><td style="${cell}"></td><td style="${cell}text-align:left;font-weight:700;">${le}</td><td style="${cell}text-align:center;">${pt}</td></tr>`;
+            });
+            for (let i = z.orders.length; i < Math.max(20, z.orders.length); i++) rows.push(`<tr><td style="${cell}text-align:center;">${i + 1}</td>${'<td style="' + cell + '"></td>'.repeat(8)}</tr>`);
+            const total = z.orders.reduce((s, o) => s + (Number(orderAsInvoice(o).grandTotal) || 0), 0);
+            const [tle, tpt] = split(total);
+            const tcell = `border:${B};border-top:3px solid #000;height:24px;font-weight:900;padding:2px 4px;`;
+            const bx = `border:${B};height:17px;padding:1px 4px;`;
+            const denoms = ['200', '100', '50', '20', '10', '5', '1', '0.50', '0.25', 'فضيات'].map(d => `<tr><td style="${bx}text-align:center;font-weight:700;">${d}</td><td style="${bx}"></td><td style="${bx}"></td></tr>`).join('');
+            const d = new Date();
+            const dots = v => `<b style="border-bottom:1px dotted #000;padding:0 10px;">${v}</b>`;
+            return `<div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;color:#000;font-size:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                  <img src="${invoiceSettings.logo || DEFAULT_INVOICE_LOGO}" style="width:92px;height:92px;object-fit:contain;">
+                  <div style="font-size:60px;line-height:1;transform:scaleX(-1);">🚚</div></div>
+                <div style="text-align:center;font-size:19px;font-weight:900;text-decoration:underline;margin:0 0 10px;">بيان المتحصلات اليومية</div>
+                <div style="display:flex;justify-content:space-between;font-weight:700;font-size:13px;margin-bottom:8px;">
+                  <span>اليوم: ${dots(d.toLocaleDateString('ar-EG', { weekday: 'long' }))}</span><span>التاريخ: ${dots(d.toLocaleDateString('ar-EG'))}</span>
+                  <span>المندوب: ${dots(escapeHtml(zoneRepsNames(z.name) || '..........'))}</span><span>خط السير: ${dots(escapeHtml(z.name))}</span></div>
+                <table style="width:100%;border-collapse:collapse;border:3px solid #000;">
+                  <thead><tr><th rowspan="2" style="${th}width:26px;">م</th><th rowspan="2" style="${th}">اسم العميـــــل</th><th rowspan="2" style="${th}width:100px;">التليفون</th><th colspan="2" style="${th}">المحصّـل</th><th colspan="2" style="${th}">مرتجـع</th><th colspan="2" style="${th}">الإجمالـي</th></tr>
+                  <tr><th style="${th}width:52px;">جنيه</th><th style="${th}width:24px;">ق</th><th style="${th}width:48px;">جنيه</th><th style="${th}width:24px;">ق</th><th style="${th}width:58px;">جنيه</th><th style="${th}width:24px;">ق</th></tr></thead>
+                  <tbody>${rows.join('')}
+                  <tr><td colspan="3" style="${tcell}text-align:center;font-size:15px;">الإجمالـــي (${z.orders.length} عميل)</td><td style="${tcell}"></td><td style="${tcell}"></td><td style="${tcell}"></td><td style="${tcell}"></td><td style="${tcell}text-align:left;">${tle}</td><td style="${tcell}text-align:center;">${tpt}</td></tr></tbody></table>
+                <div style="display:grid;grid-template-columns:1fr 1.15fr 0.9fr;gap:14px;margin-top:12px;align-items:start;">
+                  <table style="width:100%;border-collapse:collapse;"><thead><tr><th style="${th}">الفئة</th><th style="${th}">العدد</th><th style="${th}">القيمة</th></tr></thead><tbody>${denoms}</tbody></table>
+                  <table style="width:100%;border-collapse:collapse;border:2.5px solid #000;"><thead><tr><th style="${th}">المحصّل</th><th style="${th}">المرتجعات</th><th style="${th}">إجمالي التوريد</th></tr></thead><tbody><tr><td style="border:${B};height:30px;"></td><td style="border:${B};"></td><td style="border:${B};"></td></tr></tbody></table>
+                  <div style="font-weight:900;font-size:14px;line-height:2.2;">توقيع المحاسب<div style="border-bottom:1px dotted #000;height:22px;margin-bottom:10px;"></div>توقيع المندوب<div style="border-bottom:1px dotted #000;height:22px;"></div></div>
+                </div>
+                <div style="margin-top:10px;font-size:9.5px;color:#333;text-align:left;">اتطبع من نظام المعلم · ${d.toLocaleString('ar-EG')}</div></div>`;
+        }
+        const pageBreak = '<div style="page-break-after:always;break-after:page;"></div>';
+        function printRoute(zoneName, what) {
+            const zones = buildRoutesData().filter(z => !zoneName || z.name === zoneName);
+            if (!zones.length) { showToast('مفيش طلبات متسلمتش في يوم البيع ده', 'warning'); return; }
+            const pages = [];
+            zones.forEach(z => {
+                if (what === 'prep' || what === 'all') pages.push(prepTableHtml(z, 'تجميع أصناف خط السير'));
+                if (what === 'bundle' || what === 'all') {
+                    pages.push(collectionsStatementHtml(z));
+                    z.orders.forEach(o => pages.push(buildCustomerInvoiceHtml(orderAsInvoice(o))));
+                }
+            });
+            printHtml(pages.join(pageBreak), what === 'prep' ? 'تجميع الأصناف' : 'بيان المتحصلات والفواتير');
+        }
+        function printAllRoutesPrepTotal() {
+            const zones = buildRoutesData();
+            if (!zones.length) { showToast('مفيش طلبات', 'warning'); return; }
+            const all = { name: 'كل خطوط السير', orders: [], products: {} };
+            zones.forEach(z => { all.orders = all.orders.concat(z.orders); Object.values(z.products).forEach(p => { const e = all.products[p.code] || (all.products[p.code] = Object.assign({}, p, { total: 0 })); e.total += p.total; }); });
+            printHtml(prepTableHtml(all, 'إجمالي تجميع كل خطوط السير'), 'إجمالي التجميع');
+        }
+        function buildPrepZonesReportHtml() {
+            const zones = buildRoutesData();
+            if (!zones.length) return `<div class="empty-state"><i class="fas fa-boxes"></i><h3>مفيش طلبات متسلمتش في يوم البيع ده</h3></div>`;
+            return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;"><button class="btn btn-primary btn-sm" onclick="printRoute(null,'prep')"><i class="fas fa-boxes"></i> طباعة تجميع كل الخطوط</button><button class="btn btn-success btn-sm" onclick="printRoute(null,'bundle')"><i class="fas fa-file-invoice"></i> طباعة البيانات والفواتير لكل الخطوط</button><button class="btn btn-secondary btn-sm" onclick="printAllRoutesPrepTotal()"><i class="fas fa-layer-group"></i> إجمالي الأربع خطوط في صفحة</button></div>` +
+                zones.map(z => {
+                    const q = encodeURIComponent(z.name).replace(/'/g, '%27');
+                    const rows = Object.values(z.products).sort((a, b) => (a.brand || 'ي').localeCompare(b.brand || 'ي', 'ar') || a.name.localeCompare(b.name, 'ar'))
+                        .map(p => `<tr><td>${escapeHtml(p.name)}${p.brand ? `<div style="font-size:11px;color:var(--text-light);">${escapeHtml(p.brand)}</div>` : ''}</td><td style="text-align:center;font-weight:800;">${escapeHtml(formatTwoUnits(p.total, p.unit, p.sec))}</td></tr>`).join('');
+                    return `<div class="card" style="margin-bottom:14px;"><div class="card-header"><div class="card-title">📍 ${escapeHtml(z.name)} <span style="font-weight:400;color:var(--text-light);font-size:13px;">(${z.orders.length} طلب${zoneRepsNames(z.name) ? ' · ' + escapeHtml(zoneRepsNames(z.name)) : ''})</span></div>
+                        <div style="display:flex;gap:8px;"><button class="btn btn-primary btn-sm" onclick="printRoute(decodeURIComponent('${q}'),'prep')"><i class="fas fa-boxes"></i> التجميع</button><button class="btn btn-success btn-sm" onclick="printRoute(decodeURIComponent('${q}'),'bundle')"><i class="fas fa-file-invoice"></i> البيان + الفواتير</button></div></div>
+                        <div class="table-container"><table><thead><tr><th>الصنف</th><th>الكمية</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+                }).join('');
         }
 
         function openPrepZonesReport() {
@@ -4811,13 +4929,7 @@
             openModal('prepZonesReportModal');
         }
 
-        function printPrepZonesReport() {
-            const html = buildPrepZonesReportHtml();
-            printHtml(`<div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;">
-                <h2 style="text-align:center;">تقرير الأصناف المجمّع - قيد التجهيز</h2>
-                <p style="text-align:center;color:#666;margin-bottom:20px;">${new Date().toLocaleDateString('ar-EG')}</p>
-                ${html}</div>`);
-        }
+        function printPrepZonesReport() { printRoute(null, 'prep'); }
 
         // قيد التجهيز → تم التجهيز وخرج للتسليم. مجرد تحديث حالة برضو، مفيش تأثير على المخزون أو فاتورة -
         // ده هيحصل بعدين في مرحلة "تم التسليم" لما المندوب يأكد التسليم فعليًا وتتحصل الفلوس
@@ -5755,7 +5867,7 @@
                 'invoices': 'سجل الفواتير', 'treasury': 'الخزنة اليومية', 'expenses': 'التكاليف والمصروفات',
                 'inventory': 'إدارة المخزون', 'profit': 'الربحية', 'profit-target': 'تحديد الربحية والتارجت', 'products': 'قاعدة الأصناف',
                 'customers': 'قاعدة العملاء', 'suppliers': 'قاعدة الموردين', 'salesmen': 'قاعدة المناديب',
-                'reports': 'التقارير والتجميع', 'backup': 'النسخ الاحتياطي',
+                'reports': 'التقارير والتجميع', 'daily-sales': 'التقرير اليومي للمبيعات', 'backup': 'النسخ الاحتياطي',
                 'sales-returns': 'مرتجعات البيع', 'purchase-returns': 'مرتجعات الشراء',
                 'collections': 'متابعة التحصيلات', 'sales-tracking': 'لوحة متابعة المبيعات', 'sales-supervisor': 'داشبورد مشرف المبيعات', 'purchase-approvals': 'المراجعة والاعتماد', 'rep-custody': 'عهدة المناديب', 'smart-analytics': 'التحليلات الذكية',
                 'users': 'المستخدمون والصلاحيات', 'audit-log': 'سجل العمليات'
@@ -8618,6 +8730,7 @@
                 const r = origShow.apply(this, arguments);
                 if (name === 'backup') { try { renderCloudBackups(); } catch (e) {} }
                 if (name === 'rep-custody') { try { renderRepCustody(); } catch (e) {} }
+                if (name === 'daily-sales') { try { renderDailySales(); } catch (e) { console.error(e); } }
                 if (name === 'inventory') { try { renderExpiry(); } catch (e) {} }
                 if (name === 'sales-supervisor') { renderSupervisorDashboard(); setTimeout(() => Object.values(svCharts).forEach(c => { try { c.resize(); } catch (e) {} }), 50); }
                 else if (document.body.classList.contains('sv-tv')) toggleSupervisorTvMode();
@@ -10125,6 +10238,105 @@
                 showToast(`اتميّز ${plan.length} رقم مكرر`);
                 runHealthCheck();
             }).catch(e => { console.error(e); showToast('تعذر الحفظ: ' + (e.message || ''), 'error'); });
+        }
+
+
+        // ==================== التقرير اليومي للمبيعات (يوم البيع من 9 الصبح لـ 9 الصبح) ====================
+        let dsTab = 'invoices';
+        function dsWindow() {
+            const el = document.getElementById('dsDate');
+            if (!el.value) { const s = svSalesDayStart(); el.value = s.getFullYear() + '-' + String(s.getMonth() + 1).padStart(2, '0') + '-' + String(s.getDate()).padStart(2, '0'); }
+            const [y, m, d] = el.value.split('-').map(Number);
+            const start = new Date(y, m - 1, d, 9, 0, 0, 0).getTime();
+            return { start, end: start + 86400000 };
+        }
+        function invoiceRouteName(inv) {
+            const o = inv.sourceOrderId ? customerOrders.find(x => x.id === inv.sourceOrderId) : null;
+            const nb = (o && o.neighborhood) || (customers.find(c => c.code === inv.customerCode) || {}).neighborhood;
+            return getOrderZoneName({ neighborhood: nb });
+        }
+        function dailySalesData() {
+            normalizeAllProfit();
+            const w = dsWindow();
+            const route = (document.getElementById('dsRoute') || {}).value || '';
+            const inR = d => { const t = new Date(d).getTime(); return t >= w.start && t < w.end; };
+            const all = invoices.filter(i => i.type === 'sale' && inR(i.date)).map(i => Object.assign({}, i, { _route: invoiceRouteName(i) }));
+            const list = all.filter(i => !route || i._route === route).sort((a, b) => a._route.localeCompare(b._route, 'ar') || String(a.number).localeCompare(String(b.number)));
+            const rets = salesReturns.filter(r => inR(r.date) && (!route || invoiceRouteName(invoices.find(i => i.id === r.originalInvoiceId) || {}) === route));
+            const prod = {};
+            list.forEach(inv => (inv.items || []).forEach(it => {
+                const p = products.find(x => x.code === it.productCode) || {};
+                const sec = p.secondaryUnit && p.secondaryUnit.name ? p.secondaryUnit : null;
+                const q = sec && it.unit === sec.name ? (Number(it.qty) || 0) / (Number(sec.factor) || 1) : (Number(it.qty) || 0);
+                const e = prod[it.productCode] || (prod[it.productCode] = { code: it.productCode, name: it.productName || p.name, brand: p.brand || '', unit: p.unit || it.unit || '', sec, qty: 0, value: 0, invs: new Set() });
+                e.qty += q; e.value += it._netTotal != null ? it._netTotal : (Number(it.total) || 0); e.invs.add(inv.id);
+            }));
+            const gross = list.reduce((s, i) => s + (i._grossTotal || 0), 0), net = list.reduce((s, i) => s + (Number(i.grandTotal) || 0), 0);
+            const retVal = rets.reduce((s, r) => s + (Number(r.grandTotal) || 0), 0);
+            const routes = Array.from(new Set(all.map(i => i._route))).sort((a, b) => a.localeCompare(b, 'ar'));
+            return { w, route, list, rets, prods: Object.values(prod).sort((a, b) => b.value - a.value), gross, net, discount: gross - net, retVal, routes };
+        }
+        const dsF = n => (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        function renderDailySales() {
+            if (!document.getElementById('daily-sales-section')) return;
+            const D = dailySalesData();
+            const sel = document.getElementById('dsRoute'); const cur = sel.value;
+            sel.innerHTML = '<option value="">كل الخطوط</option>' + deliveryZones.map(z => z.name).concat(D.routes).filter((v, i, a) => a.indexOf(v) === i).map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+            sel.value = cur;
+            document.getElementById('dsWindow').textContent = `من ${new Date(D.w.start).toLocaleString('ar-EG', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric' })} لـ ${new Date(D.w.end).toLocaleString('ar-EG', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric' })}`;
+            const k = (t, v, c) => `<div style="background:${c};border-radius:10px;padding:12px;"><div style="font-size:12.5px;color:var(--text-light);">${t}</div><div style="font-size:22px;font-weight:800;">${v}</div></div>`;
+            document.getElementById('dsKpis').innerHTML = k('عدد الفواتير', D.list.length, 'rgba(52,152,219,0.08)') + k('المبيعات (بعد خصم النقاط)', dsF(D.net), 'rgba(46,204,113,0.08)')
+                + k('خصم النقاط', dsF(D.discount), 'rgba(243,156,18,0.1)') + k('المرتجعات', dsF(D.retVal), 'rgba(231,76,60,0.08)') + k('الصافي', dsF(D.net - D.retVal), 'rgba(155,89,182,0.08)');
+            document.getElementById('dsTabInv').className = 'btn btn-sm ' + (dsTab === 'invoices' ? 'btn-primary' : 'btn-secondary');
+            document.getElementById('dsTabProd').className = 'btn btn-sm ' + (dsTab === 'products' ? 'btn-primary' : 'btn-secondary');
+            const pSum = D.prods.reduce((s, p) => s + p.value, 0);
+            document.getElementById('dsCheck').innerHTML = Math.abs(pSum - D.net) < 0.05 ? '<span style="color:var(--accent);">✅ إجمالي المنتجات = إجمالي الفواتير (' + dsF(D.net) + ')</span>' : '<span style="color:var(--danger);">⚠️ إجمالي المنتجات ' + dsF(pSum) + ' مختلف عن الفواتير ' + dsF(D.net) + '</span>';
+            const head = document.getElementById('dsHead'), body = document.getElementById('dsBody');
+            if (dsTab === 'invoices') {
+                head.innerHTML = '<tr><th>#</th><th>رقم الفاتورة</th><th>العميل</th><th>خط السير</th><th>المندوب</th><th>إجمالي الأصناف</th><th>خصم النقاط</th><th>الإجمالي</th></tr>';
+                let html = '', last = null, sub = 0, n = 0;
+                const flush = () => { if (last !== null) html += `<tr style="background:#f8f9fa;font-weight:800;"><td colspan="7">إجمالي ${escapeHtml(last)}</td><td>${dsF(sub)}</td></tr>`; };
+                D.list.forEach(inv => {
+                    if (inv._route !== last) { flush(); last = inv._route; sub = 0; }
+                    sub += Number(inv.grandTotal) || 0; n++;
+                    html += `<tr><td>${n}</td><td>${escapeHtml(String(inv.number))}</td><td>${escapeHtml(inv.shopName || inv.customerName || '')}</td><td>${escapeHtml(inv._route)}</td><td>${escapeHtml(inv.deliveredByRepName || inv.salesmanName || '-')}</td><td>${dsF(inv._grossTotal)}</td><td>${inv._discount > 0.004 ? dsF(inv._discount) : '-'}</td><td><strong>${dsF(inv.grandTotal)}</strong></td></tr>`;
+                });
+                flush();
+                body.innerHTML = html ? html + `<tr style="font-weight:900;border-top:2px solid #000;"><td colspan="5">الإجمالي الكلي (${D.list.length} فاتورة)</td><td>${dsF(D.gross)}</td><td>${dsF(D.discount)}</td><td>${dsF(D.net)}</td></tr>` : '<tr><td colspan="8" style="text-align:center;color:var(--text-light);padding:20px;">مفيش فواتير في يوم البيع ده</td></tr>';
+            } else {
+                head.innerHTML = '<tr><th>#</th><th>المنتج</th><th>الشركة</th><th>الكمية</th><th>عدد الفواتير</th><th>القيمة</th></tr>';
+                body.innerHTML = D.prods.length ? D.prods.map((p, i) => `<tr><td>${i + 1}</td><td><strong>${escapeHtml(p.name)}</strong></td><td>${escapeHtml(p.brand || '-')}</td><td style="font-weight:700;">${escapeHtml(formatTwoUnits(p.qty, p.unit, p.sec))}</td><td>${p.invs.size}</td><td><strong>${dsF(p.value)}</strong></td></tr>`).join('')
+                    + `<tr style="font-weight:900;border-top:2px solid #000;"><td colspan="5">الإجمالي (${D.prods.length} منتج)</td><td>${dsF(pSum)}</td></tr>` : '<tr><td colspan="6" style="text-align:center;color:var(--text-light);padding:20px;">مفيش مبيعات في يوم البيع ده</td></tr>';
+            }
+        }
+        function printDailySales(kind) {
+            const D = dailySalesData();
+            const th = 'border:1.5px solid #000;padding:5px;font-weight:800;', td = 'border:1px solid #555;padding:4px 6px;';
+            const hdr = t => `<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:3px double #000;padding-bottom:6px;margin-bottom:8px;">
+                <img src="${invoiceSettings.logo || DEFAULT_INVOICE_LOGO}" style="width:74px;height:74px;object-fit:contain;">
+                <div style="text-align:center;"><div style="font-size:18px;font-weight:900;">${t}</div><div style="font-size:12px;">يوم البيع: ${new Date(D.w.start).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} (من 9 ص لـ 9 ص)${D.route ? ' · خط السير: ' + escapeHtml(D.route) : ''}</div></div>
+                <div style="font-size:12px;text-align:left;line-height:1.7;">فواتير: <b>${D.list.length}</b><br>الإجمالي: <b>${dsF(D.net)}</b><br>مرتجعات: <b>${dsF(D.retVal)}</b><br>الصافي: <b>${dsF(D.net - D.retVal)}</b></div></div>`;
+            let body;
+            if (kind === 'invoices') {
+                let rows = '', last = null, sub = 0, n = 0;
+                const flush = () => { if (last !== null) rows += `<tr><td colspan="6" style="${td}font-weight:800;background:#eee;">إجمالي ${escapeHtml(last)}</td><td style="${td}font-weight:800;background:#eee;text-align:left;">${dsF(sub)}</td></tr>`; };
+                D.list.forEach(inv => { if (inv._route !== last) { flush(); last = inv._route; sub = 0; } sub += Number(inv.grandTotal) || 0; n++;
+                    rows += `<tr><td style="${td}text-align:center;">${n}</td><td style="${td}text-align:center;">${escapeHtml(String(inv.number))}</td><td style="${td}">${escapeHtml(inv.shopName || inv.customerName || '')}</td><td style="${td}">${escapeHtml(inv.deliveredByRepName || inv.salesmanName || '')}</td><td style="${td}text-align:left;">${dsF(inv._grossTotal)}</td><td style="${td}text-align:left;">${inv._discount > 0.004 ? dsF(inv._discount) : ''}</td><td style="${td}text-align:left;font-weight:800;">${dsF(inv.grandTotal)}</td></tr>`; });
+                flush();
+                body = `<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr><th style="${th}">#</th><th style="${th}">الفاتورة</th><th style="${th}">العميل</th><th style="${th}">المندوب</th><th style="${th}">إجمالي الأصناف</th><th style="${th}">خصم النقاط</th><th style="${th}">الإجمالي</th></tr></thead><tbody>${rows}
+                    <tr><td colspan="4" style="${th}">الإجمالي الكلي</td><td style="${th}text-align:left;">${dsF(D.gross)}</td><td style="${th}text-align:left;">${dsF(D.discount)}</td><td style="${th}text-align:left;">${dsF(D.net)}</td></tr></tbody></table>`;
+            } else {
+                const rows = D.prods.map((p, i) => `<tr><td style="${td}text-align:center;">${i + 1}</td><td style="${td}">${escapeHtml(p.name)}</td><td style="${td}">${escapeHtml(p.brand || '')}</td><td style="${td}text-align:center;font-weight:800;">${escapeHtml(formatTwoUnits(p.qty, p.unit, p.sec))}</td><td style="${td}text-align:center;">${p.invs.size}</td><td style="${td}text-align:left;font-weight:800;">${dsF(p.value)}</td></tr>`).join('');
+                body = `<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr><th style="${th}">#</th><th style="${th}">المنتج</th><th style="${th}">الشركة</th><th style="${th}">الكمية</th><th style="${th}">فواتير</th><th style="${th}">القيمة</th></tr></thead><tbody>${rows}
+                    <tr><td colspan="5" style="${th}">الإجمالي (${D.prods.length} منتج)</td><td style="${th}text-align:left;">${dsF(D.prods.reduce((s, p) => s + p.value, 0))}</td></tr></tbody></table>`;
+            }
+            printHtml(`<div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;color:#000;">${hdr(kind === 'invoices' ? 'تقرير المبيعات اليومي — حسب الفواتير' : 'تقرير المبيعات اليومي — حسب المنتجات')}${body}<div style="margin-top:10px;font-size:9.5px;color:#333;text-align:left;">اتطبع من نظام المعلم · ${new Date().toLocaleString('ar-EG')}</div></div>`, 'التقرير اليومي');
+        }
+        function exportDailySales() {
+            const D = dailySalesData();
+            const inv = [['رقم الفاتورة', 'العميل', 'خط السير', 'المندوب', 'إجمالي الأصناف', 'خصم النقاط', 'الإجمالي']].concat(D.list.map(i => [i.number, i.shopName || i.customerName || '', i._route, i.deliveredByRepName || i.salesmanName || '', Number((i._grossTotal || 0).toFixed(2)), Number((i._discount || 0).toFixed(2)), Number(i.grandTotal) || 0]));
+            const pr = [['المنتج', 'الشركة', 'الكمية', 'الكمية بالوحدة الكبيرة', 'عدد الفواتير', 'القيمة']].concat(D.prods.map(p => [p.name, p.brand, formatTwoUnits(p.qty, p.unit, p.sec), Number(p.qty.toFixed(3)), p.invs.size, Number(p.value.toFixed(2))]));
+            xlWrite('مبيعات_يوم_' + document.getElementById('dsDate').value, [{ name: 'حسب الفواتير', rows: inv, widths: [12, 28, 14, 16, 14, 12, 14] }, { name: 'حسب المنتجات', rows: pr, widths: [30, 16, 22, 14, 12, 14] }]);
         }
 
         // إضافة مورد جديد من جوه فاتورة الشراء، وبعد الحفظ بيتختار في الفاتورة على طول
