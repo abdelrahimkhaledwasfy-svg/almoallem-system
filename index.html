@@ -4455,7 +4455,7 @@
                     ${buildSection('🌙 طلبات مسائية', evening)}
                     ${buildSection('⏱️ بدون وقت محدد', other)}
                 </div>`;
-            printHtml(content, 'كشف التوصيل');
+            printHtml(content, 'كشف التوصيل', true);
         }
 
         // تنفيذ الطلب: تحويله لفاتورة بيع + خصم المخزون بمعاملة آمنة (transaction) تمنع نقص الكمية عن الصفر
@@ -4883,13 +4883,13 @@
                   <thead><tr><th rowspan="2" style="${th}">م</th><th rowspan="2" style="${th}">اسم العميـــل</th><th rowspan="2" style="${th}">التليفون</th><th colspan="2" style="${th}">المحصّـل</th><th colspan="2" style="${th}">مرتجـع</th><th colspan="2" style="${th}">الإجمالـي</th></tr>
                   <tr><th style="${th}">جنيه</th><th style="${th}">ق</th><th style="${th}">جنيه</th><th style="${th}">ق</th><th style="${th}">جنيه</th><th style="${th}">ق</th></tr></thead>
                   <tbody>${rows.join('')}
-                  <tr><td colspan="3" style="${tcell}text-align:center;">الإجمالـــي (${z.orders.length} عميل)</td><td style="${tcell}"></td><td style="${tcell}"></td><td style="${tcell}"></td><td style="${tcell}"></td><td style="${tcell}text-align:left;">${tle}</td><td style="${tcell}text-align:center;">${tpt}</td></tr></tbody></table>
+                  <tr><td colspan="3" style="${tcell}text-align:center;">الإجمالـــي</td><td style="${tcell}"></td><td style="${tcell}"></td><td style="${tcell}"></td><td style="${tcell}"></td><td style="${tcell}text-align:left;">${tle}</td><td style="${tcell}text-align:center;">${tpt}</td></tr></tbody></table>
                 <div style="display:grid;grid-template-columns:52mm 1fr 48mm;gap:5mm;margin-top:4mm;align-items:start;">
                   <table style="width:100%;border-collapse:collapse;table-layout:fixed;"><thead><tr><th style="${th}">الفئة</th><th style="${th}">العدد</th><th style="${th}">القيمة</th></tr></thead><tbody>${denoms}</tbody></table>
                   <table style="width:100%;border-collapse:collapse;border:2.2px solid #000;"><thead><tr><th style="${th}">المحصّل</th><th style="${th}">المرتجعات</th><th style="${th}">إجمالي التوريد</th></tr></thead><tbody><tr><td style="border:1.3px solid #000;height:10mm;"></td><td style="border:1.3px solid #000;"></td><td style="border:1.3px solid #000;"></td></tr></tbody></table>
                   <div style="font-weight:900;font-size:13px;line-height:1.6;">توقيع المحاسب<div style="border-bottom:1px dotted #000;height:9mm;margin-bottom:4mm;"></div>توقيع المندوب<div style="border-bottom:1px dotted #000;height:9mm;"></div></div>
                 </div>
-                <div style="margin-top:3mm;font-size:9px;color:#333;text-align:left;">اتطبع من نظام المعلم · ${d.toLocaleString('ar-EG')}</div></div>`;
+                </div>`;
         }
         const pageBreak = '<div style="page-break-after:always;break-after:page;"></div>';
         function printRoute(zoneName, what) {
@@ -7341,7 +7341,7 @@
             const card = document.getElementById('customerStatementCard').cloneNode(true);
             const hdr = card.querySelector('#customerStatementPrintHeader'); if (hdr) hdr.style.display = 'block';
             card.querySelectorAll('.no-print, button, select').forEach(e => e.remove());
-            printHtml(card.innerHTML, 'كشف حساب عميل');
+            printHtml(card.innerHTML, 'كشف حساب عميل', true);
         }
 
         function exportCustomerStatementExcel() {
@@ -10592,7 +10592,7 @@
             const sec = document.getElementById('invoice-section').cloneNode(true);
             sec.querySelectorAll('.no-print, .invoice-actions, button, .searchable-dropdown, select[style*="display: none"]').forEach(e => e.remove());
             sec.querySelectorAll('input, select, textarea').forEach(inp => { const span = document.createElement('span'); span.textContent = inp.tagName === 'SELECT' ? ((inp.options[inp.selectedIndex] || {}).text || '') : inp.value; inp.replaceWith(span); });
-            printHtml(sec.innerHTML, 'فاتورة بيع');
+            printHtml(sec.innerHTML, 'فاتورة بيع', true);
         }
 
         // ==================== PURCHASE INVOICE ====================
@@ -10714,7 +10714,7 @@
             const sec = document.getElementById('purchase-invoice-section').cloneNode(true);
             sec.querySelectorAll('.no-print, .invoice-actions, button, .searchable-dropdown, #myPurchaseDraftsPanel, #purchaseDraftEditBanner').forEach(e => e.remove());
             sec.querySelectorAll('input, select, textarea').forEach(inp => { if (inp.type === 'file' || inp.type === 'hidden' || inp.style.display === 'none') { inp.remove(); return; } const span = document.createElement('span'); span.textContent = inp.tagName === 'SELECT' ? ((inp.options[inp.selectedIndex] || {}).text || '') : inp.value; inp.replaceWith(span); });
-            printHtml(sec.innerHTML, 'فاتورة شراء');
+            printHtml(sec.innerHTML, 'فاتورة شراء', true);
         }
 
         // ==================== INVOICES LIST ====================
@@ -11123,8 +11123,12 @@
         // ==================== طباعة مضمونة على أي جهاز ====================
         // الفاتورة بتتحط في صفحة منفصلة جاهزة (iframe) وتتطبع منها. قبل كده كنا بنخفي الصفحة ونرجّعها بعد نص ثانية،
         // وعلى الموبايل/التابلت شاشة الطباعة كانت بتتأخر أكتر من كده فتطلع الورقة فاضية.
-        function printHtml(html, title) {
-            const heads = Array.from(document.querySelectorAll('head link[rel="stylesheet"], head style')).map(n => n.outerHTML).join('\n');
+        function printHtml(html, title, withAppStyles) {
+            // الورق المطبوع (بيان، تجميع، فواتير، تقارير) متصمم بمقاساته هو، فمش بناخد معاه أي تنسيقات من شاشة السيستم
+            // (تنسيقات الشاشة/الموبايل كانت بتكبّر خانات الجداول وتنزّل البيان على ورقتين). الخط بس.
+            const heads = withAppStyles
+                ? Array.from(document.querySelectorAll('head link[rel="stylesheet"], head style')).map(n => n.outerHTML).join('\n')
+                : Array.from(document.querySelectorAll('head link[rel="stylesheet"]')).filter(n => /fonts\.googleapis/.test(n.href)).map(n => n.outerHTML).join('\n');
             const doc = '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>' + (title || 'طباعة') + '</title>' + heads +
                 '<style>@page{size:A4;margin:0}html,body{background:#fff!important;margin:0;padding:0}body{direction:rtl;font-family:Tajawal,Arial,sans-serif;font-size:13px;color:#222}' +
                 '.print-root{width:190mm;max-width:100%;margin:0 auto;padding:9mm 0 6mm}@media (max-width:768px){.print-root th,.print-root td{padding:revert-layer}}table{page-break-inside:auto}tr{page-break-inside:avoid}.no-print{display:none!important}</style></head><body><div class="print-root">' + html + '</div></body></html>';
