@@ -10740,7 +10740,28 @@
         // ==================== عرض/تعديل طلب العميل كفاتورة ====================
         let currentlyViewedOrder = null;
 
+        // الطلب (قبل أو بعد التسليم) بيتعرض ويتطبع بنفس شكل فاتورة العميل
+        function orderAsInvoice(order) {
+            const inv = invoices.find(i => i.sourceOrderId === order.id);
+            if (inv) return inv;   // اتسلم خلاص: الفاتورة الحقيقية برقمها ونقاطها
+            const items = order.items || [];
+            const gross = items.reduce((s, it) => s + (Number(it.total) || (Number(it.price) || 0) * (Number(it.qty) || 0)), 0);
+            const total = order.total != null ? Number(order.total) : gross - (Number(order.discountFromPoints) || 0);
+            const a = typeof getOrderDeliveryAssignment === 'function' ? getOrderDeliveryAssignment(order) : { reps: [] };
+            return {
+                number: order.invoiceNumber || null, _orderNo: order.id.slice(-6), date: new Date(order.createdAt || Date.now()).toISOString(),
+                customerCode: order.customerCode, customerName: order.customerName, shopName: order.shopName, customerPhone: order.phone || order.customerCode,
+                deliveryAddress: [order.addressDetail, order.neighborhood].filter(Boolean).join(' - '),
+                deliveredByRepName: order.repDelivery ? order.repDelivery.name : ((a.reps && a.reps[0] && a.reps[0].name) || ''), salesmanName: order.repName || '',
+                paymentMethod: 'دفع عند الاستلام', items: items.map(it => Object.assign({}, it, { total: Number(it.total) || (Number(it.price) || 0) * (Number(it.qty) || 0) })), grandTotal: total,
+                pointsEarned: Math.floor(total / (loyaltySettings.pointsPerAmount || 10)), _pointsEstimated: true, pointsBalanceAfter: null
+            };
+        }
         function buildOrderInvoiceHtml(order) {
+            if (!window._oldOrderLayout) {
+                const statusMap = { pending: 'جديد', preparing: 'قيد التجهيز', ready: 'خرج للتسليم', delivered: 'تم التسليم', returned: 'مرتجع', rejected: 'مرفوض' };
+                return `<div class="no-print" style="margin-bottom:10px;"><span class="badge badge-info">حالة الطلب: ${statusMap[order.status] || order.status}</span></div>` + buildCustomerInvoiceHtml(orderAsInvoice(order));
+            }
             const dateStr = order.createdAt ? new Date(order.createdAt).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' }) : '-';
             const statusMap = { pending: 'جديد - قيد الانتظار', preparing: 'قيد التجهيز', ready: 'تم التجهيز وخرج للتسليم', delivered: 'تم التسليم', returned: 'مرتجع', rejected: 'مرفوض' };
             const itemsRows = (order.items || []).map((item, idx) => `
@@ -10995,7 +11016,7 @@
             const rows = items.map((it, i) => `<tr><td class="c">${i + 1}</td><td><b>${esc(it.productName || '')}</b>${brandOf(it.productCode) || it.unit ? `<div class="sub">${esc([brandOf(it.productCode), it.unit].filter(Boolean).join(' · '))}</div>` : ''}</td>
                 <td class="c">${it.qty}</td><td class="c">${f(it.price != null ? it.price : (it.total / (it.qty || 1)))}</td><td class="c b">${f(it.total)}</td></tr>`).join('');
             const pointsBox = S.showPoints && (disc > 0 || inv.pointsEarned || inv.pointsBalanceAfter != null) ? `<div class="pts"><div class="h">★ نقاط الولاء</div>
-                ${disc > 0 ? `<div>وفّرت في الفاتورة دي: <b>${f(disc)} ج</b></div>` : ''}${inv.pointsEarned ? `<div>كسبت منها: <b>+${inv.pointsEarned} نقطة</b></div>` : ''}
+                ${disc > 0 ? `<div>وفّرت في الفاتورة دي: <b>${f(disc)} ج</b></div>` : ''}${inv.pointsEarned ? `<div>${inv._pointsEstimated ? 'هتكسب منها' : 'كسبت منها'}: <b>+${inv.pointsEarned} نقطة</b></div>` : ''}
                 ${inv.pointsBalanceAfter != null ? `<div>رصيدك دلوقتي: <b>${inv.pointsBalanceAfter} نقطة</b>${loyaltySettings && loyaltySettings.pointValue ? ` = ${f(inv.pointsBalanceAfter * loyaltySettings.pointValue)} ج` : ''}</div>` : ''}</div>` : '<div></div>';
             const qr = qrSvg(S.appLink);
             const rep = inv.deliveredByRepName || inv.salesmanName || '';
@@ -11027,7 +11048,7 @@
                 <div class="brand"><img class="logo" src="${S.logo || DEFAULT_INVOICE_LOGO}"></div>
                 <div class="ct">${S.address ? `<div>📍 ${esc(S.address)}</div>` : ''}${S.phone ? `<div>☎ ${esc(S.phone)}</div>` : ''}${S.whatsapp ? `<div>واتساب: ${esc(S.whatsapp)}</div>` : ''}${S.cr ? `<div>س.ت: ${esc(S.cr)}</div>` : ''}${S.tax ? `<div>ب.ض: ${esc(S.tax)}</div>` : ''}</div>
               </div>
-              <div class="title"><span class="t">فاتورة بيع</span><span style="font-size:20px;font-weight:900;">#${esc(String(inv.number || ''))}</span></div>
+              <div class="title"><span class="t">فاتورة بيع</span><span style="font-size:20px;font-weight:900;">${inv.number ? '#' + esc(String(inv.number)) : '<span style="font-size:13px;font-weight:700;">رقم الطلب </span>#' + esc(String(inv._orderNo || ''))}</span></div>
               <div class="grid">
                 <div class="box"><div class="h">فاتورة إلى</div><div style="font-size:14px;font-weight:900;">${esc(shop || name)}</div>${shop ? `<div>${esc(name)}</div>` : ''}${phone ? `<div>${esc(phone)}</div>` : ''}${addr ? `<div>${esc(addr)}</div>` : ''}</div>
                 <div class="box"><div class="h">بيانات الفاتورة</div>
@@ -11035,7 +11056,7 @@
                   <div class="kv"><span>الساعة</span><span>${d.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit' })}</span></div>
                   ${rep ? `<div class="kv"><span>المندوب</span><span>${esc(rep)}</span></div>` : ''}
                   <div class="kv"><span>الدفع</span><span>${esc(inv.paymentMethod === 'دفع عند الاستلام' ? 'كاش عند الاستلام' : (inv.paymentMethod || 'نقدي'))}</span></div>
-                  ${inv.sourceOrderId ? `<div class="kv"><span>رقم الطلب</span><span>${esc(inv.sourceOrderId.slice(-6))}</span></div>` : ''}</div>
+                  ${inv.sourceOrderId && inv.number ? `<div class="kv"><span>رقم الطلب</span><span>${esc(inv.sourceOrderId.slice(-6))}</span></div>` : ''}</div>
               </div>
               <table><thead><tr><th style="width:30px">#</th><th style="text-align:right">الصنف</th><th style="width:60px">الكمية</th><th style="width:85px">السعر</th><th style="width:95px">الإجمالي</th></tr></thead><tbody>${rows}</tbody></table>
               <div class="bottom">${pointsBox}
