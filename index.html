@@ -3604,11 +3604,31 @@
             stockLevelsSyncTimer = setTimeout(pushStockLevelsToCloud, 900);
         }
 
-        function pushStockLevelsToCloud() {
+        // المخزون اللي الأبليكشن بيشوفه = مخزون السيستم − الحجوزات اللي السيستم لسه ماسجلهاش.
+        // من غير كده، أي حفظ مخزون كان ممكن يرجّع كمية لسه عميل حاجزها من ثانية، فتتباع مرتين.
+        const lastPushedStockLevels = {};
+        function unbookedReservations() {
+            const out = {};
+            if (!reservationLedgerLoaded) return out;
+            customerOrders.forEach(o => {
+                if (!o.stockReserved || !['pending', 'preparing', 'ready'].includes(o.status)) return;
+                const cur = computeOrderStockVector(o), booked = reservedStockLedger[o.id] || {};
+                Object.keys(cur).forEach(c => { const d = (cur[c] || 0) - (booked[c] || 0); if (d) out[c] = (out[c] || 0) + d; });
+            });
+            return out;
+        }
+        function pushStockLevelsToCloud(force) {
             if (!db) return Promise.reject(new Error('لا يوجد اتصال بالسحابة'));
             // Firestore بيمنع أكتر من 500 عملية كتابة في نفس الـ batch، فلو عدد الأصناف كبير
             // بنقسمهم لدفعات (batches) متعددة ونستنى كل الدفعات تخلص فعليًا قبل ما نقول "تم"
-            const codes = Object.keys(inventory);
+            if (!reservationLedgerLoaded && !force) { scheduleStockLevelsSync(); return Promise.resolve(); }
+            const pending = unbookedReservations();
+            const codes = Object.keys(inventory).filter(code => {
+                const target = Math.round(((Number(inventory[code].qty) || 0) - (pending[code] || 0)) * 1000) / 1000;
+                if (!force && lastPushedStockLevels[code] === target) return false;
+                lastPushedStockLevels[code] = target;
+                return true;
+            });
             const BATCH_LIMIT = 450;
             const chunks = [];
             for (let i = 0; i < codes.length; i += BATCH_LIMIT) chunks.push(codes.slice(i, i + BATCH_LIMIT));
@@ -3616,7 +3636,7 @@
                 const batch = db.batch();
                 chunkCodes.forEach(code => {
                     const ref = db.collection('stockLevels').doc(code);
-                    batch.set(ref, { code, qty: inventory[code].qty || 0, updatedAt: Date.now() });
+                    batch.set(ref, { code, qty: lastPushedStockLevels[code], updatedAt: Date.now() });
                 });
                 return batch.commit();
             });
@@ -3630,7 +3650,7 @@
             if (!db) { showToast('لا يوجد اتصال بالسحابة حاليًا', 'error'); return; }
             if (!confirm('هيتم إرسال أحدث كميات المخزون الموجودة عندك دلوقتي لكل الأصناف، وتحديث ظهورها في الأبليكشن فورًا. متابعة؟')) return;
             showToast('جاري إعادة المزامنة... من فضلك استنى ولا تقفل الصفحة');
-            pushStockLevelsToCloud()
+            pushStockLevelsToCloud(true)
                 .then(() => showToast('تمت إعادة المزامنة بنجاح فعليًا ✓'))
                 .catch(err => {
                     console.error('Manual stock resync failed:', err);
@@ -4379,13 +4399,7 @@
                     ${buildSection('🌙 طلبات مسائية', evening)}
                     ${buildSection('⏱️ بدون وقت محدد', other)}
                 </div>`;
-            const area = document.getElementById('deliverySheetPrintArea');
-            area.innerHTML = content;
-            area.style.display = 'block';
-            setTimeout(function() {
-                window.print();
-                area.style.display = 'none';
-            }, 100);
+            printHtml(content, 'كشف التوصيل');
         }
 
         // تنفيذ الطلب: تحويله لفاتورة بيع + خصم المخزون بمعاملة آمنة (transaction) تمنع نقص الكمية عن الصفر
@@ -4765,16 +4779,10 @@
 
         function printPrepZonesReport() {
             const html = buildPrepZonesReportHtml();
-            const area = document.getElementById('printInvoiceArea');
-            area.innerHTML = `<div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;">
+            printHtml(`<div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;">
                 <h2 style="text-align:center;">تقرير الأصناف المجمّع - قيد التجهيز</h2>
                 <p style="text-align:center;color:#666;margin-bottom:20px;">${new Date().toLocaleDateString('ar-EG')}</p>
-                ${html}</div>`;
-            document.body.classList.add('printing-invoice-mode');
-            setTimeout(function() {
-                window.print();
-                setTimeout(function() { document.body.classList.remove('printing-invoice-mode'); }, 500);
-            }, 100);
+                ${html}</div>`);
         }
 
         // قيد التجهيز → تم التجهيز وخرج للتسليم. مجرد تحديث حالة برضو، مفيش تأثير على المخزون أو فاتورة -
@@ -7182,9 +7190,10 @@
         function printCustomerStatement() {
             const code = document.getElementById('customerStatementSelect').value;
             if (!code) { showToast('الرجاء اختيار عميل أولاً', 'error'); return; }
-            document.getElementById('customerStatementPrintHeader').style.display = 'block';
-            window.print();
-            setTimeout(() => { document.getElementById('customerStatementPrintHeader').style.display = 'none'; }, 500);
+            const card = document.getElementById('customerStatementCard').cloneNode(true);
+            const hdr = card.querySelector('#customerStatementPrintHeader'); if (hdr) hdr.style.display = 'block';
+            card.querySelectorAll('.no-print, button, select').forEach(e => e.remove());
+            printHtml(card.innerHTML, 'كشف حساب عميل');
         }
 
         function exportCustomerStatementExcel() {
@@ -9972,7 +9981,7 @@
             const lastBackup = localStorage.getItem('_lastBackupDay');
             add(lastBackup === new Date().toISOString().slice(0, 10), 'فيه نسخة احتياطية النهارده', lastBackup ? 'آخر نسخة: ' + lastBackup : 'لسه مفيش نسخة على الجهاز ده');
             const okCount = checks.filter(c => c.ok).length;
-            el.innerHTML = `<div style="font-weight:800;margin-bottom:8px;">${okCount} من ${checks.length} سليم</div>` + checks.map(c => `<div style="padding:8px 10px;border-radius:8px;margin-bottom:6px;background:${c.ok ? 'rgba(46,204,113,0.07)' : 'rgba(231,76,60,0.08)'};"><strong>${c.ok ? '✅' : '⚠️'} ${c.title}</strong>${!c.ok && c.detail ? `<div style="font-size:12.5px;margin-top:3px;">${escapeHtml(c.detail)}</div>` : ''}</div>`).join('');
+            el.innerHTML = `<div style="font-weight:800;margin-bottom:8px;">${okCount} من ${checks.length} سليم</div>` + checks.map(c => `<div style="padding:8px 10px;border-radius:8px;margin-bottom:6px;background:${c.ok ? 'rgba(46,204,113,0.07)' : 'rgba(231,76,60,0.08)'};"><strong>${c.ok ? '✅' : '⚠️'} ${c.title}</strong>${!c.ok && c.detail ? `<div style="font-size:12.5px;margin-top:3px;">${escapeHtml(c.detail)}</div>` : ''}${!c.ok && c.title === 'أرقام الفواتير مش مكررة' && String(currentUser.role).toLowerCase() === 'admin' ? '<button class="btn btn-warning btn-sm" style="margin-top:6px;" onclick="fixDuplicateNumbers()"><i class="fas fa-tag"></i> ميّز الأرقام المكررة</button>' : ''}</div>`).join('');
             logAction('فحص سلامة البيانات', `${okCount} من ${checks.length} سليم`);
             return checks;
         }
@@ -10044,6 +10053,44 @@
             const rows = [['رقم الفاتورة', 'التاريخ', 'المورد', 'طريقة الدفع', 'كود الصنف', 'الصنف', 'الكمية', 'سعر الشراء', 'الإجمالي', 'إجمالي الفاتورة', 'ملاحظة']];
             rebuiltPurchases.forEach(p => (p.items.length ? p.items : [{}]).forEach(it => rows.push([p.number, new Date(p.date).toLocaleDateString('ar-EG'), p.supplier, p.paymentMethod, it.productCode || '', it.productName || '', it.qty || '', it.cost || '', it.total || '', p.grandTotal, (p._flags || []).join('، ')])));
             xlWrite('فواتير_شراء_معاد_بناؤها', [{ name: 'الفواتير', rows }]);
+        }
+
+
+        // ==================== تمييز أرقام الفواتير المكررة (الأقدم يفضل زي ما هو، واللي بعده ياخد -ب، -ج...) ====================
+        function fixDuplicateNumbers() {
+            if (!currentUser || String(currentUser.role).toLowerCase() !== 'admin' || !db) return;
+            const letters = ['ب', 'ج', 'د', 'هـ', 'و', 'ز', 'ح', 'ط'];
+            const plan = [];
+            [['sale', invoices.filter(i => i.type === 'sale'), 'invoiceRecords'], ['purchase', purchaseInvoices, 'purchaseInvoiceRecords']].forEach(([kind, list, col]) => {
+                const groups = {};
+                list.forEach(i => { const n = String(i.number || ''); if (n) (groups[n] = groups[n] || []).push(i); });
+                Object.keys(groups).forEach(n => {
+                    const g = groups[n]; if (g.length < 2) return;
+                    g.sort((a, b) => String(a.date).localeCompare(String(b.date)) || (Number(a.id) - Number(b.id)));
+                    g.slice(1).forEach((inv, k) => plan.push({ kind, col, inv, from: n, to: n + '-' + (letters[k] || (k + 2)) }));
+                });
+            });
+            if (!plan.length) { showToast('مفيش أرقام مكررة'); return; }
+            if (!confirm(`هيتغير رقم ${plan.length} فاتورة:\n` + plan.slice(0, 15).map(p => `${p.kind === 'sale' ? 'بيع' : 'شراء'} ${p.from} ← ${p.to}`).join('\n') + (plan.length > 15 ? '\n...' : '') + '\n\nالمبالغ مش هتتغير. تكمل؟')) return;
+            let chain = Promise.resolve();
+            plan.forEach(p => {
+                chain = chain.then(() => {
+                    p.inv.number = p.to;
+                    const writes = [db.collection(p.col).doc(String(p.inv.id)).set({ number: p.to }, { merge: true })];
+                    if (p.inv.sourceOrderId) {
+                        writes.push(db.collection('customerOrders').doc(p.inv.sourceOrderId).set({ invoiceNumber: p.to }, { merge: true }).catch(() => {}));
+                        writes.push(db.collection('deliveryCollectionRecords').doc('DLV-ORD-' + p.inv.sourceOrderId).get().then(s => s.exists ? s.ref.set({ invoiceNumber: p.to }, { merge: true }) : null).catch(() => {}));
+                    }
+                    return Promise.all(writes);
+                });
+            });
+            chain.then(() => {
+                localStorage.setItem('invoices', JSON.stringify(invoices)); localStorage.setItem('purchaseInvoices', JSON.stringify(purchaseInvoices));
+                logAction('تمييز أرقام فواتير مكررة', plan.map(p => `${p.kind === 'sale' ? 'بيع' : 'شراء'} ${p.from}←${p.to}`).join('، '));
+                try { renderInvoices(); } catch (e) {}
+                showToast(`اتميّز ${plan.length} رقم مكرر`);
+                runHealthCheck();
+            }).catch(e => { console.error(e); showToast('تعذر الحفظ: ' + (e.message || ''), 'error'); });
         }
 
         // إضافة مورد جديد من جوه فاتورة الشراء، وبعد الحفظ بيتختار في الفاتورة على طول
@@ -10292,7 +10339,13 @@
             clearInvoiceDraft('sale');
         }
 
-        function printInvoice() { window.print(); }
+        function printInvoice() {
+            // فاتورة لسه متحفظتش: بنطبع نسخة من الشاشة نفسها (من غير زراير وقوائم)
+            const sec = document.getElementById('invoice-section').cloneNode(true);
+            sec.querySelectorAll('.no-print, .invoice-actions, button, .searchable-dropdown, select[style*="display: none"]').forEach(e => e.remove());
+            sec.querySelectorAll('input, select, textarea').forEach(inp => { const span = document.createElement('span'); span.textContent = inp.tagName === 'SELECT' ? ((inp.options[inp.selectedIndex] || {}).text || '') : inp.value; inp.replaceWith(span); });
+            printHtml(sec.innerHTML, 'فاتورة بيع');
+        }
 
         // ==================== PURCHASE INVOICE ====================
         function initPurchaseInvoice() {
@@ -10409,7 +10462,12 @@
             const eb = document.getElementById('purchaseDraftEditBanner'); if (eb) eb.style.display = 'none';
         }
 
-        function printPurchaseInvoice() { window.print(); }
+        function printPurchaseInvoice() {
+            const sec = document.getElementById('purchase-invoice-section').cloneNode(true);
+            sec.querySelectorAll('.no-print, .invoice-actions, button, .searchable-dropdown, #myPurchaseDraftsPanel, #purchaseDraftEditBanner').forEach(e => e.remove());
+            sec.querySelectorAll('input, select, textarea').forEach(inp => { if (inp.type === 'file' || inp.type === 'hidden' || inp.style.display === 'none') { inp.remove(); return; } const span = document.createElement('span'); span.textContent = inp.tagName === 'SELECT' ? ((inp.options[inp.selectedIndex] || {}).text || '') : inp.value; inp.replaceWith(span); });
+            printHtml(sec.innerHTML, 'فاتورة شراء');
+        }
 
         // ==================== INVOICES LIST ====================
         function renderInvoices() {
@@ -10790,13 +10848,38 @@
         function printOrderInvoice() {
             if (!currentlyViewedOrder) return;
             const html = buildOrderInvoiceHtml(currentlyViewedOrder);
-            const area = document.getElementById('printInvoiceArea');
-            area.innerHTML = html;
-            document.body.classList.add('printing-invoice-mode');
-            setTimeout(function() {
-                window.print();
-                setTimeout(function() { document.body.classList.remove('printing-invoice-mode'); }, 500);
-            }, 100);
+            printHtml(html);
+        }
+
+        // ==================== طباعة مضمونة على أي جهاز ====================
+        // الفاتورة بتتحط في صفحة منفصلة جاهزة (iframe) وتتطبع منها. قبل كده كنا بنخفي الصفحة ونرجّعها بعد نص ثانية،
+        // وعلى الموبايل/التابلت شاشة الطباعة كانت بتتأخر أكتر من كده فتطلع الورقة فاضية.
+        function printHtml(html, title) {
+            const heads = Array.from(document.querySelectorAll('head link[rel="stylesheet"], head style')).map(n => n.outerHTML).join('\n');
+            const doc = '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>' + (title || 'طباعة') + '</title>' + heads +
+                '<style>@page{size:A4;margin:12mm}html,body{background:#fff!important;margin:0;padding:0}body{direction:rtl;font-family:Tajawal,Arial,sans-serif;font-size:13px;color:#222}' +
+                '.print-root{width:186mm;max-width:100%;margin:0 auto}table{page-break-inside:auto}tr{page-break-inside:avoid}.no-print{display:none!important}</style></head><body><div class="print-root">' + html + '</div></body></html>';
+            const old = document.getElementById('printFrame'); if (old) old.remove();
+            const frame = document.createElement('iframe');
+            frame.id = 'printFrame';
+            frame.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;';
+            document.body.appendChild(frame);
+            const w = frame.contentWindow;
+            w.document.open(); w.document.write(doc); w.document.close();
+            let printed = false;
+            const go = () => {
+                if (printed) return; printed = true;
+                try { w.focus(); w.print(); }
+                catch (e) {
+                    const win = window.open('', '_blank');
+                    if (win) { win.document.write(doc); win.document.close(); setTimeout(() => win.print(), 400); }
+                    else showToast('المتصفح مانع الطباعة، اسمح بالنوافذ المنبثقة وجرب تاني', 'error');
+                }
+                setTimeout(() => { try { frame.remove(); } catch (e) {} }, 60000);
+            };
+            // نستنى الخطوط والصور تتحمل (أقصى حاجة ثانيتين) عشان الفاتورة تطلع كاملة
+            const fontsReady = w.document.fonts && w.document.fonts.ready ? w.document.fonts.ready : Promise.resolve();
+            Promise.race([Promise.all([fontsReady, new Promise(r => setTimeout(r, 300))]), new Promise(r => setTimeout(r, 2000))]).then(go);
         }
 
         function buildInvoiceHtml(invoice, type) {
@@ -10864,13 +10947,7 @@
         function printCurrentViewedInvoice() {
             if (!currentlyViewedInvoice) return;
             const html = buildInvoiceHtml(currentlyViewedInvoice.invoice, currentlyViewedInvoice.type);
-            const area = document.getElementById('printInvoiceArea');
-            area.innerHTML = html;
-            document.body.classList.add('printing-invoice-mode');
-            setTimeout(function() {
-                window.print();
-                setTimeout(function() { document.body.classList.remove('printing-invoice-mode'); }, 500);
-            }, 100);
+            printHtml(html);
         }
 
         // ==================== SALES RETURNS ====================
@@ -11730,18 +11807,12 @@
             const tableHtml = document.getElementById('dailyShipmentTable').outerHTML;
             const dateLabel = document.getElementById('dailyShipmentDate').textContent;
             const grandTotal = document.getElementById('dailyShipmentGrandTotal').textContent;
-            const area = document.getElementById('printInvoiceArea');
-            area.innerHTML = `<div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;">
+            printHtml(`<div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;">
                 <h2 style="text-align:center;">بيان نهاية اليوم - كميات الأصناف المرسلة</h2>
                 <p>${dateLabel}</p>
                 <table style="width:100%;border-collapse:collapse;">${tableHtml}</table>
                 <h3 style="text-align:left;">الإجمالي المالي: ${grandTotal} ر.س</h3>
-            </div>`;
-            document.body.classList.add('printing-invoice-mode');
-            setTimeout(function() {
-                window.print();
-                setTimeout(function() { document.body.classList.remove('printing-invoice-mode'); }, 500);
-            }, 100);
+            </div>`);
         }
 
         function renderSalesSummary() {
