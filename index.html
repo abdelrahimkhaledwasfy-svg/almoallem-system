@@ -480,7 +480,7 @@
             <li class="nav-item" data-section="profit"><a class="nav-link" href="javascript:void(0)" onclick="showSection('profit')"><i class="fas fa-chart-line"></i><span class="menu-text">الربحية</span></a></li>
             <li class="nav-item" data-section="profit-target"><a class="nav-link" href="javascript:void(0)" onclick="showSection('profit-target')"><i class="fas fa-bullseye"></i><span class="menu-text">تحديد الربحية</span></a></li>
             <li class="nav-item" data-section="products"><a class="nav-link" href="javascript:void(0)" onclick="showSection('products')"><i class="fas fa-boxes"></i><span class="menu-text">قاعدة الأصناف</span></a></li>
-            <li class="nav-item" data-section="customers"><a class="nav-link" href="javascript:void(0)" onclick="showSection('customers')"><i class="fas fa-users"></i><span class="menu-text">قاعدة العملاء</span></a></li>
+            <li class="nav-item" data-section="customers"><a class="nav-link" href="javascript:void(0)" onclick="showSection('customers')"><i class="fas fa-users"></i><span class="menu-text">قاعدة العملاء</span> <span id="newAppCustBadge" class="badge badge-danger" style="display:none;margin-right:6px;"></span></a></li>
             <li class="nav-item" data-section="suppliers"><a class="nav-link" href="javascript:void(0)" onclick="showSection('suppliers')"><i class="fas fa-truck"></i><span class="menu-text">قاعدة الموردين</span></a></li>
             <li class="nav-item" data-section="salesmen"><a class="nav-link" href="javascript:void(0)" onclick="showSection('salesmen')"><i class="fas fa-user-tie"></i><span class="menu-text">قاعدة المناديب</span></a></li>
             <li class="nav-item" data-section="daily-sales"><a class="nav-link" href="javascript:void(0)" onclick="showSection('daily-sales')"><i class="fas fa-calendar-day"></i><span class="menu-text">التقرير اليومي للمبيعات</span></a></li>
@@ -523,6 +523,7 @@
         <section id="dashboard-section" class="section active">
             <div id="purchaseApprovalAlert" style="display:none;cursor:pointer;margin-bottom:14px;padding:14px 18px;border-radius:12px;font-size:14px;" onclick="showSection('purchase-approvals')"></div>
             <div id="repCustodyAlert" style="display:none;cursor:pointer;margin-bottom:14px;padding:14px 18px;border-radius:12px;font-size:14px;background:rgba(231,76,60,0.1);border-right:4px solid var(--danger);" onclick="showSection('rep-custody')"></div>
+            <div id="newAppCustomersAlert" style="display:none;cursor:pointer;margin-bottom:14px;padding:14px 18px;border-radius:12px;font-size:14px;background:rgba(52,152,219,0.1);border-right:4px solid var(--info);" onclick="openNewAppCustomersModal('pending')"></div>
             <div id="expiryAlert" style="display:none;cursor:pointer;margin-bottom:14px;padding:14px 18px;border-radius:12px;font-size:14px;background:rgba(243,156,18,0.12);border-right:4px solid var(--warning);" onclick="showSection('inventory')"></div>
             <div class="date-filter" style="margin-bottom:15px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                 <label style="font-weight:600;"><i class="fas fa-calendar-alt"></i> فترة عرض الإحصائيات:</label>
@@ -595,6 +596,12 @@
                     <div class="stat-value" id="totalCustomers">0</div>
                     <div class="stat-label">عدد العملاء</div>
                     <div class="stat-change positive"><i class="fas fa-user-plus"></i> مسجل</div>
+                </div>
+                <div class="stat-card salesmen" data-role-card="newAppCustomers" onclick="openNewAppCustomersModal('pending')">
+                    <div class="stat-icon"><i class="fas fa-user-plus"></i></div>
+                    <div class="stat-value" id="newAppCustToday">0</div>
+                    <div class="stat-label">عملاء جدد من الأبليكشن (النهارده)</div>
+                    <div class="stat-change positive" id="newAppCustSub"><i class="fas fa-calendar-week"></i> هذا الأسبوع: 0</div>
                 </div>
                 <div class="stat-card salesmen" data-role-card="salesmen" onclick="showSection('salesmen')">
                     <div class="stat-icon"><i class="fas fa-user-tie"></i></div>
@@ -2381,7 +2388,7 @@
     <!-- تقرير الأصناف المجمّع لمرحلة "قيد التجهيز"، مقسّم حسب منطقة التسليم -->
     <div class="modal-overlay" id="prepZonesReportModal">
         <div class="modal wide">
-            <div class="modal-header"><h3 class="modal-title">خطوط السير: التجميع وبيان المتحصلات (طلبات يوم البيع اللي لسه متسلمتش)</h3><button class="modal-close" onclick="closeModal('prepZonesReportModal')">&times;</button></div>
+            <div class="modal-header"><h3 class="modal-title">خطوط السير: التجميع وبيان المتحصلات (كل الطلبات اللي لسه متسلمتش)</h3><button class="modal-close" onclick="closeModal('prepZonesReportModal')">&times;</button></div>
             <div class="modal-body">
                 <div id="prepZonesReportContent"></div>
             </div>
@@ -2408,6 +2415,39 @@
                 <div style="text-align:left;margin-top:12px;font-size:18px;font-weight:700;color:var(--accent);">الإجمالي الجديد: <span id="editInvoiceGrandTotal">0.00</span> ر.س</div>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('editInvoiceModal')">إلغاء</button><button class="btn btn-success" onclick="saveInvoiceEdit()">حفظ التعديلات</button></div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="newAppCustomersModal">
+        <div class="modal" style="max-width:1000px;">
+            <div class="modal-header"><h3 class="modal-title"><i class="fas fa-user-plus"></i> عملاء الأبليكشن الجدد</h3><button class="modal-close" onclick="closeModal('newAppCustomersModal')">&times;</button></div>
+            <div class="modal-body">
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;">
+                    <button class="btn btn-sm" id="nacTab-pending" onclick="setNewAppCustTab('pending')">محتاج مراجعة <span id="nacCount-pending"></span></button>
+                    <button class="btn btn-sm" id="nacTab-today" onclick="setNewAppCustTab('today')">سجلوا النهارده <span id="nacCount-today"></span></button>
+                    <button class="btn btn-sm" id="nacTab-week" onclick="setNewAppCustTab('week')">آخر 7 أيام <span id="nacCount-week"></span></button>
+                    <button class="btn btn-sm" id="nacTab-all" onclick="setNewAppCustTab('all')">الكل <span id="nacCount-all"></span></button>
+                    <span style="flex:1;"></span>
+                    <button class="btn btn-secondary btn-sm" onclick="markOldAppCustomersReviewed()" title="للاستخدام مرة واحدة: العملاء اللي سجلوا قبل النهارده بيتعلّموا إنهم اتراجعوا"><i class="fas fa-check-double"></i> اعتبار القدامى اتراجعوا</button>
+                </div>
+                <div class="table-container">
+                    <table><thead><tr><th>المحل / العميل</th><th>التليفون</th><th>المنطقة</th><th>وقت التسجيل</th><th>أول طلب</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody id="newAppCustomersTable"></tbody></table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="appCustReviewModal">
+        <div class="modal" style="max-width:480px;">
+            <div class="modal-header"><h3 class="modal-title">مراجعة عميل جديد</h3><button class="modal-close" onclick="closeModal('appCustReviewModal')">&times;</button></div>
+            <div class="modal-body">
+                <div id="appCustReviewInfo" style="background:var(--bg,#f7f7f7);padding:12px;border-radius:10px;margin-bottom:14px;font-size:13px;line-height:1.9;"></div>
+                <div class="form-group"><label class="form-label">المندوب المسؤول</label><select class="form-control" id="appCustReviewSalesman"></select></div>
+                <div class="form-group"><label class="form-label">الحي</label><select class="form-control" id="appCustReviewNeighborhood"></select></div>
+                <div class="form-group"><label class="form-label">ملاحظة (اختياري)</label><input type="text" class="form-control" id="appCustReviewNote" placeholder="مثال: اتصلنا بيه ورحبنا بيه"></div>
+                <div style="font-size:12px;color:var(--text-light);margin-bottom:12px;">عند الحفظ: العميل بيتضاف لقاعدة العملاء (أو بيتحدّث ملفه لو موجود) بالمندوب والحي اللي اخترتهم.</div>
+                <button class="btn btn-success" style="width:100%;" id="appCustReviewSaveBtn" onclick="saveAppCustomerReview()"><i class="fas fa-check"></i> تمت المراجعة</button>
+            </div>
         </div>
     </div>
 
@@ -3097,6 +3137,7 @@
                 startReservationLedgerListener();
                 startOrdersListener();
                 startActivationUsesListener();
+                try { startAppCustomersListener(); } catch (e) { console.error('appCustomers listener start failed:', e); }
                 // نستنى الترحيل يخلص الأول (لو محتاج يشتغل)، وبعدين نفتح الاستماع الحي على الفواتير/
                 // الحركات/السجل، عشان مايبقاش فيه لحظة يلاقي فيها المكان الجديد فاضي فيمسح الشاشة
                 migrateLegacyRecordsIfNeeded().finally(function() {
@@ -3962,6 +4003,196 @@
             ]);
         }
 
+
+        // ==================== عملاء الأبليكشن الجدد (متابعة التسجيلات لحظيًا) ====================
+        // كل عميل بيعمل "إنشاء حساب" من الأبليكشن بيتسجل في appCustomers. هنا بنتابعهم لحظيًا عشان
+        // المدير يعرف فورًا إن فيه عميل جديد، ويراجعه (يحدد المندوب والحي) قبل ما يطلب.
+        // المراجعة بتتحفظ في نفس مستند العميل (حقل review) بـ merge، من غير ما نلمس الرقم السري أو بياناته.
+        let appRegistrations = [];
+        let knownAppRegPhones = null;
+        let appCustomersListenerStarted = false;
+        let newAppCustTab = 'pending';
+        let reviewingAppPhone = null;
+
+        function nacDigits(p) { return String(p || '').replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/\D/g, '').slice(-10); }
+        function nacStartOfToday() { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); }
+        function nacIsAdmin() { return !!(currentUser && String(currentUser.role).toLowerCase() === 'admin'); }
+
+        function startAppCustomersListener() {
+            if (!db || appCustomersListenerStarted) return;
+            appCustomersListenerStarted = true;
+            db.collection('appCustomers').orderBy('createdAt', 'desc').limit(1000).onSnapshot(function(snap) {
+                // مهم: مش بنحتفظ بالرقم السري (passwordHash) نهائيًا في الذاكرة ولا في الشاشة
+                appRegistrations = snap.docs.map(function(d) {
+                    const x = d.data() || {};
+                    const pr = x.profile || {};
+                    return { phone: x.phone || d.id, createdAt: x.createdAt || 0, customerName: pr.customerName || '', shopName: pr.shopName || '',
+                        addressDetail: pr.addressDetail || '', neighborhood: pr.neighborhood || '', city: pr.city || '', governorate: pr.governorate || '',
+                        location: pr.location || null, review: x.review || null };
+                });
+                const phones = new Set(appRegistrations.map(r => r.phone));
+                if (knownAppRegPhones !== null) {
+                    const fresh = appRegistrations.filter(r => !knownAppRegPhones.has(r.phone) && Date.now() - r.createdAt < 3600000);
+                    if (fresh.length && nacIsAdmin()) {
+                        try { playNewOrderSound(); } catch (e) {}
+                        const r = fresh[0];
+                        showToast(fresh.length === 1 ? ('🆕 عميل جديد سجّل من الأبليكشن: ' + (r.shopName || r.customerName || r.phone) + (r.neighborhood ? ' – ' + r.neighborhood : ''))
+                            : ('🆕 سجّل ' + fresh.length + ' عملاء جدد من الأبليكشن'), 'warning', 8000);
+                    }
+                }
+                knownAppRegPhones = phones;
+                renderNewAppCustomersWidgets();
+            }, function(err) { console.error('appCustomers listener error:', err); });
+        }
+
+        function nacHasOrdered(phone) {
+            const d = nacDigits(phone);
+            if (customerOrders.some(o => String(o.customerCode) === String(phone) || nacDigits(o.phone) === d)) return true;
+            return invoices.some(inv => String(inv.customerCode || '') === String(phone) || (d && nacDigits(inv.customerPhone) === d));
+        }
+        function nacFindSystemCustomer(phone) {
+            const byCode = customers.find(c => String(c.code) === String(phone));
+            if (byCode) return byCode;
+            const d = nacDigits(phone);
+            return d.length >= 8 ? customers.find(c => nacDigits(c.phone) === d) : null;
+        }
+
+        function renderNewAppCustomersWidgets() {
+            const today0 = nacStartOfToday(), week0 = today0 - 6 * 86400000;
+            const pending = appRegistrations.filter(r => !r.review);
+            const todayCount = appRegistrations.filter(r => r.createdAt >= today0).length;
+            const weekCount = appRegistrations.filter(r => r.createdAt >= week0).length;
+            const setT = (id, v) => { const el = document.getElementById(id); if (el) el.innerHTML = v; };
+            setT('newAppCustToday', todayCount);
+            setT('newAppCustSub', `<i class="fas fa-calendar-week"></i> الأسبوع: ${weekCount} · محتاج مراجعة: <strong style="color:${pending.length ? 'var(--danger)' : 'inherit'};">${pending.length}</strong>`);
+            const badge = document.getElementById('newAppCustBadge');
+            if (badge) { const show = pending.length && nacIsAdmin(); badge.textContent = pending.length; badge.style.display = show ? 'inline-block' : 'none'; badge.classList.toggle('badge-pulse', !!show); }
+            const alertEl = document.getElementById('newAppCustomersAlert');
+            if (alertEl) {
+                if (pending.length && nacIsAdmin()) {
+                    const newest = pending.reduce((a, b) => (b.createdAt > a.createdAt ? b : a));
+                    alertEl.style.display = 'block';
+                    alertEl.innerHTML = `<i class="fas fa-user-plus" style="color:var(--info);"></i> <strong>${pending.length} عميل جديد سجّل من الأبليكشن ومحتاج مراجعة</strong> — آخرهم: ${escapeHtml(newest.shopName || newest.customerName || newest.phone)} من ${pdAgo(newest.createdAt)} · <u>افتح المراجعة</u>`;
+                } else alertEl.style.display = 'none';
+            }
+            setT('nacCount-pending', `(${pending.length})`); setT('nacCount-today', `(${todayCount})`);
+            setT('nacCount-week', `(${weekCount})`); setT('nacCount-all', `(${appRegistrations.length})`);
+            const modal = document.getElementById('newAppCustomersModal');
+            if (modal && modal.classList.contains('active')) renderNewAppCustomersTable();
+        }
+
+        function openNewAppCustomersModal(tab) {
+            if (!nacIsAdmin()) { showToast('الشاشة دي للمدير بس', 'error'); return; }
+            newAppCustTab = tab || 'pending';
+            renderNewAppCustomersWidgets();
+            renderNewAppCustomersTable();
+            openModal('newAppCustomersModal');
+        }
+        function setNewAppCustTab(tab) { newAppCustTab = tab; renderNewAppCustomersTable(); }
+
+        function renderNewAppCustomersTable() {
+            ['pending', 'today', 'week', 'all'].forEach(t => { const b = document.getElementById('nacTab-' + t); if (b) b.className = 'btn btn-sm ' + (t === newAppCustTab ? 'btn-primary' : 'btn-secondary'); });
+            const today0 = nacStartOfToday(), week0 = today0 - 6 * 86400000;
+            let list = appRegistrations;
+            if (newAppCustTab === 'pending') list = list.filter(r => !r.review);
+            else if (newAppCustTab === 'today') list = list.filter(r => r.createdAt >= today0);
+            else if (newAppCustTab === 'week') list = list.filter(r => r.createdAt >= week0);
+            const tbody = document.getElementById('newAppCustomersTable');
+            if (!tbody) return;
+            if (!list.length) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-light);">${newAppCustTab === 'pending' ? '👌 مفيش عملاء محتاجين مراجعة' : 'مفيش عملاء في الفترة دي'}</td></tr>`; return; }
+            tbody.innerHTML = list.map(r => {
+                const dt = r.createdAt ? new Date(r.createdAt) : null;
+                const when = dt ? `${dt.toLocaleDateString('ar-EG')} ${dt.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}<div style="font-size:11px;color:var(--text-light);">منذ ${pdAgo(r.createdAt)}</div>` : '-';
+                const ordered = nacHasOrdered(r.phone) ? '<span class="badge badge-success">طلب ✓</span>' : '<span class="badge badge-warning">لسه</span>';
+                const sm = r.review && r.review.salesmanName ? `<div style="font-size:11px;">مندوب: ${escapeHtml(r.review.salesmanName)}</div>` : '';
+                const status = r.review ? `<span class="badge badge-info">اتراجع</span>${sm}<div style="font-size:11px;color:var(--text-light);">${escapeHtml(r.review.by || '')}</div>` : '<span class="badge badge-danger">محتاج مراجعة</span>';
+                const map = r.location && r.location.lat ? ` <a href="https://www.google.com/maps?q=${r.location.lat},${r.location.lng}" target="_blank" title="الموقع على الخريطة"><i class="fas fa-map-marker-alt" style="color:var(--danger);"></i></a>` : '';
+                const area = [r.neighborhood, r.city].filter(Boolean).map(escapeHtml).join(' - ') || '-';
+                const ph = escapeHtml(r.phone);
+                return `<tr><td><strong>${escapeHtml(r.shopName || '-')}</strong><div style="font-size:12px;color:var(--text-light);">${escapeHtml(r.customerName || '')}</div></td>
+                    <td><a href="tel:${ph}" style="direction:ltr;display:inline-block;">${ph}</a></td>
+                    <td>${area}${map}<div style="font-size:11px;color:var(--text-light);">${escapeHtml(r.addressDetail || '')}</div></td>
+                    <td>${when}</td><td>${ordered}</td><td>${status}</td>
+                    <td><button class="btn btn-sm ${r.review ? 'btn-secondary' : 'btn-success'}" onclick="openAppCustReview('${ph}')"><i class="fas ${r.review ? 'fa-edit' : 'fa-check'}"></i> ${r.review ? 'تعديل' : 'مراجعة'}</button></td></tr>`;
+            }).join('');
+        }
+
+        function openAppCustReview(phone) {
+            const r = appRegistrations.find(x => String(x.phone) === String(phone));
+            if (!r) return;
+            reviewingAppPhone = r.phone;
+            const sysCust = nacFindSystemCustomer(r.phone);
+            document.getElementById('appCustReviewInfo').innerHTML =
+                `<div><strong>${escapeHtml(r.shopName || '-')}</strong> — ${escapeHtml(r.customerName || '')}</div>
+                 <div>📞 ${escapeHtml(r.phone)} · 📍 ${escapeHtml([r.neighborhood, r.city, r.governorate].filter(Boolean).join(' - '))}</div>
+                 <div>${escapeHtml(r.addressDetail || '')}</div>
+                 <div style="margin-top:4px;">${sysCust ? `<span class="badge badge-info">موجود في قاعدة العملاء بكود ${escapeHtml(sysCust.code)}</span>` : '<span class="badge badge-warning">مش موجود في قاعدة العملاء — هيتضاف عند الحفظ</span>'}</div>`;
+            const sSel = document.getElementById('appCustReviewSalesman');
+            sSel.innerHTML = '<option value="">— بدون مندوب —</option>' + salesmen.filter(s => s.status === 'نشط').map(s => `<option value="${escapeHtml(s.code)}">${escapeHtml(s.name)}</option>`).join('');
+            sSel.value = (r.review && r.review.salesmanCode) || (sysCust && sysCust.salesmanCode) || '';
+            const nSel = document.getElementById('appCustReviewNeighborhood');
+            const names = appNeighborhoods.map(n => n.name);
+            if (r.neighborhood && !names.includes(r.neighborhood)) names.unshift(r.neighborhood);
+            nSel.innerHTML = '<option value="">— اختر الحي —</option>' + names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+            nSel.value = (sysCust && sysCust.neighborhood) || r.neighborhood || '';
+            document.getElementById('appCustReviewNote').value = (r.review && r.review.note) || '';
+            openModal('appCustReviewModal');
+        }
+
+        async function saveAppCustomerReview() {
+            const r = appRegistrations.find(x => String(x.phone) === String(reviewingAppPhone));
+            if (!r || !db) { showToast('تعذر الحفظ، تأكد من الاتصال', 'error'); return; }
+            const salesmanCode = document.getElementById('appCustReviewSalesman').value;
+            const sm = salesmen.find(s => s.code === salesmanCode);
+            const neighborhood = document.getElementById('appCustReviewNeighborhood').value;
+            const note = document.getElementById('appCustReviewNote').value.trim();
+            const btn = document.getElementById('appCustReviewSaveBtn');
+            btn.disabled = true;
+            try {
+                const review = { status: 'done', by: (currentUser && (currentUser.fullName || currentUser.username)) || '', at: Date.now(),
+                    salesmanCode: salesmanCode || '', salesmanName: sm ? sm.name : '', neighborhood: neighborhood || '', note: note };
+                await db.collection('appCustomers').doc(String(r.phone)).set({ review: review }, { merge: true });
+                // ربطه بقاعدة العملاء: لو موجود نحدّث المندوب والحي بس (باقي بياناته زي ما هي)، ولو مش موجود نضيفه
+                const sysCust = nacFindSystemCustomer(r.phone);
+                if (sysCust) {
+                    sysCust.salesmanCode = salesmanCode || sysCust.salesmanCode || '';
+                    if (neighborhood) sysCust.neighborhood = neighborhood;
+                    if (!sysCust.shopName && r.shopName) sysCust.shopName = r.shopName;
+                } else {
+                    customers.push({ code: String(r.phone), name: r.customerName || r.shopName || String(r.phone), shopName: r.shopName || '', phone: String(r.phone),
+                        address: [r.addressDetail, r.neighborhood, r.city, r.governorate].filter(Boolean).join(' - '), neighborhood: neighborhood || '',
+                        salesmanCode: salesmanCode || '', creditLimit: null, source: 'app' });
+                }
+                localStorage.setItem('customers', JSON.stringify(customers));
+                logAction('مراجعة عميل جديد من الأبليكشن', `تمت مراجعة العميل ${r.shopName || r.customerName} (${r.phone})${sm ? ' — المندوب: ' + sm.name : ''}`);
+                try { updateInvoiceDropdowns(); updateDashboardStats(); } catch (e) {}
+                try { if (document.getElementById('customers-section').classList.contains('active')) renderCustomers(); } catch (e) {}
+                closeModal('appCustReviewModal');
+                showToast('تمت مراجعة العميل ✓');
+            } catch (e) {
+                console.error('app customer review failed:', e);
+                showToast('تعذر حفظ المراجعة، حاول تاني', 'error');
+            } finally { btn.disabled = false; }
+        }
+
+        // للاستخدام مرة واحدة بعد التحديث: كل اللي سجلوا قبل النهارده يتعلّموا إنهم اتراجعوا، عشان التنبيه يبدأ من النهارده بس
+        async function markOldAppCustomersReviewed() {
+            const today0 = nacStartOfToday();
+            const old = appRegistrations.filter(r => !r.review && r.createdAt < today0);
+            if (!old.length) { showToast('مفيش عملاء قدامى محتاجين مراجعة'); return; }
+            if (!confirm(`هيتم تعليم ${old.length} عميل (سجلوا قبل النهارده) إنهم اتراجعوا، من غير تغيير أي بيانات تانية ليهم. تكمل؟`)) return;
+            try {
+                const by = (currentUser && (currentUser.fullName || currentUser.username)) || '';
+                for (let i = 0; i < old.length; i += 400) {
+                    const batch = db.batch();
+                    old.slice(i, i + 400).forEach(r => batch.set(db.collection('appCustomers').doc(String(r.phone)), { review: { status: 'bulk', by: by, at: Date.now(), note: 'تعليم جماعي للقدامى' } }, { merge: true }));
+                    await batch.commit();
+                }
+                logAction('تعليم عملاء أبليكشن قدامى', `تم تعليم ${old.length} عميل قديم كـ "اتراجع"`);
+                showToast(`تم تعليم ${old.length} عميل ✓`);
+            } catch (e) { console.error(e); showToast('تعذر التعليم الجماعي، حاول تاني', 'error'); }
+        }
+
         function startOrdersListener() {
             if (!db || ordersListenerStarted) return;
             ordersListenerStarted = true;
@@ -4584,6 +4815,7 @@
                     totalCost: order.items.reduce((sum, it) => sum + ((it.cost || 0) * (it.stockDeductQty != null ? it.stockDeductQty : it.qty)), 0),
                     totalProfit: order.items.reduce((sum, it) => sum + (it.profit || 0), 0),
                     sourceOrderId: order.id,
+                    orderCreatedAt: order.createdAt || null,
                     deliveryStatus: 'تم التسليم',
                     deliveredByRepCode: order.repDelivery ? (order.repDelivery.code || '') : '',
                     deliveredByRepName: order.repDelivery ? (order.repDelivery.name || '') : '',
@@ -4800,9 +5032,13 @@
         // كل منطقة بجدول منفصل بإجمالي كمية كل صنف عبرها، عشان أمين المخزن يجهّز منطقة لوحدها في كل مرة
         // ==================== خطوط السير: التجميع (بالوحدتين) + بيان المتحصلات + الفواتير ====================
         // خط السير = منطقة التسليم. الطلبات = كل طلبات يوم البيع اللي لسه متسلمتش (جديد / قيد التجهيز / خرج للتسليم)
+        // كل الطلبات اللي لسه متسلمتش، حتى لو من يوم بيع قبل كده (عشان مفيش طلب متأخر يقع من التجميع)
         function routeOrders() {
+            return customerOrders.filter(o => ['pending', 'preparing', 'ready'].includes(o.status));
+        }
+        function lateOrdersCount(orders) {
             const start = svSalesDayStart().getTime();
-            return customerOrders.filter(o => ['pending', 'preparing', 'ready'].includes(o.status) && (o.createdAt || 0) >= start);
+            return orders.filter(o => (o.createdAt || 0) < start).length;
         }
         function buildRoutesData() {
             const byZone = {};
@@ -4894,7 +5130,7 @@
         const pageBreak = '<div style="page-break-after:always;break-after:page;"></div>';
         function printRoute(zoneName, what) {
             const zones = buildRoutesData().filter(z => !zoneName || z.name === zoneName);
-            if (!zones.length) { showToast('مفيش طلبات متسلمتش في يوم البيع ده', 'warning'); return; }
+            if (!zones.length) { showToast('مفيش طلبات لسه متسلمتش', 'warning'); return; }
             const pages = [];
             zones.forEach(z => {
                 if (what === 'prep' || what === 'all') pages.push(prepTableHtml(z, 'تجميع أصناف خط السير'));
@@ -4914,13 +5150,13 @@
         }
         function buildPrepZonesReportHtml() {
             const zones = buildRoutesData();
-            if (!zones.length) return `<div class="empty-state"><i class="fas fa-boxes"></i><h3>مفيش طلبات متسلمتش في يوم البيع ده</h3></div>`;
+            if (!zones.length) return `<div class="empty-state"><i class="fas fa-boxes"></i><h3>مفيش طلبات لسه متسلمتش</h3></div>`;
             return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;"><button class="btn btn-primary btn-sm" onclick="printRoute(null,'prep')"><i class="fas fa-boxes"></i> طباعة تجميع كل الخطوط</button><button class="btn btn-success btn-sm" onclick="printRoute(null,'bundle')"><i class="fas fa-file-invoice"></i> طباعة البيانات والفواتير لكل الخطوط</button><button class="btn btn-secondary btn-sm" onclick="printAllRoutesPrepTotal()"><i class="fas fa-layer-group"></i> إجمالي الأربع خطوط في صفحة</button></div>` +
                 zones.map(z => {
                     const q = encodeURIComponent(z.name).replace(/'/g, '%27');
                     const rows = Object.values(z.products).sort((a, b) => (a.brand || 'ي').localeCompare(b.brand || 'ي', 'ar') || a.name.localeCompare(b.name, 'ar'))
                         .map(p => `<tr><td>${escapeHtml(p.name)}${p.brand ? `<div style="font-size:11px;color:var(--text-light);">${escapeHtml(p.brand)}</div>` : ''}</td><td style="text-align:center;font-weight:800;">${escapeHtml(formatTwoUnits(p.total, p.unit, p.sec))}</td></tr>`).join('');
-                    return `<div class="card" style="margin-bottom:14px;"><div class="card-header"><div class="card-title">📍 ${escapeHtml(z.name)} <span style="font-weight:400;color:var(--text-light);font-size:13px;">(${z.orders.length} طلب${zoneRepsNames(z.name) ? ' · ' + escapeHtml(zoneRepsNames(z.name)) : ''})</span></div>
+                    return `<div class="card" style="margin-bottom:14px;"><div class="card-header"><div class="card-title">📍 ${escapeHtml(z.name)} <span style="font-weight:400;color:var(--text-light);font-size:13px;">(${z.orders.length} طلب${zoneRepsNames(z.name) ? ' · ' + escapeHtml(zoneRepsNames(z.name)) : ''})</span>${lateOrdersCount(z.orders) ? ` <span class="badge badge-danger">منهم ${lateOrdersCount(z.orders)} متأخر من يوم سابق</span>` : ''}</div>
                         <div style="display:flex;gap:8px;"><button class="btn btn-primary btn-sm" onclick="printRoute(decodeURIComponent('${q}'),'prep')"><i class="fas fa-boxes"></i> التجميع</button><button class="btn btn-success btn-sm" onclick="printRoute(decodeURIComponent('${q}'),'bundle')"><i class="fas fa-file-invoice"></i> البيان + الفواتير</button></div></div>
                         <div class="table-container"><table><thead><tr><th>الصنف</th><th>الكمية</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
                 }).join('');
@@ -5189,6 +5425,7 @@
             invoices: ['admin', 'accountant'],
             products: ['admin', 'accountant', 'warehouse_keeper'],
             customers: ['admin'],
+            newAppCustomers: ['admin'],
             salesmen: ['admin'],
             performance: ['admin'],
             salesChart: ['admin', 'accountant'],
@@ -5203,6 +5440,7 @@
 
         function applyDashboardRoleFilters() {
             if (!currentUser) return;
+            try { renderNewAppCustomersWidgets(); } catch (e) {}
             const role = currentUser.role;
             const isAdmin = role === 'admin';
             document.querySelectorAll('[data-role-card]').forEach(el => {
@@ -8369,6 +8607,18 @@
             if (now < s) s.setDate(s.getDate() - 1);
             return s;
         }
+        // وقت الطلب اللي الفاتورة اتعملت منه (يوم البيع بيتحسب بوقت الطلب مش بوقت التسليم).
+        // الفواتير الجديدة شايلة orderCreatedAt؛ القديمة بنجيبه من الطلب، أو من رقم الطلب نفسه (ORD-وقت)، وإلا تاريخ الفاتورة
+        function saleTimeOf(i) {
+            if (i.orderCreatedAt) return Number(i.orderCreatedAt);
+            if (i.sourceOrderId) {
+                const o = customerOrders.find(x => x.id === i.sourceOrderId);
+                if (o && o.createdAt) return Number(o.createdAt);
+                const m = /^ORD-(\d{12,})/.exec(String(i.sourceOrderId));
+                if (m) return Number(m[1]);
+            }
+            return new Date(i.date).getTime();
+        }
         function svItemValue(it) { return Number(it.total != null ? it.total : (it.price || 0) * (it.qty || 0)) || 0; }
         function svAgo(ms) { const m = Math.max(0, Math.round((Date.now() - ms) / 60000)); return m < 60 ? `من ${m} د` : `من ${Math.floor(m / 60)} س`; }
         function svTargetsFor(key) { return (salesTargets && salesTargets[key]) || {}; }
@@ -8402,7 +8652,7 @@
             const sales = invoices.filter(i => i.type === 'sale');
             svCustRep = {}; customers.forEach(c => { if (c.salesmanCode) svCustRep[c.code] = c.salesmanCode; });
             svOrderRep = {}; customerOrders.forEach(o => { if (o.repCode) svOrderRep[o.id] = o.repCode; });
-            const t = i => new Date(i.date).getTime();
+            const t = i => saleTimeOf(i);
             const today = sales.filter(i => { const x = t(i); return x >= dayStart && x < dayEnd; });
             const sum = arr => arr.reduce((s, i) => s + (Number(i.grandTotal) || 0), 0);
             const todaySales = sum(today);
@@ -8502,7 +8752,7 @@
             const curIdx = Math.floor((nowMs - dayStart) / 3600000);
             const histStart = dayStart - 28 * 86400000;
             sales.forEach(i => {
-                const x = new Date(i.date).getTime();
+                const x = saleTimeOf(i);
                 if (x >= dayStart && x < dayStart + 86400000) today[Math.floor((x - dayStart) / 3600000)] += Number(i.grandTotal) || 0;
                 else if (x >= histStart && x < dayStart) {
                     const offset = ((x - dayStart) % 86400000 + 86400000) % 86400000;
@@ -10262,8 +10512,8 @@
             normalizeAllProfit();
             const w = dsWindow();
             const route = (document.getElementById('dsRoute') || {}).value || '';
-            const inR = d => { const t = new Date(d).getTime(); return t >= w.start && t < w.end; };
-            const all = invoices.filter(i => i.type === 'sale' && inR(i.date)).map(i => Object.assign({}, i, { _route: invoiceRouteName(i) }));
+            const inR = t => t >= w.start && t < w.end;
+            const all = invoices.filter(i => i.type === 'sale' && inR(saleTimeOf(i))).map(i => Object.assign({}, i, { _route: invoiceRouteName(i) }));
             const list = all.filter(i => !route || i._route === route).sort((a, b) => a._route.localeCompare(b._route, 'ar') || String(a.number).localeCompare(String(b.number)));
             const rets = salesReturns.filter(r => inR(r.date) && (!route || invoiceRouteName(invoices.find(i => i.id === r.originalInvoiceId) || {}) === route));
             const prod = {};
