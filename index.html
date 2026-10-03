@@ -2493,7 +2493,7 @@
                 <div class="form-group"><label class="form-label">الرصيد الحالي المحسوب</label><input type="text" class="form-control" id="supplierAdjustmentCurrent" disabled></div>
                 <div class="form-group"><label class="form-label">الرصيد الصحيح (بعد التعديل)</label><input type="number" step="0.01" class="form-control" id="supplierAdjustmentNew"></div>
                 <div class="form-group"><label class="form-label">سبب التعديل (اختياري)</label><input type="text" class="form-control" id="supplierAdjustmentNotes" placeholder="مثال: تصحيح خطأ إدخال فاتورة"></div>
-                <p style="font-size:12px;color:var(--text-light);">هيتم تسجيل الفرق كحركة تسوية منفصلة في سجل الأحداث، من غير ما نلمس أي فاتورة أو سند قديم.</p>
+                <p style="font-size:12px;color:var(--text-light);">الرقم ده هيبقى رصيد المورد من النهارده، وبعده بيتحسب بس الفواتير الآجل الجديدة والمرتجعات وسندات الصرف. أي تعديل قديم بيتلغي، ومفيش فاتورة أو سند قديم بيتلمس.</p>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('supplierAdjustmentModal')">إلغاء</button><button class="btn btn-success" onclick="saveSupplierAdjustment()">حفظ التعديل</button></div>
         </div>
@@ -3524,6 +3524,7 @@
             GATED_SPLIT_KEYS.forEach(k => {
                 db.collection(SPLIT_COLLECTION_KEYS[k].collection).onSnapshot(function(snap) {
                     const merged = mergeSplitIncoming(k, snap.docs.map(d => d.data()), 'id');
+                    if (!snap.metadata || !snap.metadata.fromCache) moneyCloudLoaded[k] = true;
                     setListByKey(k, merged);
                     if (k === 'treasury') { try { rebuildTreasuryChain(); } catch (e) {} }
                     _origLocalStorageSetItem(k, JSON.stringify(getListByKey(k)));
@@ -3798,6 +3799,7 @@
             purchaseInvoiceRecordsListenerStarted = true;
             db.collection('purchaseInvoiceRecords').onSnapshot(function(snap) {
                 purchaseInvoices = snap.docs.map(function(d) { return d.data(); });
+                if (!snap.metadata || !snap.metadata.fromCache) purchaseInvoicesCloudLoaded = true;
                 localStorage.setItem('purchaseInvoices', JSON.stringify(purchaseInvoices));
                 try { updateDashboardStats(); renderInvoices(); renderRecentInvoices(); } catch (e) { console.error('refresh after purchase invoice update failed:', e); }
             }, function(err) { console.error('Purchase invoice records listener error:', err); });
@@ -5871,21 +5873,52 @@
             return balance;
         }
 
-        function getSupplierBalance(supplierCode) {
-            let balance = 0;
+        // ==================== مديونية المورد (إصلاح 2026-10) ====================
+        // زمان التعديل كان بيتحفظ كـ "فرق" محسوب على اللي الجهاز شايفه وقتها، فلو البيانات لسه
+        // متحملتش كان الفرق بيطلع غلط، والفروق كانت بتتراكم فوق بعض والرصيد يبوظ تاني يوم.
+        // دلوقتي آخر تعديل = "رصيد المورد في التاريخ ده كان كذا" (نقطة بداية)، وبعده بيتحسب بس
+        // اللي حصل بعده: فواتير شراء آجل + مرتجعات شراء + سندات صرف من الخزنة. والتعديلات القديمة بتتلغي.
+        function getSupplierAnchor(supplierCode) {
+            let a = null;
+            supplierAdjustments.forEach(x => {
+                if (!x || x.supplierCode !== supplierCode || x.newBalance == null || isNaN(Number(x.newBalance))) return;
+                const t = new Date(x.date).getTime(); if (isNaN(t)) return;
+                if (!a || t > new Date(a.date).getTime() || (t === new Date(a.date).getTime() && String(x.id) > String(a.id))) a = x;
+            });
+            return a;
+        }
+        function getSupplierLedger(supplierCode) {
+            const anchor = getSupplierAnchor(supplierCode);
+            const after = anchor ? new Date(anchor.date).getTime() : -Infinity;
+            const ok = d => { const t = new Date(d).getTime(); return isNaN(t) ? !anchor : t > after; };
+            const entries = [];
             purchaseInvoices.forEach(inv => {
-                if (inv.supplierCode === supplierCode) {
-                    if (inv.paymentMethod === 'آجل') balance += inv.grandTotal;
-                }
+                if (inv.supplierCode === supplierCode && inv.paymentMethod === 'آجل' && ok(inv.date))
+                    entries.push({ date: inv.date, type: 'فاتورة شراء', ref: '#' + inv.number, debit: 0, credit: Number(inv.grandTotal) || 0, notes: 'آجل' });
             });
             treasury.forEach(t => {
-                if (t.type === 'out' && t.partyType === 'supplier' && t.party === supplierCode && t.isDebtRelated !== false) balance -= t.amount;
+                if (t.type === 'out' && t.partyType === 'supplier' && t.party === supplierCode && t.isDebtRelated !== false && ok(t.date))
+                    entries.push({ date: t.date, type: 'سند صرف', ref: '-', debit: Number(t.amount) || 0, credit: 0, notes: t.notes || 'دفع' });
             });
             purchaseReturns.forEach(r => {
-                if (r.supplierCode === supplierCode && r.affectsBalance) balance -= r.grandTotal;
+                if (r.supplierCode === supplierCode && r.affectsBalance && ok(r.date))
+                    entries.push({ date: r.date, type: 'مرتجع شراء', ref: '#' + (r.number || '-'), debit: Number(r.grandTotal) || 0, credit: 0, notes: 'مرتجع' });
             });
-            supplierAdjustments.forEach(a => { if (a.supplierCode === supplierCode) balance += a.diff; });
-            return balance;
+            entries.sort((a, b) => new Date(a.date) - new Date(b.date));
+            const start = anchor ? Number(anchor.newBalance) : 0;
+            const balance = entries.reduce((b, e) => b + e.credit - e.debit, start);
+            return { anchor, start, entries, balance: Math.round(balance * 100) / 100 };
+        }
+        function getSupplierBalance(supplierCode) { return getSupplierLedger(supplierCode).balance; }
+
+        // التعديل مايتعملش غير بعد ما فواتير الشراء والخزنة والتسويات تتحمل من السحابة
+        let purchaseInvoicesCloudLoaded = false;
+        const moneyCloudLoaded = {};
+        function supplierDataReady() {
+            if (!db) return true;
+            if (!purchaseInvoicesCloudLoaded) return false;
+            if (typeof moneySplitActive !== 'undefined' && moneySplitActive && !['treasury', 'purchaseReturns', 'supplierAdjustments'].every(k => moneyCloudLoaded[k])) return false;
+            return true;
         }
 
         function saveSupplierAdjustments() { localStorage.setItem('supplierAdjustments', JSON.stringify(supplierAdjustments)); }
@@ -5896,6 +5929,7 @@
             if (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin') { showToast('تعديل إجمالي مديونية المورد متاح للمدير فقط', 'error'); return; }
             const supplier = suppliers.find(s => s.code === supplierCode);
             if (!supplier) return;
+            if (!supplierDataReady()) { showToast('البيانات لسه بتتحمل من السحابة.. استنى ثواني وجرب تاني', 'error'); return; }
             const current = getSupplierBalance(supplierCode);
             document.getElementById('supplierAdjustmentCode').value = supplierCode;
             document.getElementById('supplierAdjustmentName').textContent = supplier.name;
@@ -5911,6 +5945,7 @@
             const newBalance = parseFloat(document.getElementById('supplierAdjustmentNew').value);
             const notes = document.getElementById('supplierAdjustmentNotes').value.trim();
             if (isNaN(newBalance)) { showToast('الرجاء إدخال رقم صحيح', 'error'); return; }
+            if (!supplierDataReady()) { showToast('البيانات لسه بتتحمل من السحابة.. استنى ثواني وجرب تاني', 'error'); return; }
             const current = getSupplierBalance(code);
             const diff = newBalance - current;
             if (Math.abs(diff) < 0.001) { showToast('لا يوجد فرق لتسجيله'); closeModal('supplierAdjustmentModal'); return; }
@@ -5918,7 +5953,7 @@
             supplierAdjustments.push({
                 id: Date.now() + '-' + Math.random().toString(36).slice(2, 6),
                 supplierCode: code, date: new Date().toISOString(),
-                previousBalance: current, newBalance, diff, notes,
+                previousBalance: current, newBalance, diff, notes, mode: 'anchor',
                 by: currentUser.fullName || currentUser.username
             });
             saveSupplierAdjustments();
@@ -7536,173 +7571,21 @@
             if (!code) { container.style.display = 'none'; return; }
             container.style.display = 'block';
 
-            // ملاحظة: كشف الحساب هذا يعرض حركات الدين الفعلية فقط. الفواتير النقدية لا تُدرج
-            // هنا لأنها لا تُنشئ دَينًا (يُدفع ثمنها فورًا)، وبالتالي لا تؤثر على الرصيد.
-            let entries = [];
-            invoices.filter(inv => inv.customerCode === code && inv.paymentMethod === 'آجل').forEach(inv => {
-                entries.push({ date: inv.date, type: 'فاتورة بيع', ref: '#' + inv.number, debit: inv.grandTotal, credit: 0, notes: 'آجل' });
-            });
-            treasury.filter(t => t.type === 'in' && t.partyType === 'customer' && t.party === code && t.isDebtRelated !== false).forEach(t => {
-                entries.push({ date: t.date, type: 'سند قبض', ref: '-', debit: 0, credit: t.amount, notes: t.notes || 'تحصيل' });
-            });
-            salesReturns.filter(r => r.customerCode === code).forEach(r => {
-                entries.push({ date: r.date, type: 'مرتجع بيع', ref: '#' + r.number, debit: 0, credit: r.affectsBalance ? r.grandTotal : 0, notes: 'مرتجع لفاتورة #' + r.originalInvoiceNumber + (r.affectsBalance ? '' : ' (مسترد نقداً)') });
-            });
-            entries.sort((a, b) => new Date(a.date) - new Date(b.date));
+            // كشف الحساب بيستخدم نفس حساب الرصيد بالظبط: يبدأ من آخر تعديل، وبعده كل حركة برصيدها
+            const ledger = getSupplierLedger(code);
+            let entries = ledger.entries.slice();
+            const anchorRow = ledger.anchor ? `<tr style="background:rgba(243,156,18,0.12);font-weight:700;">
+                    <td>${new Date(ledger.anchor.date).toLocaleDateString('ar-SA')}</td>
+                    <td><span class="badge badge-warning">رصيد بعد تعديل</span></td><td>-</td><td>-</td><td>-</td>
+                    <td><strong>${ledger.start.toFixed(2)}</strong></td>
+                    <td style="font-size:13px;">${ledger.anchor.by ? 'عدّله ' + ledger.anchor.by : ''}${ledger.anchor.notes ? ' — ' + ledger.anchor.notes : ''} (الحركات اللي قبل التاريخ ده مش داخلة في الحساب)</td></tr>` : '';
 
-            const customer = customers.find(c => c.code === code);
-            document.getElementById('customerStatementPrintName').textContent = customer ? `العميل: ${customer.name} (${customer.code})` : '';
-            document.getElementById('customerStatementPrintDate').textContent = new Date().toLocaleDateString('ar-SA');
-
-            let runningBalance = 0;
-            if (entries.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-light);">لا توجد حركات لهذا العميل</td></tr>`;
-                return;
-            }
-            tbody.innerHTML = entries.map(e => {
-                runningBalance += e.debit - e.credit;
-                return `<tr class="statement-row ${e.debit > 0 ? 'debit' : 'credit'}">
-                    <td>${new Date(e.date).toLocaleDateString('ar-SA')}</td>
-                    <td><span class="badge ${e.debit > 0 ? 'badge-danger' : 'badge-success'}">${e.type}</span></td>
-                    <td>${e.ref}</td>
-                    <td style="color:var(--danger);font-weight:700;">${e.debit > 0 ? e.debit.toFixed(2) : '-'}</td>
-                    <td style="color:var(--accent);font-weight:700;">${e.credit > 0 ? e.credit.toFixed(2) : '-'}</td>
-                    <td><strong>${runningBalance.toFixed(2)}</strong></td>
-                    <td style="color:var(--text-light);font-size:13px;">${e.notes}</td>
-                </tr>`;
-            }).join('') + `<tr style="background:var(--primary);color:white;font-weight:700;"><td colspan="5">الرصيد النهائي</td><td>${runningBalance.toFixed(2)} ر.س</td><td>${runningBalance > 0 ? 'مدين' : (runningBalance < 0 ? 'دائن' : 'صفر')}</td></tr>`;
-        }
-
-        function printCustomerStatement() {
-            const code = document.getElementById('customerStatementSelect').value;
-            if (!code) { showToast('الرجاء اختيار عميل أولاً', 'error'); return; }
-            const card = document.getElementById('customerStatementCard').cloneNode(true);
-            const hdr = card.querySelector('#customerStatementPrintHeader'); if (hdr) hdr.style.display = 'block';
-            card.querySelectorAll('.no-print, button, select').forEach(e => e.remove());
-            printHtml(card.innerHTML, 'كشف حساب عميل', true);
-        }
-
-        function exportCustomerStatementExcel() {
-            const code = document.getElementById('customerStatementSelect').value;
-            if (!code) { showToast('الرجاء اختيار عميل أولاً', 'error'); return; }
-            const customer = customers.find(c => c.code === code);
-            const rows = [['التاريخ', 'النوع', 'الرقم', 'مدين', 'دائن', 'الرصيد', 'البيان']];
-            document.querySelectorAll('#customerStatementTable tr').forEach(row => {
-                const cells = Array.from(row.children).map(td => td.textContent.trim());
-                rows.push(cells);
-            });
-            const ws = XLSX.utils.aoa_to_sheet(rows);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'كشف حساب');
-            XLSX.writeFile(wb, `كشف_حساب_${customer ? customer.name : code}.xlsx`);
-        }
-
-        // ==================== SUPPLIERS ====================
-        function openSupplierModal(supplier = null) {
-            if (supplier && String((currentUser && currentUser.role) || '').toLowerCase() === 'warehouse_keeper') { showToast('أمين المخزن يقدر يضيف مورد جديد بس. التعديل للمحاسب أو المدير', 'error'); return; }
-            editingSupplier = supplier;
-            pendingPurchaseSupplierSelect = false;
-            document.getElementById('supplierCode').value = supplier ? supplier.code : makeAutoCoder(suppliers.map(s => s.code), 'V')();
-            lockCodeField('supplierCode', !!supplier);
-            document.getElementById('supplierName').value = supplier ? supplier.name : '';
-            document.getElementById('supplierPhone').value = supplier ? supplier.phone : '';
-            document.getElementById('supplierAddress').value = supplier ? supplier.address : '';
-            openModal('supplierModal');
-        }
-
-        function saveSupplier() {
-            const code = editingSupplier ? editingSupplier.code : document.getElementById('supplierCode').value.trim();
-            const name = document.getElementById('supplierName').value.trim();
-            const phone = document.getElementById('supplierPhone').value.trim();
-            const address = document.getElementById('supplierAddress').value.trim();
-            if (!code || !name) { showToast('الرجاء ملء الحقول الإلزامية', 'error'); return; }
-            if (editingSupplier) {
-                const idx = suppliers.findIndex(s => s.code === editingSupplier.code);
-                if (idx !== -1) suppliers[idx] = { code, name, phone, address };
-            } else {
-                if (suppliers.find(s => s.code === code)) { showToast('كود المورد موجود مسبقاً', 'error'); return; }
-                suppliers.push({ code, name, phone, address });
-            }
-            saveSuppliers();
-            logAction(editingSupplier ? 'تعديل مورد' : 'إضافة مورد', `${editingSupplier ? 'تم تعديل' : 'تم إضافة'} المورد "${name}" (${code})`);
-            renderSuppliers(); updatePurchaseDropdowns(); updateDashboardStats(); closeModal('supplierModal');
-            showToast(editingSupplier ? 'تم تحديث المورد' : 'تم إضافة المورد');
-            if (pendingPurchaseSupplierSelect && !editingSupplier) {
-                document.getElementById('purchaseSupplier').value = code;
-                document.getElementById('purchaseSupplierSearch').value = name;
-                handlePurchasePaymentChange();
-            }
-            pendingPurchaseSupplierSelect = false;
-        }
-
-        function deleteSupplier(code) {
-            if (String((currentUser && currentUser.role) || '').toLowerCase() === 'warehouse_keeper') { showToast('حذف الموردين للمحاسب أو المدير', 'error'); return; }
-            if (confirm('هل أنت متأكد من حذف هذا المورد؟')) {
-                const s = suppliers.find(x => x.code === code);
-                suppliers = suppliers.filter(s => s.code !== code);
-                saveSuppliers();
-                logAction('حذف مورد', `تم حذف المورد "${s ? s.name : code}" (${code})`);
-                renderSuppliers(); updatePurchaseDropdowns(); updateDashboardStats(); showToast('تم حذف المورد');
-            }
-        }
-
-        function renderSuppliers() {
-            const tbody = document.getElementById('suppliersTable');
-            if (suppliers.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;"><div style="color:var(--text-light);"><i class="fas fa-truck" style="font-size:48px;margin-bottom:15px;display:block;opacity:0.4;"></i><h3 style="color:var(--text);margin-bottom:8px;">قاعدة الموردين فارغة</h3><p style="margin-bottom:15px;">لم يتم إضافة أي موردين بعد</p><button class="btn btn-success btn-sm" onclick="openSupplierModal()"><i class="fas fa-plus"></i> إضافة مورد جديد</button></div></td></tr>`;
-                return;
-            }
-            tbody.innerHTML = suppliers.map(s => {
-                const balance = getSupplierBalance(s.code);
-                let balanceClass = 'zero'; let balanceText = '0.00 ر.س';
-                if (balance > 0) { balanceClass = 'debtor'; balanceText = balance.toFixed(2) + ' ر.س (علينا)'; }
-                else if (balance < 0) { balanceClass = 'creditor'; balanceText = Math.abs(balance).toFixed(2) + ' ر.س (له)'; }
-                else balanceText = '0.00 ر.س';
-                return `<tr><td><span class="badge badge-orange">${s.code}</span></td><td><strong>${s.name}</strong></td><td>${s.phone || '-'}</td><td>${s.address || '-'}</td>
-                <td><span class="customer-balance ${balanceClass}">${balanceText}</span></td>
-                <td>${String((currentUser && currentUser.role) || '').toLowerCase() === 'warehouse_keeper' ? '' : `<button class="btn btn-primary btn-icon btn-sm" onclick='openSupplierModal(${JSON.stringify(s).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>`}
-                ${currentUser && String(currentUser.role || '').trim().toLowerCase() === 'admin' ? `<button class="btn btn-secondary btn-icon btn-sm" title="تعديل إجمالي المديونية" onclick="openSupplierAdjustmentModal('${s.code}')"><i class="fas fa-balance-scale"></i></button>` : ''}
-                ${String((currentUser && currentUser.role) || '').toLowerCase() === 'warehouse_keeper' ? '' : `<button class="btn btn-danger btn-icon btn-sm" onclick="deleteSupplier('${s.code}')"><i class="fas fa-trash"></i></button>`}</td></tr>`;
-            }).join('');
-            updateSupplierStatementSelect();
-        }
-
-        function filterSuppliers() {
-            const term = document.getElementById('supplierSearch').value.toLowerCase();
-            document.querySelectorAll('#suppliersTable tr').forEach(row => {
-                if (row.querySelector('.empty-state')) return;
-                row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none';
-            });
-        }
-
-        function updateSupplierStatementSelect() {
-            // بقى حقل بحث بدل select، مفيش تعبئة مطلوبة هنا
-        }
-
-        function renderSupplierStatement() {
-            const code = document.getElementById('supplierStatementSelect').value;
-            const container = document.getElementById('supplierStatementContainer');
-            const tbody = document.getElementById('supplierStatementTable');
-            if (!code) { container.style.display = 'none'; return; }
-            container.style.display = 'block';
-
-            // ملاحظة: كشف الحساب هذا يعرض حركات الدين الفعلية فقط. فواتير الشراء النقدية لا تُدرج
-            // هنا لأنها تُدفع فورًا ولا تُنشئ دَينًا على المحل.
-            let entries = [];
-            purchaseInvoices.filter(inv => inv.supplierCode === code && inv.paymentMethod === 'آجل').forEach(inv => {
-                entries.push({ date: inv.date, type: 'فاتورة شراء', ref: '#' + inv.number, debit: 0, credit: inv.grandTotal, notes: 'آجل' });
-            });
-            treasury.filter(t => t.type === 'out' && t.partyType === 'supplier' && t.party === code && t.isDebtRelated !== false).forEach(t => {
-                entries.push({ date: t.date, type: 'سند صرف', ref: '-', debit: t.amount, credit: 0, notes: t.notes || 'دفع' });
-            });
-            entries.sort((a, b) => new Date(a.date) - new Date(b.date));
-
-            let runningBalance = 0;
-            if (entries.length === 0) {
+            let runningBalance = ledger.start;
+            if (entries.length === 0 && !ledger.anchor) {
                 tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-light);">لا توجد حركات لهذا المورد</td></tr>`;
                 return;
             }
-            tbody.innerHTML = entries.map(e => {
+            tbody.innerHTML = anchorRow + entries.map(e => {
                 runningBalance += e.credit - e.debit;
                 return `<tr class="statement-row ${e.credit > 0 ? 'credit' : 'debit'}">
                     <td>${new Date(e.date).toLocaleDateString('ar-SA')}</td>
