@@ -1770,6 +1770,7 @@
                         <button class="btn btn-info btn-sm" onclick="exportCustomersToExcel()"><i class="fas fa-file-export"></i> تصدير العملاء الحاليين</button>
                         <button class="btn btn-primary btn-sm" onclick="document.getElementById('excelFileInput').click()"><i class="fas fa-file-excel"></i> رفع ملف Excel</button>
                         <button class="btn btn-secondary btn-sm" onclick="downloadCustomerTemplate()"><i class="fas fa-download"></i> تحميل نموذج فارغ</button>
+                        <button class="btn btn-warning btn-sm" onclick="restoreCustomerRepsFromInvoices()"><i class="fas fa-user-check"></i> رجّع المناديب للعملاء</button>
                         <button class="btn btn-danger btn-sm" onclick="openDeleteAllCustomersModal()"><i class="fas fa-trash-alt"></i> مسح الكل</button>
                         <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleExcelUpload(event)">
                     </div>
@@ -2918,6 +2919,33 @@
         };
         let splitSyncTimers = {};
 
+        // *** حماية البيانات (2026-10) - الحل الجذري لمسح بيانات العملاء/المخزون ***
+        // أي جهاز بيفتح بيبدأ بالنسخة القديمة اللي على الجهاز لحد ما السحابة توصل. ممنوع أي كتابة للسحابة
+        // أو أي عملية (فاتورة/جرد/تعديل عميل) قبل ما أحدث نسخة من السحابة توصل للجهاز فعلاً.
+        const cloudLoaded = { products: false, customers: false, suppliers: false, inventory: false };
+        let coreReadyTasksRan = false;
+        function isCloudReady() { return !db || (cloudLoaded.products && cloudLoaded.customers && cloudLoaded.suppliers && cloudLoaded.inventory); }
+        function requireCloudReady() {
+            if (isCloudReady()) return true;
+            showToast('استنى ثواني... البيانات لسه بتتحمل من السحابة. جرب تاني أول ما علامة المزامنة تبقى خضرا', 'error');
+            return false;
+        }
+        function markCloudLoaded(key) {
+            if (cloudLoaded[key]) return;
+            cloudLoaded[key] = true;
+            if (isCloudReady() && !coreReadyTasksRan) {
+                coreReadyTasksRan = true;
+                // الحاجات اللي كانت بتشتغل أوتوماتيك على النسخة القديمة، بقت تستنى لحد ما البيانات تحمل
+                try { processRepDeliveredOrders(); } catch (e) { console.error('processRepDeliveredOrders error:', e); }
+                try {
+                    let addedAny = false;
+                    customerOrders.forEach(function(o) { if (syncCustomerFromOrder(o)) addedAny = true; });
+                    if (addedAny) { localStorage.setItem('customers', JSON.stringify(customers)); try { renderCustomers(); updateInvoiceDropdowns(); } catch (e) {} }
+                } catch (e) { console.error(e); }
+                try { scheduleStockLevelsSync(); } catch (e) {}
+            }
+        }
+
         function scheduleSplitSync(key) {
             if (!db) return;
             clearTimeout(splitSyncTimers[key]);
@@ -2932,24 +2960,41 @@
             if (key === 'inventory') { pushInventoryDiff(); return; }
             const conf = SPLIT_COLLECTION_KEYS[key];
             if (!conf || (conf.money && !moneySplitActive)) return;
-            const current = getListByKey(key);
+            // ممنوع نرفع أي حاجة قبل ما أحدث نسخة من السحابة توصل (كده الجهاز القديم مش هيكتب فوق الجديد)
+            if (cloudLoaded[key] === false) { scheduleSplitSync(key); return; }
+            let current = getListByKey(key);
 
             const currentMap = {}, prevMap = {};
             (current || []).forEach(function(item) { if (item && item[conf.idField] != null) currentMap[item[conf.idField]] = item; });
             (lastSyncedSplit[key] || []).forEach(function(item) { if (item && item[conf.idField] != null) prevMap[item[conf.idField]] = item; });
 
+            // حماية من المسح الجماعي: لو فيه أكتر من 5 عناصر هتتمسح مرة واحدة، لازم تأكيد صريح
+            const toDelete = Object.keys(prevMap).filter(function(id) { return !currentMap[id]; });
+            if (toDelete.length > 5) {
+                const label = { products: 'صنف', customers: 'عميل', suppliers: 'مورد' }[key] || 'سجل';
+                if (!confirm('تنبيه أمان: السيستم هيمسح ' + toDelete.length + ' ' + label + ' من السحابة نهائيًا.\nلو انت اللي مسحتهم بنفسك دوس OK.\nلو مش انت، دوس Cancel وهيرجعوا تاني.')) {
+                    toDelete.forEach(function(id) { current.push(prevMap[id]); currentMap[id] = prevMap[id]; });
+                    setListByKey(key, current);
+                    _origLocalStorageSetItem(key, JSON.stringify(current));
+                    toDelete.length = 0;
+                }
+            }
             const batch = db.batch();
             let opCount = 0;
             Object.keys(currentMap).forEach(function(id) {
                 const cur = currentMap[id], prev = prevMap[id];
-                if (!prev || JSON.stringify(prev) !== JSON.stringify(cur)) {
-                    batch.set(db.collection(conf.collection).doc(String(id)), cur);
+                if (!prev) {
+                    batch.set(db.collection(conf.collection).doc(String(id)), cur, { merge: true });
                     opCount++;
+                } else if (JSON.stringify(prev) !== JSON.stringify(cur)) {
+                    if (conf.money) { batch.set(db.collection(conf.collection).doc(String(id)), cur); opCount++; return; }
+                    // بنرفع الخانات اللي اتغيرت بس - مش الكارت كله. كده تعديل النقاط مثلاً مستحيل يمسح المندوب
+                    const upd = {};
+                    Object.keys(cur).forEach(function(f) { if (JSON.stringify(cur[f]) !== JSON.stringify(prev[f])) upd[f] = cur[f]; });
+                    if (Object.keys(upd).length) { batch.set(db.collection(conf.collection).doc(String(id)), upd, { merge: true }); opCount++; }
                 }
             });
-            Object.keys(prevMap).forEach(function(id) {
-                if (!currentMap[id]) { batch.delete(db.collection(conf.collection).doc(String(id))); opCount++; }
-            });
+            toDelete.forEach(function(id) { batch.delete(db.collection(conf.collection).doc(String(id))); opCount++; });
             if (opCount === 0) return;
             const before = lastSyncedSplit[key];
             lastSyncedSplit[key] = JSON.parse(JSON.stringify(current || []));
@@ -2966,6 +3011,7 @@
         // غيّروا نفس الصنف في نفس الوقت، التغييرين يتجمعوا بدل ما واحد يمسح التاني.
         function pushInventoryDiff() {
             if (!db) return;
+            if (!cloudLoaded.inventory) { scheduleSplitSync('inventory'); return; }
             const currentMap = inventory || {};
             const prevMap = lastSyncedSplit.inventory || {};
             const inc = (firebase && firebase.firestore && firebase.firestore.FieldValue && firebase.firestore.FieldValue.increment) ? firebase.firestore.FieldValue.increment : null;
@@ -3012,7 +3058,11 @@
             (local || []).forEach(it => { if (it && it[idField] != null) localMap[it[idField]] = it; });
             let pending = false;
             let out = serverArr.filter(it => { const id = it[idField]; if (prevMap[id] !== undefined && !localMap[id]) { pending = true; return false; } return true; });
-            out = out.map(it => { const id = it[idField], loc = localMap[id]; if (loc && prevMap[id] !== undefined && JSON.stringify(loc) !== prevMap[id]) { pending = true; return loc; } return it; });
+            // لو فيه تعديل محلي لسه ما اترفعش، ناخد الخانات اللي اتعدلت محليًا بس فوق نسخة السحابة (مش الكارت القديم كله)
+            out = out.map(it => { const id = it[idField], loc = localMap[id]; if (loc && prevMap[id] !== undefined && JSON.stringify(loc) !== prevMap[id]) {
+                pending = true; const prevObj = JSON.parse(prevMap[id]); const merged = Object.assign({}, it);
+                Object.keys(loc).forEach(f => { if (JSON.stringify(loc[f]) !== JSON.stringify(prevObj[f])) merged[f] = loc[f]; });
+                return merged; } return it; });
             const serverIds = new Set(serverArr.map(it => it[idField]));
             Object.keys(localMap).forEach(id => { if (prevMap[id] === undefined && !serverIds.has(localMap[id][idField])) { out.push(localMap[id]); pending = true; } });
             lastSyncedSplit[key] = JSON.parse(JSON.stringify(serverArr));
@@ -3719,6 +3769,7 @@
             if (!db) return Promise.reject(new Error('لا يوجد اتصال بالسحابة'));
             // Firestore بيمنع أكتر من 500 عملية كتابة في نفس الـ batch، فلو عدد الأصناف كبير
             // بنقسمهم لدفعات (batches) متعددة ونستنى كل الدفعات تخلص فعليًا قبل ما نقول "تم"
+            if (!cloudLoaded.inventory) { if (!force) scheduleStockLevelsSync(); return force ? Promise.reject(new Error('البيانات لسه بتتحمل، جرب تاني بعد ثواني')) : Promise.resolve(); }
             if (!reservationLedgerLoaded && !force) { scheduleStockLevelsSync(); return Promise.resolve(); }
             const pending = unbookedReservations();
             const codes = Object.keys(inventory).filter(code => {
@@ -3860,6 +3911,7 @@
                 products = mergeSplitIncoming('products', snap.docs.map(function(d) { return d.data(); }), 'code');
                 _origLocalStorageSetItem('products', JSON.stringify(products));
                 _origLocalStorageSetItem('_lastSyncedProducts', JSON.stringify(lastSyncedSplit.products));
+                markCloudLoaded('products');
                 try { if (document.getElementById('products-section') && document.getElementById('products-section').classList.contains('active')) renderProducts(); } catch (e) {}
                 try { updateInvoiceDropdowns(); } catch (e) {}
                 try { updateDashboardStats(); } catch (e) {}
@@ -3873,6 +3925,7 @@
                 customers = mergeSplitIncoming('customers', snap.docs.map(function(d) { return d.data(); }), 'code');
                 _origLocalStorageSetItem('customers', JSON.stringify(customers));
                 _origLocalStorageSetItem('_lastSyncedCustomers', JSON.stringify(lastSyncedSplit.customers));
+                markCloudLoaded('customers');
                 try { if (document.getElementById('customers-section') && document.getElementById('customers-section').classList.contains('active')) renderCustomers(); } catch (e) {}
                 try { updateInvoiceDropdowns(); } catch (e) {}
             }, function(err) { console.error('Customer records listener error:', err); });
@@ -3885,6 +3938,7 @@
                 suppliers = mergeSplitIncoming('suppliers', snap.docs.map(function(d) { return d.data(); }), 'code');
                 _origLocalStorageSetItem('suppliers', JSON.stringify(suppliers));
                 _origLocalStorageSetItem('_lastSyncedSuppliers', JSON.stringify(lastSyncedSplit.suppliers));
+                markCloudLoaded('suppliers');
                 try { if (document.getElementById('suppliers-section') && document.getElementById('suppliers-section').classList.contains('active')) renderSuppliers(); } catch (e) {}
                 try { updateInvoiceDropdowns(); } catch (e) {}
             }, function(err) { console.error('Supplier records listener error:', err); });
@@ -3899,6 +3953,7 @@
                 inventory = mergeInventoryIncoming(inv);
                 _origLocalStorageSetItem('inventory', JSON.stringify(inventory));
                 _origLocalStorageSetItem('_lastSyncedInventory', JSON.stringify(lastSyncedSplit.inventory));
+                markCloudLoaded('inventory');
                 try { if (document.getElementById('inventory-section') && document.getElementById('inventory-section').classList.contains('active')) renderInventory(); } catch (e) {}
                 try { updateDashboardStats(); } catch (e) {}
             }, function(err) { console.error('Inventory records listener error:', err); });
@@ -4205,9 +4260,10 @@
                 customerOrders = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
                 localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
                 syncReservedOrdersIntoLocalInventory(customerOrders);
-                try { processRepDeliveredOrders(); } catch (e) { console.error('processRepDeliveredOrders error:', e); }
+                // قفل التسليم وإضافة العملاء بيستنوا لحد ما بيانات العملاء والمخزون توصل من السحابة
+                if (isCloudReady()) { try { processRepDeliveredOrders(); } catch (e) { console.error('processRepDeliveredOrders error:', e); } }
                 let addedAny = false;
-                customerOrders.forEach(function(o) { if (syncCustomerFromOrder(o)) addedAny = true; });
+                if (isCloudReady()) customerOrders.forEach(function(o) { if (syncCustomerFromOrder(o)) addedAny = true; });
                 if (addedAny) {
                     localStorage.setItem('customers', JSON.stringify(customers));
                     if (typeof renderCustomers === 'function' && document.getElementById('customers-section') && document.getElementById('customers-section').classList.contains('active')) renderCustomers();
@@ -7371,6 +7427,7 @@
         }
 
         function saveStockAdjustment() {
+            if (!requireCloudReady()) return;
             const code = document.getElementById('adjustProduct').value;
             const type = document.getElementById('adjustType').value;
             const qty = parseFloat(document.getElementById('adjustQty').value);
@@ -7482,7 +7539,37 @@
             openModal('customerModal');
         }
 
+        // بيرجّع كل عميل اتشال منه المندوب لمندوبه، من آخر فاتورة بيع ليه عليها مندوب. بيعرض النتيجة الأول قبل الحفظ.
+        function restoreCustomerRepsFromInvoices() {
+            if (!requireCloudReady()) return;
+            const latest = {};
+            (invoices || []).forEach(function(inv) {
+                if (!inv || !inv.customerCode || !inv.salesmanCode) return;
+                const t = new Date(inv.date || inv.createdAt || 0).getTime() || Number(inv.id) || 0;
+                const cur = latest[inv.customerCode];
+                if (!cur || t > cur.t) latest[inv.customerCode] = { t: t, code: inv.salesmanCode };
+            });
+            const fixes = [];
+            customers.forEach(function(c) {
+                if (c.salesmanCode) return;
+                const l = latest[c.code];
+                if (!l) return;
+                const sm = (salesmen || []).find(function(x) { return x.code === l.code; });
+                if (!sm) return;
+                fixes.push({ c: c, smCode: sm.code, smName: sm.name });
+            });
+            if (!fixes.length) { showToast('مفيش عملاء من غير مندوب ليهم فواتير بمندوب. كله تمام ✓'); return; }
+            const preview = fixes.slice(0, 20).map(function(f) { return '• ' + (f.c.shopName || f.c.name || f.c.code) + ' ← ' + f.smName; }).join('\n');
+            if (!confirm('هيترجع ' + fixes.length + ' عميل لمندوبهم (من آخر فاتورة ليهم):\n\n' + preview + (fixes.length > 20 ? '\n... و' + (fixes.length - 20) + ' تانيين' : '') + '\n\nموافق؟')) return;
+            fixes.forEach(function(f) { f.c.salesmanCode = f.smCode; });
+            localStorage.setItem('customers', JSON.stringify(customers));
+            logAction('استرجاع مناديب العملاء', 'تم ربط ' + fixes.length + ' عميل بمندوبهم من آخر فاتورة');
+            try { renderCustomers(); updateInvoiceDropdowns(); } catch (e) {}
+            showToast('تم ربط ' + fixes.length + ' عميل بمندوبهم ✓');
+        }
+
         function saveCustomer() {
+            if (!requireCloudReady()) return;
             const code = editingCustomer ? editingCustomer.code : document.getElementById('customerCode').value.trim();
             const name = document.getElementById('customerName').value.trim();
             const shopName = document.getElementById('customerShopName').value.trim();
@@ -7510,7 +7597,8 @@
             }
             if (editingCustomer) {
                 const idx = customers.findIndex(c => c.code === editingCustomer.code);
-                if (idx !== -1) customers[idx] = { code, name, shopName, phone, address, neighborhood, salesmanCode, creditLimit };
+                // بنحافظ على كل بيانات العميل التانية (النقاط، اللوكيشن، ...) ونغيّر بس اللي في الشاشة
+                if (idx !== -1) customers[idx] = Object.assign({}, customers[idx], { code, name, shopName, phone, address, neighborhood, salesmanCode, creditLimit });
             } else {
                 if (customers.find(c => c.code === code)) { showToast('كود العميل موجود مسبقاً', 'error'); return; }
                 customers.push({ code, name, shopName, phone, address, neighborhood, salesmanCode, creditLimit });
@@ -9206,6 +9294,7 @@
         }
 
         function submitPurchaseForReview(data) {
+            if (!requireCloudReady()) return;
             if (purchaseSaveBusy) return;
             if (!db) { showToast('لازم يكون فيه إنترنت عشان الفاتورة تتبعت للمراجعة', 'error'); return; }
             purchaseSaveBusy = true;
@@ -9328,6 +9417,7 @@
         }
 
         function approvePurchaseDraft() {
+            if (!requireCloudReady()) return;
             const id = document.getElementById('purchaseReviewId').value;
             const d = purchaseDrafts.find(x => x.id === id);
             if (!d || !db) return;
@@ -9523,6 +9613,7 @@
         }
 
         function approveGenericDraft() {
+            if (!requireCloudReady()) return;
             const id = document.getElementById('approvalReviewId').value;
             const d = purchaseDrafts.find(x => x.id === id);
             if (!d || !db) return;
@@ -9686,12 +9777,14 @@
 
         // ==================== 1) جرد المخزون بالإكسل ====================
         function exportInventoryCountSheet() {
+            if (!requireCloudReady()) return;
             const rows = [['كود الصنف', 'اسم الصنف', 'الوحدة', 'الكمية في السيستم', 'الكمية الفعلية', 'حد الطلب', 'السبب']];
             products.forEach(p => { const inv = inventory[p.code] || {}; rows.push([p.code, p.name, p.unit || '', Number(inv.qty) || 0, '', inv.minStock || p.minStock || 0, '']); });
             xlWrite('جرد_مخزون', [{ name: 'الجرد', rows, widths: [12, 34, 10, 16, 16, 10, 24] }]);
             showToast('اكتب "الكمية الفعلية" بس للأصناف اللي فيها فرق، وارفع الشيت');
         }
         function importInventoryCountSheet(event) {
+            if (!requireCloudReady()) { try { if (event && event.target) event.target.value = ''; } catch (e) {} return; }
             xlRead(event, {
                 code: ['كود الصنف', 'الكود', 'code'], name: ['اسم الصنف', 'الصنف'], sys: ['الكمية في السيستم', 'الكمية الحالية'],
                 counted: ['الكمية الفعلية', 'الجرد', 'الكمية بعد الجرد'], min: ['حد الطلب', 'الحد الأدنى', 'minStock'], reason: ['السبب', 'ملاحظات']
@@ -10767,6 +10860,7 @@
         }
 
         function saveInvoice() {
+            if (!requireCloudReady()) return;
             const customerCode = document.getElementById('invoiceCustomer').value;
             const salesmanCode = document.getElementById('invoiceSalesman').value;
             if (!customerCode) { showToast('الرجاء اختيار العميل', 'error'); return; }
@@ -10944,6 +11038,7 @@
         }
 
         function savePurchaseInvoice() {
+            if (!requireCloudReady()) return;
             const supplierCode = document.getElementById('purchaseSupplier').value;
             if (!supplierCode) { showToast('الرجاء اختيار المورد', 'error'); return; }
             const supplierInvoiceNo = document.getElementById('purchaseSupplierInvoice').value.trim();
@@ -11885,6 +11980,7 @@
         }
 
         function savePurchaseReturn() {
+            if (!requireCloudReady()) return;
             const invoiceId = parseFloat(document.getElementById('purchaseReturnInvoiceSelect').value);
             const invoice = purchaseInvoices.find(i => i.id === invoiceId);
             if (!invoice) { showToast('الرجاء اختيار فاتورة صحيحة', 'error'); return; }
@@ -13588,6 +13684,7 @@
 
         // ==================== EXCEL UPLOAD ====================
         function handleExcelUpload(event) {
+            if (!requireCloudReady()) { try { if (event && event.target) event.target.value = ''; } catch (e) {} return; }
             const file = event.target.files[0];
             if (!file) return;
             const reader = new FileReader();
