@@ -4258,9 +4258,11 @@
             // ويكلّف أكتر مع الوقت. آخر 300 طلب كفاية لأي متابعة يومية، والأقدم من كده
             // بيفضل موجود في قاعدة البيانات وممكن يتراجع من فايرستور مباشرة لو احتجناه.
             db.collection('customerOrders').orderBy('createdAt', 'desc').limit(300).onSnapshot(function(snap) {
-                customerOrders = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+                // الطلبات اللي اتضافت على طلب تاني لنفس العميل (merged) بتختفي من كل الشاشات والتقارير - أصنافها بقت جوه الطلب الأساسي
+                customerOrders = snap.docs.map(d => Object.assign({ id: d.id }, d.data())).filter(o => o.status !== 'merged');
                 localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
                 syncReservedOrdersIntoLocalInventory(customerOrders);
+                try { scheduleAutoMergeOrders(); } catch (e) { console.error('auto merge error:', e); }
                 // قفل التسليم وإضافة العملاء بيستنوا لحد ما بيانات العملاء والمخزون توصل من السحابة
                 if (isCloudReady()) { try { processRepDeliveredOrders(); } catch (e) { console.error('processRepDeliveredOrders error:', e); } }
                 let addedAny = false;
@@ -5027,10 +5029,156 @@
                 .catch(err => { console.error(err); showToast('تعذر رفض الطلب', 'error'); });
         }
 
+        // ==================== فاتورة واحدة للعميل في يوم البيع ====================
+        // القاعدة (طلب عيسى 2026-10-06): طول ما طلب العميل لسه "جديد" وفي نفس يوم البيع (9ص → 9ص)،
+        // أي طلب تاني ليه - سواء هو اللي طلبه أو مندوب طلبه له - يتضاف على نفس الطلب ويطلع فاتورة واحدة.
+        // أول ما الطلب يدخل "قيد التجهيز" (أو يوم البيع يخلص) أي طلب بعده يبقى طلب وفاتورة جديدة.
+        // الأبليكشن بيضيف على الطلب المفتوح مباشرة؛ ودي شبكة أمان في السيستم بتجمع أي طلبات "جديدة"
+        // مكررة لنفس العميل في نفس اليوم (من نسخة أبليكشن قديمة، أو طلبين وصلوا في نفس اللحظة).
+        // الطلب اللي اتضاف بيفضل موجود بحالة "merged" وأصنافه الأصلية محفوظة فيه (originalItems)، بس
+        // من غير أصناف ولا حجز، عشان مايتحسبش مرتين في المخزون أو الفواتير.
+        function orderCustomerKey(o) {
+            const ph = nacDigits(o.phone || '');
+            if (ph.length >= 9) return 'ph:' + ph;
+            return o.customerCode ? 'c:' + o.customerCode : '';
+        }
+        function orderSalesDayKey(o) { return svSalesDayStart(new Date(o.createdAt || Date.now())).getTime(); }
+        function findSameDayPendingGroups(onlyKeys) {
+            const groups = {};
+            customerOrders.forEach(o => {
+                if (o.status !== 'pending') return;
+                const ck = orderCustomerKey(o);
+                if (!ck) return;
+                if (onlyKeys && !onlyKeys.has(ck)) return;
+                const k = ck + '|' + orderSalesDayKey(o);
+                (groups[k] = groups[k] || []).push(o);
+            });
+            return Object.values(groups).filter(g => g.length > 1).map(g => g.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)));
+        }
+        const orderMergeInFlight = new Set();
+        // بيجمع مجموعة طلبات (كلها "جديد" لنفس العميل ونفس يوم البيع) في أقدم طلب فيهم.
+        // كله جوه معاملة ذرية واحدة: لو أي طلب منهم اتغيرت حالته في اللحظة دي (حد بدأ تجهيزه أو العميل عدّله)
+        // بنقرا أحدث نسخة ونتأكد، ولو حاجة مش مظبوطة منلمسش أي حاجة.
+        function mergeOrderGroup(group) {
+            if (!db || !group || group.length < 2) return Promise.resolve(null);
+            const ids = group.map(o => o.id);
+            const lockKey = ids.slice().sort().join(',');
+            if (ids.some(id => orderMergeInFlight.has(id))) return Promise.resolve(null);
+            ids.forEach(id => orderMergeInFlight.add(id));
+            const orderRefs = ids.map(id => db.collection('customerOrders').doc(id));
+            const ledgerRefs = ids.map(id => db.collection('orderReservationLedger').doc(id));
+            let result = null;
+            return db.runTransaction(function(t) {
+                result = null;
+                return Promise.all(orderRefs.concat(ledgerRefs).map(r => t.get(r))).then(function(snaps) {
+                    const oSnaps = snaps.slice(0, ids.length), lSnaps = snaps.slice(ids.length);
+                    const fresh = [];
+                    for (let i = 0; i < ids.length; i++) {
+                        if (!oSnaps[i].exists) return;
+                        const d = Object.assign({ id: ids[i] }, oSnaps[i].data());
+                        if (d.status !== 'pending') return;              // طلب منهم دخل التجهيز أو اتلغى - منجمعش
+                        fresh.push({ o: d, ledger: lSnaps[i].exists ? ((lSnaps[i].data() || {}).vector || {}) : null });
+                    }
+                    fresh.sort((a, b) => (a.o.createdAt || 0) - (b.o.createdAt || 0));
+                    const day0 = orderSalesDayKey(fresh[0].o), key0 = orderCustomerKey(fresh[0].o);
+                    if (fresh.some(f => orderSalesDayKey(f.o) !== day0 || orderCustomerKey(f.o) !== key0)) return;
+                    const reserved = !!fresh[0].o.stockReserved;
+                    if (fresh.some(f => !!f.o.stockReserved !== reserved)) return; // طلبات قديمة جدًا بنظام حجز مختلف - تتساب زي ما هي
+
+                    const target = fresh[0].o, rest = fresh.slice(1);
+                    const items = (target.items || []).map(it => Object.assign({}, it));
+                    const mergedFrom = (target.mergedFrom || []).slice();
+                    let pointsRedeemed = Number(target.pointsRedeemed) || 0, discount = Number(target.discountFromPoints) || 0;
+                    const upd = {};
+                    rest.forEach(f => {
+                        const o = f.o;
+                        (o.items || []).forEach(nit => {
+                            const ex = items.find(it => it.productCode === nit.productCode && it.unit === nit.unit && Number(it.price) === Number(nit.price));
+                            if (ex) { ex.qty = (Number(ex.qty) || 0) + (Number(nit.qty) || 0); ex.total = (Number(ex.total) || 0) + (Number(nit.total) || 0); }
+                            else items.push(Object.assign({}, nit));
+                        });
+                        pointsRedeemed += Number(o.pointsRedeemed) || 0;
+                        discount += Number(o.discountFromPoints) || 0;
+                        mergedFrom.push({ id: o.id, source: o.source || 'customer', repCode: o.repCode || '', repName: o.repName || '', createdAt: o.createdAt || 0, total: Number(o.total) || 0 });
+                        if (!target.repCode && !upd.repCode && o.repCode) { upd.repCode = o.repCode; upd.repName = o.repName || ''; }
+                        if (!target.assignedDeliveryRep && !upd.assignedDeliveryRep && o.assignedDeliveryRep) upd.assignedDeliveryRep = o.assignedDeliveryRep;
+                        if (!target.location && !upd.location && o.location) upd.location = o.location;
+                    });
+                    const subtotal = items.reduce((s, it) => s + (Number(it.total) || 0), 0);
+                    Object.assign(upd, { items: items, subtotal: subtotal, pointsRedeemed: pointsRedeemed, discountFromPoints: discount, total: Math.max(0, subtotal - discount), mergedFrom: mergedFrom, mergedAt: Date.now() });
+                    t.update(orderRefs[ids.indexOf(target.id)], upd);
+
+                    // دفتر الحجز: الكميات اللي السيستم سجّلها فعلاً للطلبات المضافة تتنقل للطلب الأساسي، عشان مايتخصمش ولا يرجع حاجة مرتين
+                    let newVec = null;
+                    if (reserved) {
+                        newVec = Object.assign({}, fresh[0].ledger || {});
+                        let any = !!fresh[0].ledger;
+                        rest.forEach(f => { if (f.ledger) { any = true; Object.keys(f.ledger).forEach(c => { newVec[c] = (newVec[c] || 0) + (f.ledger[c] || 0); }); } });
+                        if (any) t.set(ledgerRefs[ids.indexOf(target.id)], { orderId: target.id, vector: newVec, updatedAt: Date.now() });
+                        else newVec = null;
+                    }
+                    rest.forEach(f => {
+                        const i = ids.indexOf(f.o.id);
+                        t.update(orderRefs[i], { status: 'merged', mergedInto: target.id, mergedAt: Date.now(), originalItems: f.o.items || [], originalTotal: Number(f.o.total) || 0,
+                            items: [], subtotal: 0, total: 0, pointsRedeemed: 0, discountFromPoints: 0, stockReserved: false });
+                        if (f.ledger) t.delete(ledgerRefs[i]);
+                    });
+                    result = { targetId: target.id, absorbed: rest.map(f => f.o.id), newVec: newVec, customerName: target.customerName || target.shopName || '' };
+                });
+            }).then(function() {
+                if (result) {
+                    // نحدّث النسخة المحلية فورًا (الـ listener هيأكد بعدها)
+                    result.absorbed.forEach(id => { delete reservedStockLedger[id]; });
+                    if (result.newVec) reservedStockLedger[result.targetId] = result.newVec;
+                    localStorage.setItem('reservedStockLedger', JSON.stringify(reservedStockLedger));
+                    customerOrders = customerOrders.filter(o => result.absorbed.indexOf(o.id) === -1);
+                    try { logAction('دمج طلبات العميل في فاتورة واحدة', `${result.customerName}: اتضاف ${result.absorbed.length} طلب على الطلب #${result.targetId.slice(-6)} (نفس يوم البيع)`); } catch (e) {}
+                }
+                return result;
+            }).catch(function(err) { console.error('mergeOrderGroup failed:', err); return null; })
+              .then(function(r) { ids.forEach(id => orderMergeInFlight.delete(id)); return r; });
+        }
+        // بيجمع كل المجموعات المكررة (أو بس بتاعة عملاء معينين) واحدة ورا التانية
+        function mergeSameDayPendingOrders(onlyKeys) {
+            const groups = findSameDayPendingGroups(onlyKeys);
+            if (!groups.length) return Promise.resolve([]);
+            const done = [];
+            return groups.reduce((ch, g) => ch.then(() => mergeOrderGroup(g).then(r => { if (r) done.push(r); })), Promise.resolve()).then(() => done);
+        }
+        // تلقائي من الـ listener: لأي موظف بيشتغل على الطلبات، بتأخير بسيط عشان لو وصل كذا تحديث ورا بعض
+        let autoMergeTimer = null;
+        function scheduleAutoMergeOrders() {
+            if (!db || !currentUser) return;
+            if (!['admin', 'accountant', 'warehouse_keeper'].includes(String(currentUser.role || '').trim().toLowerCase())) return;
+            if (!reservationLedgerLoaded) return;
+            if (!findSameDayPendingGroups().length) return;
+            clearTimeout(autoMergeTimer);
+            autoMergeTimer = setTimeout(function() {
+                mergeSameDayPendingOrders().then(function(done) {
+                    if (done.length) {
+                        const n = done.reduce((s, r) => s + r.absorbed.length, 0);
+                        showToast('اتجمع ' + n + ' طلب مكرر في طلبات العملاء الأصلية (فاتورة واحدة لكل عميل في اليوم)', 'info', 4000);
+                        renderCustomerOrders(); updatePendingOrdersBadge();
+                    }
+                });
+            }, 1500);
+        }
+
         // بدء تجهيز الطلب: مرحلة وسيطة بين "جديد" و"تم التجهيز"، عشان تعرف إن حد فعليًا شايل الطلب
         // ده دلوقتي، ومنع أكتر من حد يجهزوا نفس الطلب في نفس الوقت من غير ما يعرفوا
         function startPreparingOrder(orderId) {
             if (!db) { showToast('لا يوجد اتصال بالسحابة', 'error'); return; }
+            const first = customerOrders.find(o => o.id === orderId);
+            if (!first) return;
+            // قبل التجهيز: لو العميل عنده طلبات "جديدة" تانية في نفس يوم البيع، نجمعهم الأول في طلب واحد
+            const ck = orderCustomerKey(first);
+            (ck ? mergeSameDayPendingOrders(new Set([ck])) : Promise.resolve([])).then(function(done) {
+                const hit = done.find(r => r.absorbed.indexOf(orderId) !== -1);
+                if (hit) { orderId = hit.targetId; showToast('اتجمعت طلبات العميل في طلب واحد قبل التجهيز', 'info', 3500); }
+                startPreparingOrderNow(orderId);
+            });
+        }
+        function startPreparingOrderNow(orderId) {
             const order = customerOrders.find(o => o.id === orderId);
             if (!order) return;
             db.collection('customerOrders').doc(orderId).update({ status: 'preparing', preparingAt: Date.now(), preparingBy: DEVICE_ID })
@@ -5066,6 +5214,9 @@
         // ده مجرد تغيير حالة - المخزون أصلاً اتحجز من وقت الطلب نفسه، فمفيش أي خصم بيحصل هنا تاني.
         function batchIssueForPreparation() {
             if (!db) { showToast('لا يوجد اتصال بالسحابة', 'error'); return; }
+            if (customerOrders.filter(o => o.status === 'pending').length === 0) { showToast('لا توجد طلبات جديدة حاليًا', 'warning'); return; }
+            // الأول بنجمع طلبات كل عميل في نفس يوم البيع في طلب واحد، وبعدين نحسب العدد
+            mergeSameDayPendingOrders().then(function() {
             const pendingOrders = customerOrders.filter(o => o.status === 'pending');
             if (pendingOrders.length === 0) { showToast('لا توجد طلبات جديدة حاليًا', 'warning'); return; }
             if (!confirm('تأكيد تحويل ' + pendingOrders.length + ' طلب جديد لحالة "قيد التجهيز" دفعة واحدة؟')) return;
@@ -5085,6 +5236,7 @@
                 renderCustomerOrders();
                 updatePendingOrdersBadge();
                 showToast('تم تحويل ' + successCount + ' طلب لقيد التجهيز' + (failCount > 0 ? ' — وفشل ' + failCount : ''), failCount > 0 ? 'warning' : 'success', 5000);
+            });
             });
         }
 
