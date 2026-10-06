@@ -1664,9 +1664,9 @@
                     <div class="form-group"><label class="form-label">قيمة النقطة الواحدة عند الاستبدال (جنيه)</label><input type="number" class="form-control" id="loyaltyPointValue" min="0" step="0.1"></div>
                     <button class="btn btn-success" onclick="saveLoyaltySettings()"><i class="fas fa-save"></i> حفظ الإعدادات</button>
                 </div>
-                <div class="card-header" style="border-top:1px solid var(--border);"><div class="card-title"><i class="fas fa-users"></i> رصيد نقاط العملاء</div></div>
+                <div class="card-header" style="border-top:1px solid var(--border);"><div class="card-title"><i class="fas fa-users"></i> رصيد نقاط العملاء</div><button class="btn btn-warning btn-sm" onclick="unifyLoyaltyAccounts()"><i class="fas fa-link"></i> وحّد نقاط العملاء المكررين</button></div>
                 <div class="table-container">
-                    <table><thead><tr><th>كود العميل</th><th>اسم العميل</th><th>رصيد النقاط</th><th>قيمتها كخصم</th><th>تعديل يدوي</th></tr></thead><tbody id="loyaltyCustomersTable"></tbody></table>
+                    <table><thead><tr><th>كود العميل</th><th>اسم العميل</th><th>رصيد النقاط</th><th>قيمتها كخصم</th><th>السجل / تعديل</th></tr></thead><tbody id="loyaltyCustomersTable"></tbody></table>
                 </div>
             </div>
 
@@ -2201,6 +2201,12 @@
                 <div class="form-group"><label class="form-label">الأحياء</label><div id="szNeighborhoods" style="display:flex;flex-wrap:wrap;gap:8px;max-height:45vh;overflow:auto;"></div></div>
                 <div style="display:flex;gap:8px;justify-content:flex-end;"><button class="btn btn-secondary" onclick="closeModal('salesZoneEditorModal')">إلغاء</button><button class="btn btn-success" onclick="saveSalesZone()"><i class="fas fa-save"></i> حفظ</button></div>
             </div>
+        </div>
+    </div>
+    <div class="modal-overlay" id="pointsHistoryModal">
+        <div class="modal" style="max-width:900px;width:96%;">
+            <div class="modal-header"><h3 class="modal-title" id="pointsHistoryTitle">سجل النقاط</h3><button class="modal-close" onclick="closeModal('pointsHistoryModal')">&times;</button></div>
+            <div class="modal-body" id="pointsHistoryBody"></div>
         </div>
     </div>
     <div class="modal-overlay" id="stockAuditModal">
@@ -2971,6 +2977,7 @@
             if (cloudLoaded[key]) return;
             cloudLoaded[key] = true;
             if (key === 'products') { try { syncReservedOrdersIntoLocalInventory(customerOrders); } catch (e) { console.error(e); } }
+            if (key === 'customers') { try { startLoyaltyListener(); reconcileLoyaltyDisplay(); } catch (e) { console.error(e); } }
             if (isCloudReady() && !coreReadyTasksRan) {
                 coreReadyTasksRan = true;
                 // الحاجات اللي كانت بتشتغل أوتوماتيك على النسخة القديمة، بقت تستنى لحد ما البيانات تحمل
@@ -3242,6 +3249,7 @@
                     startSupplierRecordsListener();
                     startInventoryRecordsListener();
                     try { startSalesZonesListener(); } catch (e) { console.error(e); }
+                    setTimeout(function() { try { startLoyaltyListener(); } catch (e) { console.error(e); } }, 4000);
                     try { activateMoneySplit(); } catch (e) { console.error(e); }
                     try { probeCounters(); } catch (e) { console.error(e); }
                 });
@@ -4852,7 +4860,7 @@
             // بالفعل ومفيش داعي نكرره هنا - بس نسيب مصفوفة الفواتير فاضية عشان نتخطى فحص/خصم المخزون بالكامل
             const alreadyReserved = !!order.stockReserved;
             const refs = alreadyReserved ? [] : (order.items || []).map(item => db.collection('stockLevels').doc(item.productCode));
-            const custLoyaltyRef = order.customerCode ? db.collection('customerLoyaltyPoints').doc(order.customerCode) : null;
+            const loyaltyGrp = order.customerCode ? loyaltyGroupFor(order.customerCode, order.phone) : null;
             const orderRef = db.collection('customerOrders').doc(order.id);
             const pv = loyaltySettings.pointValue || 1;
             const itemsTotal = order.items.reduce((sum, it) => sum + (it.total || (it.price * it.qty) || 0), 0);
@@ -4867,11 +4875,10 @@
                     if (orderSnap.exists && orderSnap.data().status === 'delivered') {
                         return { alreadyFulfilledElsewhere: true };
                     }
-                    const allRefs = custLoyaltyRef ? refs.concat([custLoyaltyRef]) : refs;
-                    let counterRes = null;
-                    return readCounterInTx(t, 'saleInvoice', invoices.filter(i => i.type === 'sale')).then(function(c) { counterRes = c; return Promise.all(allRefs.map(r => t.get(r))); }).then(function(snaps) {
+                    let counterRes = null, loyaltyRd = null;
+                    return readCounterInTx(t, 'saleInvoice', invoices.filter(i => i.type === 'sale')).then(function(c) { counterRes = c; return loyaltyGrp ? readLoyaltyInTx(t, loyaltyGrp) : null; })
+                      .then(function(rd) { loyaltyRd = rd; return Promise.all(refs.map(r => t.get(r))); }).then(function(snaps) {
                         const stockSnaps = snaps.slice(0, refs.length);
-                        const loyaltySnap = custLoyaltyRef ? snaps[snaps.length - 1] : null;
 
                         for (let i = 0; i < stockSnaps.length; i++) {
                             const item = order.items[i];
@@ -4885,8 +4892,8 @@
                         // العميل بيتنفذ في نفس اللحظة (حتى من جهاز مختلف)، فايرستور بيعيد محاولة المعاملة
                         // دي تلقائيًا لحد ما يقرا الرصيد الصحيح بعد خصم الطلب الأول، فمستحيل يتخصم نفس
                         // الرصيد مرتين على طلبين مختلفين.
-                        const currentPoints = loyaltySnap && loyaltySnap.exists
-                            ? (loyaltySnap.data().points || 0)
+                        const currentPoints = loyaltyRd && loyaltyRd.found
+                            ? loyaltyRd.points
                             : (cust ? (cust.loyaltyPoints || 0) : 0);
 
                         let pointsToDeduct = 0, appliedDiscount = 0;
@@ -4903,9 +4910,7 @@
                             const newQty = (stockSnaps[i].data().qty || 0) - item.stockDeductQty;
                             t.set(refs[i], { code: item.productCode, qty: newQty, updatedAt: Date.now() });
                         }
-                        if (custLoyaltyRef) {
-                            t.set(custLoyaltyRef, { points: newPoints, updatedAt: Date.now() }, { merge: true });
-                        }
+                        if (loyaltyGrp) writeLoyaltyInTx(t, loyaltyGrp, loyaltyRd, newPoints, null);
                         t.update(orderRef, { status: 'delivered', deliveredAt: Date.now(), deliveredBy: DEVICE_ID });
                         counterRes.commit();
 
@@ -4987,6 +4992,9 @@
                 // رصيد النقاط النهائي اتحسب فعليًا جوه المعاملة الذرية (txResult.newPoints) عشان
                 // يبقى محمي من التعارض؛ هنا بس بنعكسه على نسخة العميل المحلية للعرض في الشاشة
                 if (finalCust) {
+                    // بنحدّث نسخة العميل "الحالية" (مش النسخة اللي كانت معانا قبل المعاملة - ممكن تكون اتبدلت من جهاز تاني)
+                    if (loyaltyGrp) applyLoyaltyLocally(loyaltyGrp, newPoints);
+                    finalCust = customers.find(c => c.code === finalCust.code) || finalCust;
                     finalCust.loyaltyPoints = newPoints;
                     if (pointsToDeduct > 0) {
                         logAction('استخدام نقاط ولاء', `العميل ${finalCust.name}: -${pointsToDeduct} نقطة مقابل خصم ${appliedDiscount.toFixed(2)} ر.س (رصيده الآن ${newPoints})`);
@@ -5769,6 +5777,7 @@
         }
 
         function applyRolePermissions() {
+            setTimeout(function() { try { startLoyaltyListener(); } catch (e) {} }, 0);
             if (!currentUser) return;
             if (!ROLES[currentUser.role]) {
                 alert('الدور بتاعك (' + currentUser.role + ') اتلغى من السيستم. كلّم المدير يدّيك صلاحية جديدة.');
@@ -7048,6 +7057,147 @@
             showToast('تم حفظ إعدادات نقاط الولاء');
         }
 
+        // ==================== نقاط الولاء: حساب واحد لكل عميل (برقم تليفونه) ====================
+        // *** 2026-10-06 ***
+        // 1) العميل ممكن يكون متسجل مرتين: بكود السيستم (C270) لما المندوب يطلب له، وبرقم تليفونه لما يطلب بنفسه من الأبليكشن.
+        //    النقاط كانت بتتقسم على الحسابين، والأبليكشن بيعرض حساب التليفون بس. دلوقتي النقاط بتتحسب على رقم التليفون
+        //    (حساب واحد)، وأي رصيد قديم على الكود التاني بيتضم له أول مرة.
+        // 2) الرصيد اللي بيظهر في الأبليكشن (loyaltyPoints على العميل) ساعات ماكانش بيتحدث بعد التسليم (لو بيانات
+        //    العملاء اتحدثت من جهاز تاني والتسليم شغال). دلوقتي بيتكتب في نفس المعاملة، وفيه متابعة بتصلّح أي فرق لوحدها.
+        function phoneKey(p) { const d = nacDigits(p); return d.length === 10 && d.charAt(0) === '1' ? '0' + d : ''; }
+        function loyaltyKeyOfCustomer(c) { return (c && (phoneKey(c.phone) || phoneKey(c.code))) || (c && c.code) || ''; }
+        function loyaltyGroupFor(code, phone) {
+            const c0 = customers.find(c => c.code === code);
+            const ph = phoneKey(phone) || phoneKey(c0 && c0.phone) || phoneKey(code);
+            const key = ph || code;
+            const codes = new Set([code].filter(Boolean));
+            if (ph) customers.forEach(c => { if (phoneKey(c.phone) === ph || phoneKey(c.code) === ph) codes.add(c.code); });
+            return { key, codes: Array.from(codes) };
+        }
+        // بيقرا رصيد العميل جوه معاملة: حساب التليفون + أي رصيد قديم على أكواده التانية (اللي لسه ماتضمّش)
+        function readLoyaltyInTx(t, grp) {
+            const keyRef = db.collection('customerLoyaltyPoints').doc(grp.key);
+            const legacy = grp.codes.filter(c => c !== grp.key).map(c => db.collection('customerLoyaltyPoints').doc(c));
+            return Promise.all([keyRef].concat(legacy).map(r => t.get(r))).then(function(snaps) {
+                let points = 0, found = false; const merge = [];
+                snaps.forEach((s, i) => {
+                    if (!s.exists) return;
+                    const d = s.data() || {};
+                    if (i > 0 && d.mergedInto) return;
+                    found = true; points += Number(d.points) || 0;
+                    if (i > 0) merge.push({ ref: legacy[i - 1], code: legacy[i - 1].id, points: Number(d.points) || 0 });
+                });
+                return { keyRef, points, found, merge, keyData: snaps[0].exists ? (snaps[0].data() || {}) : null };
+            });
+        }
+        function writeLoyaltyInTx(t, grp, rd, newPoints, logEntry) {
+            const upd = { points: newPoints, codes: grp.codes, updatedAt: Date.now() };
+            if (logEntry) upd.log = ((rd.keyData && rd.keyData.log) || []).concat([logEntry]).slice(-60);
+            t.set(rd.keyRef, upd, { merge: true });
+            rd.merge.forEach(m => t.set(m.ref, { points: 0, mergedInto: grp.key, mergedPoints: m.points, mergedAt: Date.now() }, { merge: true }));
+            // الرصيد اللي الأبليكشن والمندوب بيشوفوه، على كل أكواد العميل
+            grp.codes.forEach(code => { if (customers.some(c => c.code === code)) t.set(db.collection('customerRecords').doc(String(code)), { loyaltyPoints: newPoints }, { merge: true }); });
+        }
+        function applyLoyaltyLocally(grp, newPoints) {
+            let changed = false;
+            grp.codes.forEach(code => { const c = customers.find(x => x.code === code); if (c && c.loyaltyPoints !== newPoints) { c.loyaltyPoints = newPoints; changed = true; } });
+            if (changed) localStorage.setItem('customers', JSON.stringify(customers));
+            return changed;
+        }
+
+        // متابعة: أي فرق بين الرصيد الحقيقي والرصيد اللي ظاهر على العميل بيتصلّح لوحده (من جهاز موظف)
+        let loyaltyListenerStarted = false, loyaltyDocs = {};
+        function startLoyaltyListener() {
+            if (!db || loyaltyListenerStarted || !currentUser) return;
+            if (!['admin', 'accountant', 'warehouse_keeper'].includes(String(currentUser.role || '').trim().toLowerCase())) return;
+            loyaltyListenerStarted = true;
+            db.collection('customerLoyaltyPoints').onSnapshot(function(snap) {
+                const m = {}; snap.docs.forEach(d => { m[d.id] = d.data() || {}; }); loyaltyDocs = m;
+                reconcileLoyaltyDisplay();
+            }, function(err) { console.error('loyalty listener error:', err); loyaltyListenerStarted = false; });
+        }
+        function reconcileLoyaltyDisplay() {
+            if (!isCloudReady()) return;
+            let changed = 0;
+            customers.forEach(c => {
+                const key = loyaltyKeyOfCustomer(c);
+                let d = loyaltyDocs[key];
+                if (!d && key !== c.code) d = loyaltyDocs[c.code];
+                if (!d || d.mergedInto) return;
+                const v = Number(d.points) || 0;
+                if ((c.loyaltyPoints || 0) !== v || c.loyaltyPoints === undefined) { c.loyaltyPoints = v; changed++; }
+            });
+            if (changed) {
+                localStorage.setItem('customers', JSON.stringify(customers));
+                try { if (document.getElementById('loyaltyCustomersTable')) renderLoyaltyCustomers(); } catch (e) {}
+            }
+        }
+
+        // توحيد العملاء اللي النقاط بتاعتهم متقسمة على أكتر من كود (نفس رقم التليفون)
+        function unifyLoyaltyAccounts() {
+            if (!db || !requireCloudReady()) return;
+            db.collection('customerLoyaltyPoints').get().then(snap => {
+                const docs = {}; snap.docs.forEach(d => { docs[d.id] = d.data() || {}; });
+                const groups = {};
+                customers.forEach(c => { const k = loyaltyKeyOfCustomer(c); if (k && k !== c.code) (groups[k] = groups[k] || []).push(c); });
+                const entries = []; let row = 0;
+                Object.keys(groups).forEach(k => {
+                    const grp = loyaltyGroupFor(groups[k][0].code, k);
+                    const parts = grp.codes.concat([grp.key]).filter((v, i, a) => a.indexOf(v) === i).map(code => ({ code, d: docs[code] })).filter(x => x.d && !(x.code !== grp.key && x.d.mergedInto));
+                    const legacy = parts.filter(x => x.code !== grp.key && (Number(x.d.points) || 0) > 0);
+                    if (!legacy.length) return;
+                    const total = parts.reduce((s, x) => s + (Number(x.d.points) || 0), 0);
+                    const names = grp.codes.map(code => { const c = customers.find(x => x.code === code); return c ? (c.shopName || c.name) + ' (' + code + ')' : code; });
+                    entries.push({ row: ++row, grp, status: 'update', cells: [names.join(' + '), parts.map(x => `${x.code}: ${Number(x.d.points) || 0}`).join(' ، '), total] });
+                });
+                if (!entries.length) { showToast('كل نقاط العملاء موحّدة ✓ مفيش عميل نقاطه متقسمة'); return; }
+                xlPreview({ title: 'توحيد نقاط العملاء المتسجلين بأكتر من كود', confirmLabel: `وحّد ${entries.length} عميل`,
+                    info: 'العملاء دول ليهم أكتر من حساب بنفس رقم التليفون (كود السيستم + رقم التليفون من الأبليكشن)، والنقاط متقسمة بينهم. التوحيد بيجمع الرصيد كله على رقم التليفون، فيظهر للعميل في الأبليكشن ولمندوبه. <strong>مفيش نقاط بتضيع: الرصيد الجديد = مجموع الأرصدة.</strong>',
+                    headers: ['العميل', 'الأرصدة دلوقتي', 'الرصيد بعد التوحيد'], entries,
+                    onConfirm: function(list) {
+                        let done = 0;
+                        list.reduce((ch, e) => ch.then(() => db.runTransaction(t => readLoyaltyInTx(t, e.grp).then(rd => {
+                            const by = (currentUser && (currentUser.fullName || currentUser.username)) || '';
+                            writeLoyaltyInTx(t, e.grp, rd, rd.points, rd.merge.length ? { at: Date.now(), by, type: 'merge', delta: 0, balance: rd.points, note: 'توحيد الحسابات: ' + rd.merge.map(m => m.code + ' (' + m.points + ')').join('، ') } : null);
+                            return rd.points;
+                        })).then(p => { applyLoyaltyLocally(e.grp, p); done++; }).catch(err => console.error('unify failed', err))), Promise.resolve())
+                        .then(() => { logAction('توحيد نقاط العملاء', `اتوحد ${done} عميل`); showToast(`اتوحدت نقاط ${done} عميل ✓`); try { renderLoyaltyCustomers(); } catch (e) {} });
+                    } });
+            }).catch(e => { console.error(e); showToast('تعذر قراءة النقاط', 'error'); });
+        }
+
+        // سجل نقاط العميل: كل فاتورة كسب منها أو استخدم فيها نقاط + التعديلات اليدوية
+        function openPointsHistory(code) {
+            const grp = loyaltyGroupFor(code, (customers.find(c => c.code === code) || {}).phone);
+            const c = customers.find(x => x.code === code) || { name: code };
+            document.getElementById('pointsHistoryTitle').textContent = 'سجل نقاط: ' + (c.shopName || c.name);
+            const body = document.getElementById('pointsHistoryBody');
+            body.innerHTML = '<p style="text-align:center;padding:20px;"><i class="fas fa-spinner fa-spin"></i></p>';
+            openModal('pointsHistoryModal');
+            const keys = grp.codes.concat([grp.key]).filter((v, i, a) => a.indexOf(v) === i);
+            Promise.all(keys.map(k => db.collection('customerLoyaltyPoints').doc(k).get())).then(snaps => {
+                const docs = {}; snaps.forEach((s, i) => { if (s.exists) docs[keys[i]] = s.data() || {}; });
+                const keyDoc = docs[grp.key] || {};
+                const balance = Object.keys(docs).reduce((s, k) => s + ((k === grp.key || !docs[k].mergedInto) ? (Number(docs[k].points) || 0) : 0), 0);
+                const codes = new Set(grp.codes);
+                const phDigits = phoneKey(grp.key);
+                const rows = [];
+                invoices.filter(i => i.type === 'sale' && (codes.has(i.customerCode) || (phDigits && phoneKey(i.customerPhone) === phDigits)) && (i.pointsEarned || i.pointsRedeemed || i.pointsBalanceAfter != null) && !i._pointsEstimated).forEach(i => {
+                    const red = Number(i.pointsRedeemed) || 0, earn = Number(i.pointsEarned) || 0;
+                    rows.push({ at: new Date(i.date).getTime(), what: 'فاتورة #' + i.number + (i.salesmanName ? ' — طلبها ' + i.salesmanName : (i.sourceOrderId ? ' — من الأبليكشن' : '')), earn, red, bal: i.pointsBalanceAfter, by: '' });
+                });
+                Object.keys(docs).forEach(k => (docs[k].log || []).forEach(l => rows.push({ at: l.at, what: l.type === 'merge' ? 'توحيد الحسابات' : 'تعديل يدوي', earn: l.delta > 0 ? l.delta : 0, red: l.delta < 0 ? -l.delta : 0, bal: l.balance, by: l.by, note: l.note })));
+                Object.keys(docs).forEach(k => { if (k !== grp.key && docs[k].mergedInto) rows.push({ at: docs[k].mergedAt || 0, what: `رصيد كود ${k} (${docs[k].mergedPoints || 0} نقطة) اتضم لحساب ${docs[k].mergedInto}`, earn: 0, red: 0, bal: null, by: '' }); });
+                rows.sort((a, b) => b.at - a.at);
+                const shown = c.loyaltyPoints || 0;
+                body.innerHTML = `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+                    <div style="flex:1;min-width:160px;background:#f8f9fa;border-radius:10px;padding:10px;border-right:4px solid var(--success);"><div style="font-size:12px;color:var(--text-light);">الرصيد الحقيقي</div><div style="font-size:20px;font-weight:700;">${balance} نقطة</div><div style="font-size:12px;">= ${(balance * (loyaltySettings.pointValue || 1)).toFixed(2)} ج خصم</div></div>
+                    <div style="flex:1;min-width:160px;background:#f8f9fa;border-radius:10px;padding:10px;border-right:4px solid ${shown === balance ? 'var(--success)' : 'var(--danger)'};"><div style="font-size:12px;color:var(--text-light);">اللي ظاهر للعميل في الأبليكشن</div><div style="font-size:20px;font-weight:700;">${shown} نقطة</div><div style="font-size:12px;">${shown === balance ? '✓ مطابق' : 'هيتصلّح لوحده خلال ثواني'}</div></div>
+                    <div style="flex:1;min-width:160px;background:#f8f9fa;border-radius:10px;padding:10px;border-right:4px solid var(--info);"><div style="font-size:12px;color:var(--text-light);">أكواد العميل</div><div style="font-size:13px;">${escapeHtml(grp.codes.join('، '))}</div><div style="font-size:11px;color:var(--text-light);">الحساب على: ${escapeHtml(grp.key)}</div></div></div>` +
+                    (rows.length ? `<div class="table-container" style="max-height:50vh;overflow:auto;"><table><thead><tr><th>التاريخ</th><th>البيان</th><th>كسب</th><th>استخدم</th><th>الرصيد بعدها</th></tr></thead><tbody>` + rows.map(r => `<tr><td style="white-space:nowrap;font-size:12px;">${r.at ? new Date(r.at).toLocaleString('ar-EG') : '-'}</td><td>${escapeHtml(r.what)}${r.by ? `<div style="font-size:11px;color:var(--text-light);">${escapeHtml(r.by)}${r.note ? ' — ' + escapeHtml(r.note) : ''}</div>` : ''}</td><td style="color:var(--success);font-weight:700;">${r.earn ? '+' + r.earn : ''}</td><td style="color:var(--danger);font-weight:700;">${r.red ? '-' + r.red : ''}</td><td>${r.bal != null ? r.bal : ''}</td></tr>`).join('') + '</tbody></table></div>' : '<p style="color:var(--text-light);">مفيش حركة نقاط للعميل ده.</p>');
+            }).catch(e => { console.error(e); body.innerHTML = '<p style="color:var(--danger);">تعذر تحميل السجل</p>'; });
+        }
+
         function renderLoyaltyCustomers() {
             const tbody = document.getElementById('loyaltyCustomersTable');
             if (!tbody) return;
@@ -7059,26 +7209,30 @@
                 const points = c.loyaltyPoints || 0;
                 return `<tr><td><span class="badge badge-warning">${c.code}</span></td><td><strong>${c.name}</strong></td>
                 <td>${points}</td><td>${(points * loyaltySettings.pointValue).toFixed(2)} ر.س</td>
-                <td><button class="btn btn-secondary btn-sm" onclick="adjustCustomerPoints('${c.code}')"><i class="fas fa-edit"></i> تعديل</button></td></tr>`;
+                <td style="white-space:nowrap;"><button class="btn btn-info btn-sm" onclick="openPointsHistory('${c.code}')"><i class="fas fa-history"></i> السجل</button> <button class="btn btn-secondary btn-sm" onclick="adjustCustomerPoints('${c.code}')"><i class="fas fa-edit"></i> تعديل</button></td></tr>`;
             }).join('');
         }
 
         function adjustCustomerPoints(code) {
             const cust = customers.find(c => c.code === code);
-            if (!cust) return;
+            if (!cust || !db) return;
+            const grp = loyaltyGroupFor(cust.code, cust.phone);
             const raw = prompt(`رصيد النقاط الحالي للعميل "${cust.name}": ${cust.loyaltyPoints || 0}\nادخل الرصيد الجديد:`, cust.loyaltyPoints || 0);
             if (raw === null) return;
             const newPoints = parseInt(raw);
             if (isNaN(newPoints) || newPoints < 0) { showToast('قيمة غير صحيحة', 'error'); return; }
-            cust.loyaltyPoints = newPoints;
-            localStorage.setItem('customers', JSON.stringify(customers));
-            if (db) {
-                db.collection('customerLoyaltyPoints').doc(cust.code).set({ points: newPoints, updatedAt: Date.now() }, { merge: true })
-                    .catch(function(e) { console.error('manual points sync failed:', e); });
-            }
-            logAction('تعديل نقاط ولاء يدوي', `العميل ${cust.name}: الرصيد الجديد ${newPoints} نقطة`);
-            renderLoyaltyCustomers();
-            showToast('تم تحديث رصيد النقاط');
+            const reason = prompt('سبب التعديل (هيتسجل في سجل نقاط العميل):', '') || '';
+            const by = (currentUser && (currentUser.fullName || currentUser.username)) || '';
+            let before = 0;
+            db.runTransaction(t => readLoyaltyInTx(t, grp).then(rd => {
+                before = rd.found ? rd.points : (cust.loyaltyPoints || 0);
+                writeLoyaltyInTx(t, grp, rd, newPoints, { at: Date.now(), by, type: 'manual', delta: newPoints - before, balance: newPoints, note: reason });
+            })).then(() => {
+                applyLoyaltyLocally(grp, newPoints);
+                logAction('تعديل نقاط ولاء يدوي', `العميل ${cust.name}: ${before} ← ${newPoints} نقطة${reason ? ' — ' + reason : ''}`);
+                renderLoyaltyCustomers();
+                showToast('تم تحديث رصيد النقاط');
+            }).catch(e => { console.error('manual points failed:', e); showToast('تعذر تعديل النقاط', 'error'); });
         }
 
         // ==================== البانرات/الإعلانات ====================
