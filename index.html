@@ -1532,7 +1532,7 @@
                     #ordersTodayBreakdown span.b-fulfilled { background:rgba(39,174,96,0.15); color:var(--accent); }
                 </style>
                 <div style="padding:12px 20px 0;display:flex;justify-content:flex-end;gap:10px;">
-                    <button class="btn btn-secondary btn-sm" onclick="openPrepZonesReport()"><i class="fas fa-route"></i> خطوط السير: التجميع والبيان</button>
+                    <button class="btn btn-secondary btn-sm" onclick="openPrepZonesReport()"><i class="fas fa-route"></i> بيان المناديب والتجميع</button>
                     <button class="btn btn-primary btn-sm" onclick="batchIssueForPreparation()"><i class="fas fa-receipt"></i> إصدار الفواتير (تحويل الطلبات الجديدة لقيد التجهيز دفعة واحدة)</button>
                 </div>
                 <div style="padding:0 20px;display:flex;gap:4px;border-bottom:2px solid var(--border);flex-wrap:wrap;">
@@ -1557,6 +1557,7 @@
                     <span id="ordersBulkCount" style="font-weight:700;"></span>
                     <button class="btn btn-sm btn-success" onclick="bulkFulfillSelected()"><i class="fas fa-truck"></i> تجهيز المحدد (خروج للتسليم)</button>
                     <button class="btn btn-sm btn-primary" onclick="bulkDeliverSelected()"><i class="fas fa-check-double"></i> تسليم المحدد</button>
+                    <button class="btn btn-sm btn-info" onclick="bulkAssignDeliveryRep()"><i class="fas fa-user-tag"></i> تحديد مندوب التسليم للمحدد</button>
                     <button class="btn btn-sm btn-secondary" onclick="clearBulkSelection()">إلغاء التحديد</button>
                 </div>
                 <div class="table-container">
@@ -2389,7 +2390,7 @@
     <!-- تقرير الأصناف المجمّع لمرحلة "قيد التجهيز"، مقسّم حسب منطقة التسليم -->
     <div class="modal-overlay" id="prepZonesReportModal">
         <div class="modal wide">
-            <div class="modal-header"><h3 class="modal-title">خطوط السير: التجميع وبيان المتحصلات (كل الطلبات اللي لسه متسلمتش)</h3><button class="modal-close" onclick="closeModal('prepZonesReportModal')">&times;</button></div>
+            <div class="modal-header"><h3 class="modal-title">بيان المناديب والتجميع (كل الطلبات اللي لسه متسلمتش)</h3><button class="modal-close" onclick="closeModal('prepZonesReportModal')">&times;</button></div>
             <div class="modal-body">
                 <div id="prepZonesReportContent"></div>
             </div>
@@ -2533,7 +2534,7 @@
     <!-- Delivery Assign Modal -->
     <div class="modal-overlay" id="deliveryAssignModal">
         <div class="modal" style="max-width:440px;">
-            <div class="modal-header"><h3 class="modal-title"><i class="fas fa-truck"></i> مندوب التسليم للطلب ده</h3><button class="modal-close" onclick="closeModal('deliveryAssignModal')">&times;</button></div>
+            <div class="modal-header"><h3 class="modal-title"><i class="fas fa-truck"></i> <span id="deliveryAssignTitle">مندوب التسليم للطلب ده</span></h3><button class="modal-close" onclick="closeModal('deliveryAssignModal')">&times;</button></div>
             <div class="modal-body">
                 <input type="hidden" id="deliveryAssignOrderId">
                 <div id="deliveryAssignInfo" style="font-size:13px;color:var(--text-light);margin-bottom:12px;"></div>
@@ -4428,6 +4429,7 @@
                          <button class="row-actions-btn" onclick="toggleRowActionsMenu(this)">الإجراء <i class="fas fa-caret-down"></i></button>
                          <div class="row-actions-menu">
                            <button class="info" onclick="startPreparingOrder('${o.id}')"><i class="fas fa-box-open"></i> بدء التجهيز</button>
+                           <button onclick="openDeliveryAssignModal('${o.id}')"><i class="fas fa-user-edit"></i> تحديد مندوب التسليم</button>
                            <button class="danger" onclick="rejectOrder('${o.id}')"><i class="fas fa-times"></i> رفض الطلب</button>
                          </div>
                        </div>`;
@@ -5098,12 +5100,24 @@
             const start = svSalesDayStart().getTime();
             return orders.filter(o => (o.createdAt || 0) < start).length;
         }
-        function buildRoutesData() {
+        // طريقة تقسيم البيان والتجميع: 'rep' = باسم مندوب التسليم (الافتراضي) — 'zone' = حسب خط السير (خيار إضافي)
+        let routesMode = 'rep';
+        try { const m = localStorage.getItem('routesMode'); if (m === 'rep' || m === 'zone') routesMode = m; } catch (e) {}
+        function orderDeliveryRepGroup(o) {
+            const a = getOrderDeliveryAssignment(o);
+            if (a.reps && a.reps.length === 1) return { key: 'rep:' + a.reps[0].code, name: a.reps[0].name || a.reps[0].code };
+            if (a.reps && a.reps.length > 1) return { key: '__multi', name: 'أكتر من مندوب على نفس المنطقة (حدد واحد)' };
+            return { key: '__none', name: 'بدون مندوب تسليم محدد' };
+        }
+        function buildRoutesData(mode) {
+            mode = mode || routesMode;
             const byZone = {};
             routeOrders().forEach(o => {
-                const zone = getOrderZoneName(o);
-                const z = byZone[zone] || (byZone[zone] = { name: zone, orders: [], products: {} });
+                const zoneName = getOrderZoneName(o);
+                const g = mode === 'rep' ? orderDeliveryRepGroup(o) : { key: 'zone:' + zoneName, name: zoneName };
+                const z = byZone[g.key] || (byZone[g.key] = { key: g.key, kind: mode, name: g.name, orders: [], products: {}, zonesSet: {} });
                 z.orders.push(o);
+                z.zonesSet[zoneName] = true;
                 (o.items || []).forEach(it => {
                     const p = products.find(x => x.code === it.productCode) || {};
                     const sec = p.secondaryUnit && p.secondaryUnit.name ? p.secondaryUnit : null;
@@ -5112,8 +5126,11 @@
                     e.total += inPrimary;
                 });
             });
-            return Object.values(byZone).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+            return Object.values(byZone).sort((a, b) => (a.key.startsWith('__') ? 1 : 0) - (b.key.startsWith('__') ? 1 : 0) || a.name.localeCompare(b.name, 'ar'));
         }
+        // اسم المندوب + خط/خطوط السير لأي مجموعة (سواء متقسمة بالمندوب أو بالخط)
+        function routeGroupRepName(z) { return z.kind === 'rep' ? (z.key.startsWith('__') ? '' : z.name) : zoneRepsNames(z.name); }
+        function routeGroupZonesText(z) { return z.kind === 'rep' ? Object.keys(z.zonesSet || {}).join(' / ') : z.name; }
         // "10 كرتونة + 3 علبة" بدل ما الكراتين والعلب يتجمعوا كأنهم نفس الوحدة
         function formatTwoUnits(total, unit, sec) {
             const eps = 1e-6;
@@ -5139,7 +5156,7 @@
             return `<div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;color:#000;">
                 <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:3px double #000;padding-bottom:6px;margin-bottom:8px;">
                   <img src="${invoiceSettings.logo || DEFAULT_INVOICE_LOGO}" style="width:70px;height:70px;object-fit:contain;">
-                  <div style="text-align:center;"><div style="font-size:18px;font-weight:900;">${title}</div><div style="font-size:13px;">خط السير: <b>${escapeHtml(z.name)}</b> · ${z.orders.length} طلب${zoneRepsNames(z.name) ? ' · المندوب: ' + escapeHtml(zoneRepsNames(z.name)) : ''}</div></div>
+                  <div style="text-align:center;"><div style="font-size:18px;font-weight:900;">${title}</div><div style="font-size:13px;">${z.kind === 'rep' ? `المندوب: <b>${escapeHtml(z.name)}</b> · ${z.orders.length} طلب${routeGroupZonesText(z) ? ' · خط السير: ' + escapeHtml(routeGroupZonesText(z)) : ''}` : `خط السير: <b>${escapeHtml(z.name)}</b> · ${z.orders.length} طلب${zoneRepsNames(z.name) ? ' · المندوب: ' + escapeHtml(zoneRepsNames(z.name)) : ''}`}</div></div>
                   <div style="font-size:12px;text-align:left;">${new Date().toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div></div>
                 <table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr><th style="border:1.5px solid #000;padding:6px;">#</th><th style="border:1.5px solid #000;padding:6px;text-align:right;">الصنف</th><th style="border:1.5px solid #000;padding:6px;">الكمية المطلوبة</th></tr></thead><tbody>${rows}</tbody></table>
                 <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px;font-size:12px;"><div>جهّزه (أمين المخزن)<div style="border-bottom:1px dotted #000;height:24px;"></div></div><div>استلمه (المندوب)<div style="border-bottom:1px dotted #000;height:24px;"></div></div></div></div>`;
@@ -5171,7 +5188,7 @@
                   <div style="font-size:12mm;line-height:1;transform:scaleX(-1);">🚚</div></div>
                 <div style="display:flex;justify-content:space-between;font-weight:700;font-size:12.5px;margin:2mm 0 2.5mm;">
                   <span>اليوم: ${dots(d.toLocaleDateString('ar-EG', { weekday: 'long' }))}</span><span>التاريخ: ${dots(d.toLocaleDateString('ar-EG'))}</span>
-                  <span>المندوب: ${dots(escapeHtml(zoneRepsNames(z.name) || '..........'))}</span><span>خط السير: ${dots(escapeHtml(z.name))}</span></div>
+                  <span>المندوب: ${dots(escapeHtml(routeGroupRepName(z) || '..........'))}</span><span>خط السير: ${dots(escapeHtml(routeGroupZonesText(z) || '..........'))}</span></div>
                 <table style="width:100%;border-collapse:collapse;border:2.6px solid #000;table-layout:fixed;">
                   <colgroup><col style="width:8mm"><col><col style="width:30mm"><col style="width:17mm"><col style="width:8mm"><col style="width:15mm"><col style="width:8mm"><col style="width:19mm"><col style="width:8mm"></colgroup>
                   <thead><tr><th rowspan="2" style="${th}">م</th><th rowspan="2" style="${th}">اسم العميـــل</th><th rowspan="2" style="${th}">التليفون</th><th colspan="2" style="${th}">المحصّـل</th><th colspan="2" style="${th}">مرتجـع</th><th colspan="2" style="${th}">الإجمالـي</th></tr>
@@ -5186,12 +5203,12 @@
                 </div>`;
         }
         const pageBreak = '<div style="page-break-after:always;break-after:page;"></div>';
-        function printRoute(zoneName, what) {
-            const zones = buildRoutesData().filter(z => !zoneName || z.name === zoneName);
+        function printRoute(groupKey, what) {
+            const zones = buildRoutesData().filter(z => !groupKey || z.key === groupKey || z.name === groupKey);
             if (!zones.length) { showToast('مفيش طلبات لسه متسلمتش', 'warning'); return; }
             const pages = [];
             zones.forEach(z => {
-                if (what === 'prep' || what === 'all') pages.push(prepTableHtml(z, 'تجميع أصناف خط السير'));
+                if (what === 'prep' || what === 'all') pages.push(prepTableHtml(z, z.kind === 'rep' ? 'مجمّع أصناف المندوب' : 'تجميع أصناف خط السير'));
                 if (what === 'bundle' || what === 'all') {
                     pages.push(collectionsStatementHtml(z));
                     z.orders.forEach(o => pages.push(buildCustomerInvoiceHtml(orderAsInvoice(o))));
@@ -5202,24 +5219,34 @@
         function printAllRoutesPrepTotal() {
             const zones = buildRoutesData();
             if (!zones.length) { showToast('مفيش طلبات', 'warning'); return; }
-            const all = { name: 'كل خطوط السير', orders: [], products: {} };
+            const all = { key: '__all', kind: 'zone', name: routesMode === 'rep' ? 'كل المناديب' : 'كل خطوط السير', orders: [], products: {} };
             zones.forEach(z => { all.orders = all.orders.concat(z.orders); Object.values(z.products).forEach(p => { const e = all.products[p.code] || (all.products[p.code] = Object.assign({}, p, { total: 0 })); e.total += p.total; }); });
-            printHtml(prepTableHtml(all, 'إجمالي تجميع كل خطوط السير'), 'إجمالي التجميع');
+            printHtml(prepTableHtml(all, routesMode === 'rep' ? 'إجمالي تجميع كل المناديب' : 'إجمالي تجميع كل خطوط السير'), 'إجمالي التجميع');
         }
         function buildPrepZonesReportHtml() {
             const zones = buildRoutesData();
-            if (!zones.length) return `<div class="empty-state"><i class="fas fa-boxes"></i><h3>مفيش طلبات لسه متسلمتش</h3></div>`;
-            return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;"><button class="btn btn-primary btn-sm" onclick="printRoute(null,'prep')"><i class="fas fa-boxes"></i> طباعة تجميع كل الخطوط</button><button class="btn btn-success btn-sm" onclick="printRoute(null,'bundle')"><i class="fas fa-file-invoice"></i> طباعة البيانات والفواتير لكل الخطوط</button><button class="btn btn-secondary btn-sm" onclick="printAllRoutesPrepTotal()"><i class="fas fa-layer-group"></i> إجمالي الأربع خطوط في صفحة</button></div>` +
+            const isRep = routesMode === 'rep';
+            const toggle = `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px;"><span style="font-weight:700;">تقسيم البيان والتجميع:</span><button class="btn btn-sm ${isRep ? 'btn-primary' : 'btn-secondary'}" onclick="setRoutesMode('rep')"><i class="fas fa-user"></i> باسم المندوب</button><button class="btn btn-sm ${!isRep ? 'btn-primary' : 'btn-secondary'}" onclick="setRoutesMode('zone')"><i class="fas fa-map-marker-alt"></i> حسب خط السير</button></div>`;
+            if (!zones.length) return toggle + `<div class="empty-state"><i class="fas fa-boxes"></i><h3>مفيش طلبات لسه متسلمتش</h3></div>`;
+            const unassigned = isRep ? zones.filter(z => z.key.startsWith('__')).reduce((n, z) => n + z.orders.length, 0) : 0;
+            const warn = unassigned ? `<div style="background:#FFF4E5;border:1px solid #F0B429;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:13px;"><i class="fas fa-exclamation-triangle"></i> فيه ${unassigned} طلب من غير مندوب تسليم واحد محدد — حددهم من صفحة الطلبات (علّم عليهم ← "تحديد مندوب التسليم للمحدد") عشان يدخلوا في بيان المندوب.</div>` : '';
+            return toggle + warn + `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;"><button class="btn btn-primary btn-sm" onclick="printRoute(null,'prep')"><i class="fas fa-boxes"></i> طباعة تجميع ${isRep ? 'كل المناديب' : 'كل الخطوط'}</button><button class="btn btn-success btn-sm" onclick="printRoute(null,'bundle')"><i class="fas fa-file-invoice"></i> طباعة البيانات والفواتير ${isRep ? 'لكل المناديب' : 'لكل الخطوط'}</button><button class="btn btn-secondary btn-sm" onclick="printAllRoutesPrepTotal()"><i class="fas fa-layer-group"></i> إجمالي التجميع في صفحة</button></div>` +
                 zones.map(z => {
-                    const q = encodeURIComponent(z.name).replace(/'/g, '%27');
+                    const q = encodeURIComponent(z.key).replace(/'/g, '%27');
                     const rows = Object.values(z.products).sort((a, b) => (a.brand || 'ي').localeCompare(b.brand || 'ي', 'ar') || a.name.localeCompare(b.name, 'ar'))
                         .map(p => `<tr><td>${escapeHtml(p.name)}${p.brand ? `<div style="font-size:11px;color:var(--text-light);">${escapeHtml(p.brand)}</div>` : ''}</td><td style="text-align:center;font-weight:800;">${escapeHtml(formatTwoUnits(p.total, p.unit, p.sec))}</td></tr>`).join('');
-                    return `<div class="card" style="margin-bottom:14px;"><div class="card-header"><div class="card-title">📍 ${escapeHtml(z.name)} <span style="font-weight:400;color:var(--text-light);font-size:13px;">(${z.orders.length} طلب${zoneRepsNames(z.name) ? ' · ' + escapeHtml(zoneRepsNames(z.name)) : ''})</span>${lateOrdersCount(z.orders) ? ` <span class="badge badge-danger">منهم ${lateOrdersCount(z.orders)} متأخر من يوم سابق</span>` : ''}</div>
+                    return `<div class="card" style="margin-bottom:14px;"><div class="card-header"><div class="card-title">${z.kind === 'rep' ? (z.key.startsWith('__') ? '⚠️' : '👤') : '📍'} ${escapeHtml(z.name)} <span style="font-weight:400;color:var(--text-light);font-size:13px;">(${z.orders.length} طلب${z.kind === 'rep' ? (routeGroupZonesText(z) ? ' · ' + escapeHtml(routeGroupZonesText(z)) : '') : (zoneRepsNames(z.name) ? ' · ' + escapeHtml(zoneRepsNames(z.name)) : '')})</span>${lateOrdersCount(z.orders) ? ` <span class="badge badge-danger">منهم ${lateOrdersCount(z.orders)} متأخر من يوم سابق</span>` : ''}</div>
                         <div style="display:flex;gap:8px;"><button class="btn btn-primary btn-sm" onclick="printRoute(decodeURIComponent('${q}'),'prep')"><i class="fas fa-boxes"></i> التجميع</button><button class="btn btn-success btn-sm" onclick="printRoute(decodeURIComponent('${q}'),'bundle')"><i class="fas fa-file-invoice"></i> البيان + الفواتير</button></div></div>
                         <div class="table-container"><table><thead><tr><th>الصنف</th><th>الكمية</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
                 }).join('');
         }
 
+        function setRoutesMode(m) {
+            routesMode = m === 'zone' ? 'zone' : 'rep';
+            try { localStorage.setItem('routesMode', routesMode); } catch (e) {}
+            const el = document.getElementById('prepZonesReportContent');
+            if (el) el.innerHTML = buildPrepZonesReportHtml();
+        }
         function openPrepZonesReport() {
             document.getElementById('prepZonesReportContent').innerHTML = buildPrepZonesReportHtml();
             openModal('prepZonesReportModal');
@@ -9240,34 +9267,59 @@
             if (a.reps.length) return `<br><span class="badge" style="margin-top:4px;background:#E1F5EE;color:#085041;"><i class="fas fa-truck"></i> ${escapeHtml(a.reps.map(r => r.name).join(' / '))} · ${escapeHtml(getOrderZoneName(o))}</span>`;
             return `<br><span class="badge badge-warning" style="margin-top:4px;"><i class="fas fa-exclamation-triangle"></i> من غير مندوب تسليم — ظاهر للكل</span>`;
         }
-        function openDeliveryAssignModal(orderId) {
-            const o = customerOrders.find(x => x.id === orderId);
-            if (!o) return;
-            const a = getOrderDeliveryAssignment(o);
-            const autoText = (() => { const z = neighborhoodZoneMap[o.neighborhood]; const reps = z ? getDeliveryReps().filter(s => (s.deliveryZoneIds || []).includes(z)) : []; return reps.length ? `تلقائي حسب المنطقة (${reps.map(r => r.name).join(' / ')})` : 'تلقائي (المنطقة ملهاش مندوب، هيظهر للكل)'; })();
-            document.getElementById('deliveryAssignOrderId').value = orderId;
-            document.getElementById('deliveryAssignInfo').textContent = `${o.customerName || ''} — ${o.neighborhood || 'من غير حي'} — ${getOrderZoneName(o)}`;
+        let deliveryAssignIds = [];
+        function bulkAssignDeliveryRep() {
+            const ids = Array.from(selectedBulkOrderIds).filter(id => { const o = customerOrders.find(x => x.id === id); return o && ['pending', 'preparing', 'ready'].includes(o.status); });
+            if (!ids.length) { showToast('حدد طلبات لسه متسلمتش (جديد / قيد التجهيز / خرج للتسليم)', 'warning'); return; }
+            openDeliveryAssignModal(ids);
+        }
+        function openDeliveryAssignModal(orderIdOrIds) {
+            const ids = Array.isArray(orderIdOrIds) ? orderIdOrIds : [orderIdOrIds];
+            const list = ids.map(id => customerOrders.find(x => x.id === id)).filter(Boolean);
+            if (!list.length) return;
+            deliveryAssignIds = list.map(o => o.id);
             const sel = document.getElementById('deliveryAssignSelect');
-            sel.innerHTML = `<option value="">${escapeHtml(autoText)}</option>` + getDeliveryReps().map(s => `<option value="${escapeHtml(s.code)}">${escapeHtml(s.name)}</option>`).join('');
-            sel.value = a.manual ? a.reps[0].code : '';
+            const titleEl = document.getElementById('deliveryAssignTitle');
+            if (list.length === 1) {
+                const o = list[0];
+                const a = getOrderDeliveryAssignment(o);
+                const autoText = (() => { const z = neighborhoodZoneMap[o.neighborhood]; const reps = z ? getDeliveryReps().filter(s => (s.deliveryZoneIds || []).includes(z)) : []; return reps.length ? `تلقائي حسب المنطقة (${reps.map(r => r.name).join(' / ')})` : 'تلقائي (المنطقة ملهاش مندوب، هيظهر للكل)'; })();
+                if (titleEl) titleEl.textContent = 'مندوب التسليم للطلب ده';
+                document.getElementById('deliveryAssignInfo').textContent = `${o.customerName || ''} — ${o.neighborhood || 'من غير حي'} — ${getOrderZoneName(o)}`;
+                sel.innerHTML = `<option value="">${escapeHtml(autoText)}</option>` + getDeliveryReps().map(s => `<option value="${escapeHtml(s.code)}">${escapeHtml(s.name)}</option>`).join('');
+                sel.value = a.manual ? a.reps[0].code : '';
+            } else {
+                const codes = new Set(list.map(o => (o.assignedDeliveryRep && o.assignedDeliveryRep.code) || ''));
+                if (titleEl) titleEl.textContent = `مندوب التسليم لـ ${list.length} طلب`;
+                document.getElementById('deliveryAssignInfo').textContent = `هيتحدد نفس المندوب للـ ${list.length} طلب المحددين، وهيطلع بيان ومجمّع باسمه.`;
+                sel.innerHTML = `<option value="">تلقائي حسب منطقة كل طلب</option>` + getDeliveryReps().map(s => `<option value="${escapeHtml(s.code)}">${escapeHtml(s.name)}</option>`).join('');
+                sel.value = codes.size === 1 ? Array.from(codes)[0] : '';
+            }
+            document.getElementById('deliveryAssignOrderId').value = deliveryAssignIds[0];
             openModal('deliveryAssignModal');
         }
         function saveDeliveryAssign() {
-            const orderId = document.getElementById('deliveryAssignOrderId').value;
+            const ids = deliveryAssignIds.length ? deliveryAssignIds.slice() : [document.getElementById('deliveryAssignOrderId').value].filter(Boolean);
+            if (!ids.length) return;
             const code = document.getElementById('deliveryAssignSelect').value;
             const rep = code ? salesmen.find(s => s.code === code) : null;
             if (!db) { showToast('لا يوجد اتصال بالسحابة', 'error'); return; }
             const value = rep ? { code: rep.code, name: rep.name, by: currentUser ? (currentUser.fullName || currentUser.username || '') : '', at: Date.now() } : null;
-            db.collection('customerOrders').doc(orderId).update({ assignedDeliveryRep: value }).then(function() {
-                const o = customerOrders.find(x => x.id === orderId);
-                if (o) o.assignedDeliveryRep = value;
-                logAction('تحديد مندوب تسليم لطلب', `الطلب #${orderId.slice(-6)}: ${rep ? rep.name : 'تلقائي حسب المنطقة'}`);
+            // تحديث حقل مندوب التسليم بس على الطلبات المحددة (على دفعات 400) — مفيش أي حاجة تانية بتتغير في الطلب
+            const chunks = [];
+            for (let i = 0; i < ids.length; i += 400) chunks.push(ids.slice(i, i + 400));
+            Promise.all(chunks.map(ch => { const b = db.batch(); ch.forEach(id => b.update(db.collection('customerOrders').doc(id), { assignedDeliveryRep: value })); return b.commit(); })).then(function() {
+                ids.forEach(id => { const o = customerOrders.find(x => x.id === id); if (o) o.assignedDeliveryRep = value; });
+                logAction('تحديد مندوب تسليم', ids.length === 1 ? `الطلب #${ids[0].slice(-6)}: ${rep ? rep.name : 'تلقائي حسب المنطقة'}` : `${ids.length} طلب: ${rep ? rep.name : 'تلقائي حسب المنطقة'}`);
                 closeModal('deliveryAssignModal');
+                if (ids.length > 1 && typeof clearBulkSelection === 'function') clearBulkSelection();
+                deliveryAssignIds = [];
                 renderCustomerOrders();
-                showToast(rep ? `الطلب هيظهر عند ${rep.name} بس` : 'الطلب رجع يتوزع تلقائي حسب المنطقة');
+                const rc = document.getElementById('prepZonesReportContent');
+                if (rc && document.getElementById('prepZonesReportModal') && document.getElementById('prepZonesReportModal').classList.contains('active')) rc.innerHTML = buildPrepZonesReportHtml();
+                showToast(rep ? (ids.length > 1 ? `${ids.length} طلب اتحددوا على ${rep.name}` : `الطلب هيظهر عند ${rep.name} بس`) : 'رجعوا يتوزعوا تلقائي حسب المنطقة');
             }).catch(function(e) { console.error(e); showToast('تعذر الحفظ', 'error'); });
         }
-
 
         // ==================== مراجعة واعتماد فواتير الشراء ====================
         // أمين المخزن بيعمل الفاتورة ← بتروح "بانتظار المراجعة" (مفيش أي أثر) ← المحاسب/المدير يعتمد ← ساعتها بس
