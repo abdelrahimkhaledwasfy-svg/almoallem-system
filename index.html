@@ -1291,6 +1291,7 @@
                     <div class="card-title"><i class="fas fa-warehouse"></i> إدارة المخزون</div>
                     <div style="display:flex;gap:10px;">
                         <button class="btn btn-success btn-sm" onclick="openStockAdjustmentModal()"><i class="fas fa-sliders-h"></i> تعديل مخزون</button>
+                        <button class="btn btn-warning btn-sm" onclick="openStockAudit()"><i class="fas fa-search-plus"></i> مراجعة حركة الصنف</button>
                         <button class="btn btn-info btn-sm" onclick="exportInventoryCountSheet()"><i class="fas fa-file-export"></i> شيت الجرد Excel</button>
                         <button class="btn btn-primary btn-sm" onclick="document.getElementById('invCountFileInput').click()"><i class="fas fa-file-excel"></i> رفع شيت الجرد</button><input type="file" id="invCountFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importInventoryCountSheet(event)">
                         <button class="btn btn-teal btn-sm" onclick="showSection('purchase-invoice')"><i class="fas fa-cart-plus"></i> فاتورة شراء</button>
@@ -2179,6 +2180,18 @@
     </div>
 
     <!-- Stock Adjustment Modal -->
+    <div class="modal-overlay" id="stockAuditModal">
+        <div class="modal" style="max-width:1150px;width:96%;">
+            <div class="modal-header"><h3 class="modal-title"><i class="fas fa-search-plus" style="color:var(--warning);"></i> مراجعة حركة الصنف</h3><button class="modal-close" onclick="closeModal('stockAuditModal')">&times;</button></div>
+            <div class="modal-body">
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+                    <select class="form-control" id="saProduct" style="flex:1;min-width:220px;" onchange="showStockAuditProduct(this.value)"></select>
+                    <button class="btn btn-danger btn-sm" onclick="runStockAuditScan()"><i class="fas fa-stethoscope"></i> افحص كل الأصناف</button>
+                </div>
+                <div id="saBody"></div>
+            </div>
+        </div>
+    </div>
     <div class="modal-overlay" id="stockAdjustmentModal">
         <div class="modal">
             <div class="modal-header"><h3 class="modal-title"><i class="fas fa-sliders-h" style="color:var(--purple);"></i> تعديل مخزون يدوي</h3><button class="modal-close" onclick="closeModal('stockAdjustmentModal')">&times;</button></div>
@@ -2934,6 +2947,7 @@
         function markCloudLoaded(key) {
             if (cloudLoaded[key]) return;
             cloudLoaded[key] = true;
+            if (key === 'products') { try { syncReservedOrdersIntoLocalInventory(customerOrders); } catch (e) { console.error(e); } }
             if (isCloudReady() && !coreReadyTasksRan) {
                 coreReadyTasksRan = true;
                 // الحاجات اللي كانت بتشتغل أوتوماتيك على النسخة القديمة، بقت تستنى لحد ما البيانات تحمل
@@ -3610,6 +3624,7 @@
         // جهازين حاولوا يعدّلوا نفس الطلب في نفس اللحظة بالظبط، واحد بس هو اللي يطبق الفرق فعليًا.
         let reservedStockLedger = JSON.parse(localStorage.getItem('reservedStockLedger') || '{}');
         let reservationLedgerLoaded = false;
+        let ordersFreshFromServer = false;   // أول ما توصل الطلبات من السحابة نفسها (مش النسخة المحفوظة على الجهاز)
         let reservationLedgerListenerStarted = false;
 
         function computeOrderStockVector(order) {
@@ -3642,41 +3657,72 @@
         // الطويل ("failed-precondition" متكرر في الـ Console). دلوقتي في "قفل" بسيط بيمنع بدء أي
         // محاولة جديدة لنفس الطلب لحد ما المحاولة اللي قبلها تخلص تمامًا.
         const ledgerTxInFlight = new Set();
-        function applyLedgerChangeTransactional(order, newVec) {
+        // *** إصلاح 2026-10-06 (سبب أساسي لاختلاف الجرد) ***
+        // كانت الدالة دي بتاخد حالة الطلب وأصنافه من النسخة المحلية اللي على الجهاز. أي جهاز بيفتح السيستم
+        // كان بيبدأ بنسخة الطلبات القديمة المحفوظة عنده (localStorage) قبل ما الطلبات الحقيقية توصل من السحابة،
+        // فطلب اتسلّم من ساعات (ودفتر حجزه اتمسح) كان بيبان له لسه "خرج للتسليم" ومالوش حجز، فيحجزه تاني
+        // ويخصم بضاعته من المخزون مرة كمان. (مراجعة نسخة 6 أكتوبر: 70 طلب اتخصموا تاني بعد تسليمهم، في 92 صنف.)
+        // دلوقتي القرار بيتاخد جوه المعاملة الذرية من الطلب نفسه على السحابة: لو اتسلّم مفيش أي خصم،
+        // ولو اترفض/رجع بيترجع حجزه، ولو لسه مفتوح بيتحجز على أصنافه الحقيقية بالظبط.
+        const OPEN_ORDER_STATUSES = ['pending', 'preparing', 'ready'];
+        function orderVectorIfComplete(o) {
+            // لو أي صنف في الطلب لسه بياناته (الوحدة التانية) ماوصلتش للجهاز، منحسبش - الحساب هيطلع غلط
+            if ((o.items || []).some(it => !products.find(p => p.code === it.productCode))) return undefined;
+            return computeOrderStockVector(o);
+        }
+        function applyLedgerChangeTransactional(order) {
             if (!db) return;
             if (ledgerTxInFlight.has(order.id)) return; // فيه محاولة شغالة بالفعل لنفس الطلب - متبدأش واحدة تانية فوقها
             ledgerTxInFlight.add(order.id);
             const ledgerRef = db.collection('orderReservationLedger').doc(order.id);
+            const orderRef = db.collection('customerOrders').doc(order.id);
+            let outcome = null;
             db.runTransaction(function(t) {
-                return t.get(ledgerRef).then(function(snap) {
+                outcome = null;
+                return Promise.all([t.get(ledgerRef), t.get(orderRef)]).then(function(snaps) {
+                    const snap = snaps[0], oSnap = snaps[1];
+                    if (!oSnap.exists) return {};
+                    const fresh = Object.assign({ id: order.id }, oSnap.data());
                     const cloudVec = snap.exists ? ((snap.data() || {}).vector || {}) : {};
+                    let newVec;
+                    if (fresh.status === 'delivered') {
+                        // اتسلّم: البضاعة اتخصمت خلاص وقت الحجز - بنمسح الدفتر بس من غير أي تغيير في المخزون
+                        if (snap.exists) t.delete(ledgerRef);
+                        outcome = { vec: null };
+                        return {};
+                    } else if (OPEN_ORDER_STATUSES.includes(fresh.status) && fresh.stockReserved) {
+                        newVec = orderVectorIfComplete(fresh);
+                        if (newVec === undefined) return {};       // بيانات الأصناف لسه ماوصلتش - نستنى
+                    } else {
+                        newVec = null;                               // اترفض / رجع / اتضاف على طلب تاني: الحجز يرجع
+                    }
                     const codes = new Set(Object.keys(newVec || {}).concat(Object.keys(cloudVec)));
                     const deltas = {};
                     codes.forEach(function(code) {
-                        const cloudQty = cloudVec[code] || 0;
-                        const targetQty = newVec ? (newVec[code] || 0) : 0;
-                        const d = targetQty - cloudQty;
-                        if (d !== 0) deltas[code] = d;
+                        const d = (newVec ? (newVec[code] || 0) : 0) - (cloudVec[code] || 0);
+                        if (Math.abs(d) > 1e-9) deltas[code] = d;
                     });
-                    if (newVec) t.set(ledgerRef, { orderId: order.id, vector: newVec, updatedAt: Date.now() });
-                    else t.delete(ledgerRef);
+                    if (newVec) { if (Object.keys(deltas).length || !snap.exists) t.set(ledgerRef, { orderId: order.id, vector: newVec, updatedAt: Date.now() }); }
+                    else if (snap.exists) t.delete(ledgerRef);
+                    outcome = { vec: newVec, released: !newVec };
                     return deltas;
                 });
             }).then(function(deltas) {
-                if (newVec) reservedStockLedger[order.id] = newVec; else delete reservedStockLedger[order.id];
-                localStorage.setItem('reservedStockLedger', JSON.stringify(reservedStockLedger));
+                if (outcome) {
+                    if (outcome.vec) reservedStockLedger[order.id] = outcome.vec; else delete reservedStockLedger[order.id];
+                    localStorage.setItem('reservedStockLedger', JSON.stringify(reservedStockLedger));
+                }
                 if (!deltas || Object.keys(deltas).length === 0) return; // جهاز تاني كان سبقنا بنفس القيمة فعليًا - مفيش خصم مكرر
                 let changed = false;
                 Object.keys(deltas).forEach(function(code) {
                     const delta = deltas[code];
-                    if (inventory[code]) {
-                        inventory[code].qty -= delta;
-                        const ref = 'طلب أبليكشن #' + order.id.slice(-6);
-                        const name = (products.find(p => p.code === code) || {}).name || code;
-                        if (delta > 0) addStockMovement(code, name, 'out', -delta, inventory[code].qty, ref, newVec ? 'حجز تلقائي وقت الطلب من الأبليكشن' : 'خصم إضافي عند إلغاء حجز');
-                        else addStockMovement(code, name, 'in', -delta, inventory[code].qty, ref, newVec ? 'تقليل/حذف صنف من طلب أبليكشن قبل التجهيز' : 'إرجاع مخزون كان محجوز لطلب اتلغى/اترفض');
-                        changed = true;
-                    }
+                    if (!inventory[code]) { const pr = products.find(p => p.code === code); inventory[code] = { code, qty: 0, cost: pr ? (pr.cost || 0) : 0, minStock: 0 }; }
+                    inventory[code].qty -= delta;
+                    const ref = 'طلب أبليكشن #' + order.id.slice(-6);
+                    const name = (products.find(p => p.code === code) || {}).name || code;
+                    if (delta > 0) addStockMovement(code, name, 'out', -delta, inventory[code].qty, ref, 'حجز تلقائي وقت الطلب من الأبليكشن');
+                    else addStockMovement(code, name, 'in', -delta, inventory[code].qty, ref, outcome && outcome.released ? 'إرجاع مخزون كان محجوز لطلب اتلغى/اترفض' : 'تقليل/حذف صنف من طلب أبليكشن قبل التجهيز');
+                    changed = true;
                 });
                 if (changed) {
                     saveInventory();
@@ -3708,22 +3754,23 @@
             // من startReservationLedgerListener - لو حسبنا بناءً على دفتر فاضي هنا هيبقى زي بالظبط
             // نفس المشكلة القديمة (كل جهاز يفتكر إنه أول واحد يعالج الطلب).
             if (!reservationLedgerLoaded) return;
+            // *** إصلاح 2026-10-06: منعملش أي حجز/إرجاع غير لما الطلبات "الحقيقية" توصل من السحابة (مش النسخة ***
+            // القديمة المحفوظة على الجهاز) وبيانات الأصناف تكون اتحملت - وده كان سبب الخصم المكرر بعد التسليم
+            if (!ordersFreshFromServer || !cloudLoaded.products) return;
             orders.forEach(function(order) {
-                if (!order.stockReserved) return;
                 const prevVec = reservedStockLedger[order.id] || null;
-                if (order.status === 'rejected' || order.status === 'returned') {
-                    if (prevVec) applyLedgerChangeTransactional(order, null);
-                    return;
-                }
+                if (!order.stockReserved && !prevVec) return;
                 if (order.status === 'delivered') {
                     if (prevVec) clearLedgerDoc(order.id);
                     return;
                 }
-                // الطلب لسه "جديد" أو "قيد التجهيز" أو "خرج للتسليم" - نتابع أي فرق حصل من الأبليكشن (طلب جديد/إضافة/حذف/تعديل كمية)
-                const currVec = computeOrderStockVector(order);
-                if (!stockVectorsEqual(currVec, prevVec)) {
-                    applyLedgerChangeTransactional(order, currVec);
+                if (!OPEN_ORDER_STATUSES.includes(order.status) || !order.stockReserved) {
+                    if (prevVec) applyLedgerChangeTransactional(order);   // اترفض / رجع / اتضاف على طلب تاني
+                    return;
                 }
+                // الطلب لسه مفتوح - نتابع أي فرق حصل من الأبليكشن (طلب جديد/إضافة/حذف/تعديل كمية)
+                const currVec = orderVectorIfComplete(order);
+                if (currVec !== undefined && !stockVectorsEqual(currVec, prevVec)) applyLedgerChangeTransactional(order);
             });
         }
 
@@ -4260,6 +4307,7 @@
             db.collection('customerOrders').orderBy('createdAt', 'desc').limit(300).onSnapshot(function(snap) {
                 // الطلبات اللي اتضافت على طلب تاني لنفس العميل (merged) بتختفي من كل الشاشات والتقارير - أصنافها بقت جوه الطلب الأساسي
                 customerOrders = snap.docs.map(d => Object.assign({ id: d.id }, d.data())).filter(o => o.status !== 'merged');
+                if (!(snap.metadata && snap.metadata.fromCache)) ordersFreshFromServer = true;
                 localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
                 syncReservedOrdersIntoLocalInventory(customerOrders);
                 try { scheduleAutoMergeOrders(); } catch (e) { console.error('auto merge error:', e); }
@@ -7566,7 +7614,7 @@
                     <td>${(inv.cost || p.cost || 0).toFixed(2)} ر.س</td>
                     <td>${p.price.toFixed(2)} ر.س</td>
                     <td><span class="stock-badge ${stockClass}"><i class="fas fa-${isCritical ? 'times-circle' : (isLow ? 'exclamation-triangle' : 'check-circle')}"></i> ${stockText}</span></td>
-                    <td><button class="btn btn-purple btn-icon btn-sm" onclick="openStockAdjustmentFor('${p.code}')"><i class="fas fa-sliders-h"></i></button></td>
+                    <td style="white-space:nowrap;"><button class="btn btn-purple btn-icon btn-sm" onclick="openStockAdjustmentFor('${p.code}')" title="تعديل مخزون"><i class="fas fa-sliders-h"></i></button> <button class="btn btn-warning btn-icon btn-sm" onclick="openStockAudit('${p.code}')" title="مراجعة حركة الصنف"><i class="fas fa-history"></i></button></td>
                 </tr>`;
             }).join('');
             updateInventoryStats(products.length, totalQty, totalValue, lowStockCount);
@@ -9980,12 +10028,218 @@
         const xlRole = () => String((currentUser && currentUser.role) || '').toLowerCase();
 
         // ==================== 1) جرد المخزون بالإكسل ====================
+        // ==================== مراجعة حركة الصنف ====================
+        // بتجيب كل حركات المخزون من السحابة (مش آخر 2000 بس) وكل طلبات الأبليكشن، وتراجع الصنف من أول حركة لآخر حركة:
+        //  - كل طلب أبليكشن: اللي اتخصم فعلاً من المخزون لازم يساوي اللي في فاتورته (أو صفر لو اترفض/رجع)
+        //  - أي حجز حصل بعد ما الطلب اتسلّم = خصم مكرر (المشكلة اللي اتصلحت 6 أكتوبر)
+        //  - كل فاتورة شراء لازم يكون ليها حركة دخول بنفس الكمية، ومفيش حركة شراء من غير فاتورة
+        //  - الرصيد الحالي لازم يساوي مجموع الحركات
+        let stockAuditCache = null, stockAuditCurrent = null, stockAuditScan = null;
+        const SA_EPS = 1e-6;
+        const saR = n => Math.round((Number(n) || 0) * 1000) / 1000;
+        function saFmt(code, q) {
+            const p = products.find(x => x.code === code) || {};
+            const sign = q < -SA_EPS ? '-' : '';
+            return sign + formatTwoUnits(Math.abs(q), p.unit, p.secondaryUnit);
+        }
+        function loadStockAuditData(force) {
+            if (!db) return Promise.reject(new Error('مفيش اتصال بالسحابة'));
+            if (!force && stockAuditCache && Date.now() - stockAuditCache.at < 120000) return Promise.resolve(stockAuditCache);
+            return Promise.all([db.collection('stockMovementRecords').get(), db.collection('customerOrders').get()]).then(function(res) {
+                const moves = res[0].docs.map(d => Object.assign({ id: d.id }, d.data())).filter(m => m && m.productCode);
+                moves.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.id).localeCompare(String(b.id)));
+                const orders = res[1].docs.map(d => Object.assign({ id: d.id }, d.data()));
+                stockAuditCache = { at: Date.now(), moves, orders };
+                return stockAuditCache;
+            });
+        }
+        function saOrderKey(ref) { const m = /طلب أبليكشن\s*#\s*(\S+)/.exec(String(ref || '')); return m ? m[1] : null; }
+        function saItemDeduct(it) {
+            if (it.stockDeductQty != null) return Number(it.stockDeductQty) || 0;
+            const p = products.find(x => x.code === it.productCode);
+            return p && p.secondaryUnit && it.unit === p.secondaryUnit.name ? (Number(it.qty) || 0) / (Number(p.secondaryUnit.factor) || 1) : (Number(it.qty) || 0);
+        }
+        function analyzeProductStock(code, data) {
+            const moves = data.moves.filter(m => m.productCode === code);
+            const ordersByKey = {}; data.orders.forEach(o => { ordersByKey[String(o.id).slice(-6)] = o; });
+            const invByKey = {}; invoices.forEach(i => { if (i.type === 'sale' && i.sourceOrderId) invByKey[String(i.sourceOrderId).slice(-6)] = i; });
+            const issues = [];
+            const rows = moves.map(m => ({ m, flags: [] }));
+            // الرصيد بعد كل حركة محسوب بالترتيب (مش الرقم اللي كل جهاز كتبه لنفسه وقتها)
+            let bal = rows.length ? (Number(rows[0].m.balanceAfter) || 0) - (Number(rows[0].m.qty) || 0) : (Number((inventory[code] || {}).qty) || 0);
+            const startBal = bal;
+            rows.forEach(r => { bal += Number(r.m.qty) || 0; r.bal = bal; });
+
+            // 1) طلبات الأبليكشن
+            const groups = {};
+            rows.forEach(r => { const k = saOrderKey(r.m.reference); if (k) (groups[k] = groups[k] || []).push(r); });
+            let extraOut = 0, extraIn = 0;
+            Object.keys(groups).forEach(k => {
+                const g = groups[k], inv = invByKey[k], o = ordersByKey[k];
+                let expected = null, state = '';
+                if (inv) { expected = -(inv.items || []).filter(it => it.productCode === code).reduce((s, it) => s + saItemDeduct(it), 0); state = 'اتسلّم في فاتورة #' + inv.number; }
+                else if (o) {
+                    if (['rejected', 'returned', 'merged'].includes(o.status)) { expected = 0; state = o.status === 'merged' ? 'اتضاف على طلب تاني' : (o.status === 'returned' ? 'رجع' : 'اترفض/اتلغى'); }
+                    else if (['pending', 'preparing', 'ready'].includes(o.status) && o.stockReserved) { expected = -(computeOrderStockVector(o)[code] || 0); state = { pending: 'جديد', preparing: 'قيد التجهيز', ready: 'خرج للتسليم' }[o.status]; }
+                }
+                const net = g.reduce((s, r) => s + (Number(r.m.qty) || 0), 0);
+                const deliveredAt = inv ? String(inv.date) : (o && o.deliveredAt ? new Date(o.deliveredAt).toISOString() : null);
+                let afterDelivery = 0;
+                g.forEach(r => {
+                    if (deliveredAt && (Number(r.m.qty) || 0) < 0 && String(r.m.date) > deliveredAt) { r.flags.push({ cls: 'danger', t: 'اتخصم تاني بعد تسليم الطلب' }); afterDelivery += Number(r.m.qty) || 0; }
+                });
+                if (expected === null) return;
+                const diff = net - expected;
+                if (Math.abs(diff) > SA_EPS) {
+                    if (diff < 0) extraOut += -diff; else extraIn += diff;
+                    g.forEach(r => { if (!r.flags.length) r.flags.push({ cls: 'warning', t: 'صافي الطلب مش مطابق' }); });
+                    const who = inv ? (inv.customerName || '') : (o ? (o.customerName || o.shopName || '') : '');
+                    issues.push({ kind: 'order', sev: 'danger', qty: diff,
+                        title: (diff < 0 ? 'اتخصم زيادة ' : 'رجع زيادة ') + saFmt(code, Math.abs(diff)) + ' — طلب #' + k + (who ? ' (' + who + ')' : ''),
+                        text: `الطلب ${state}. المفروض يتخصم ${saFmt(code, -expected)}، واللي اتخصم فعلاً ${saFmt(code, -net)}` + (afterDelivery ? ` (منهم ${saFmt(code, -afterDelivery)} اتخصموا بعد التسليم)` : '') + '.' });
+                }
+            });
+
+            // 2) فواتير الشراء
+            const purchaseRefs = {};
+            rows.forEach(r => { const mm = /^فاتورة شراء #(\S+)/.exec(String(r.m.reference || '')); if (mm) (purchaseRefs[mm[1]] = purchaseRefs[mm[1]] || []).push(r); });
+            const editedOrDeleted = new Set();
+            rows.forEach(r => { const mm = /فاتورة شراء #(\S+)/.exec(String(r.m.notes || '')); if (mm && /حذف فاتورة|تعديل فاتورة/.test(String(r.m.reference || ''))) editedOrDeleted.add(mm[1]); });
+            purchaseInvoices.forEach(pi => {
+                const lines = (pi.items || []).filter(it => it.productCode === code);
+                if (!lines.length || pi.reconstructed) return;
+                const want = lines.reduce((s, it) => s + (Number(it.qty) || 0), 0);
+                const got = (purchaseRefs[pi.number] || []).reduce((s, r) => s + (Number(r.m.qty) || 0), 0);
+                if (!purchaseRefs[pi.number]) {
+                    issues.push({ kind: 'purchase', sev: 'danger', qty: want, title: 'فاتورة شراء #' + pi.number + ' مالهاش حركة دخول مخزون', text: `الفاتورة فيها ${saFmt(code, want)} من ${pi.supplier || 'المورد'} بتاريخ ${new Date(pi.date).toLocaleDateString('ar-EG')}، ومفيش حركة مخزون بيها. (لو الحركة أقدم من بداية سجل الحركات تجاهل التنبيه ده)` });
+                } else if (Math.abs(got - want) > SA_EPS && !editedOrDeleted.has(String(pi.number))) {
+                    (purchaseRefs[pi.number] || []).forEach(r => r.flags.push({ cls: 'warning', t: 'كمية مختلفة عن الفاتورة' }));
+                    issues.push({ kind: 'purchase', sev: 'warning', qty: got - want, title: 'فاتورة شراء #' + pi.number + ': الكمية اللي دخلت المخزن مختلفة', text: `في الفاتورة ${saFmt(code, want)}، ودخل المخزون ${saFmt(code, got)}.` });
+                }
+            });
+            Object.keys(purchaseRefs).forEach(no => {
+                if (purchaseInvoices.some(pi => String(pi.number) === no && (pi.items || []).some(it => it.productCode === code)) || editedOrDeleted.has(no)) return;
+                const got = purchaseRefs[no].reduce((s, r) => s + (Number(r.m.qty) || 0), 0);
+                purchaseRefs[no].forEach(r => r.flags.push({ cls: 'warning', t: 'مفيش فاتورة شراء بالرقم ده' }));
+                issues.push({ kind: 'purchase', sev: 'warning', qty: got, title: 'حركة دخول من فاتورة شراء #' + no + ' مش موجودة', text: `دخل ${saFmt(code, got)} على فاتورة شراء مش لاقيها في فواتير الشراء (ممكن اتمسحت من غير ما المخزون يتعدّل).` });
+            });
+
+            // 3) الرصيد الحالي مقابل مجموع الحركات
+            const cur = Number((inventory[code] || {}).qty) || 0;
+            const unexplained = cur - bal;
+            if (rows.length && Math.abs(unexplained) > SA_EPS) {
+                issues.push({ kind: 'balance', sev: 'warning', qty: unexplained, title: 'الرصيد الحالي ' + (unexplained > 0 ? 'أكتر' : 'أقل') + ' من مجموع الحركات بـ ' + saFmt(code, Math.abs(unexplained)), text: 'يعني المخزون اتغير بالمقدار ده من غير حركة متسجلة (أو فيه حجز لسه بيتسجل دلوقتي). لو الفرق ده فضل بعد ريفريش يبقى محتاج مراجعة.' });
+            }
+            const manual = rows.filter(r => r.m.reference === 'تعديل يدوي' || r.m.reference === 'جرد Excel' || r.m.reference === 'تصحيح جماعي').reduce((s, r) => s + (Number(r.m.qty) || 0), 0);
+            return { code, rows, issues, startBal, computed: bal, current: cur, extraOut, extraIn, manual,
+                totalIn: rows.filter(r => r.m.qty > 0).reduce((s, r) => s + Number(r.m.qty), 0), totalOut: rows.filter(r => r.m.qty < 0).reduce((s, r) => s + Number(r.m.qty), 0) };
+        }
+
+        function openStockAudit(code) {
+            const sel = document.getElementById('saProduct');
+            sel.innerHTML = '<option value="">اختار الصنف...</option>' + products.slice().sort((a, b) => String(a.name).localeCompare(String(b.name), 'ar')).map(p => `<option value="${escapeHtml(p.code)}">${escapeHtml(p.name)} (${escapeHtml(p.code)})</option>`).join('');
+            document.getElementById('saBody').innerHTML = '<p style="color:var(--text-light);text-align:center;padding:30px;">اختار صنف تشوف حركته من أول حركة لآخر حركة، أو دوس <strong>افحص كل الأصناف</strong> عشان تطلع الأصناف اللي فيها مشاكل.</p>';
+            openModal('stockAuditModal');
+            if (code) { sel.value = code; showStockAuditProduct(code); }
+        }
+        function saLoading(msg) { document.getElementById('saBody').innerHTML = `<p style="text-align:center;padding:30px;"><i class="fas fa-spinner fa-spin"></i> ${msg}</p>`; }
+        function showStockAuditProduct(code, force) {
+            if (!code) return;
+            document.getElementById('saProduct').value = code;
+            saLoading('بجيب كل حركات الصنف من السحابة...');
+            loadStockAuditData(force).then(data => { stockAuditCurrent = analyzeProductStock(code, data); renderStockAuditProduct(); })
+                .catch(e => { console.error(e); document.getElementById('saBody').innerHTML = '<p style="color:var(--danger);padding:20px;">تعذر تحميل الحركات: ' + escapeHtml(e.message || '') + '</p>'; });
+        }
+        function renderStockAuditProduct() {
+            const a = stockAuditCurrent; if (!a) return;
+            const p = products.find(x => x.code === a.code) || { name: a.code };
+            const card = (label, val, color) => `<div style="flex:1;min-width:150px;background:var(--light, #f8f9fa);border-radius:10px;padding:10px 12px;border-right:4px solid ${color};"><div style="font-size:12px;color:var(--text-light);">${label}</div><div style="font-size:16px;font-weight:700;">${val}</div></div>`;
+            let html = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+                <h3 style="margin:0;">${escapeHtml(p.name)} <span style="font-size:13px;color:var(--text-light);">(${escapeHtml(a.code)})</span></h3>
+                <div style="display:flex;gap:6px;">${stockAuditScan ? '<button class="btn btn-secondary btn-sm" onclick="renderStockAuditScan()"><i class="fas fa-arrow-right"></i> رجوع لقايمة الأصناف</button>' : ''}
+                <button class="btn btn-info btn-sm" onclick="exportStockAuditProduct()"><i class="fas fa-file-export"></i> Excel</button>
+                <button class="btn btn-secondary btn-sm" onclick="showStockAuditProduct('${escapeHtml(a.code)}', true)"><i class="fas fa-sync"></i> تحديث</button></div></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+                ${card('الرصيد الحالي في السيستم', saFmt(a.code, a.current), 'var(--primary)')}
+                ${card('أول رصيد في السجل', saFmt(a.code, a.startBal), 'var(--secondary, #888)')}
+                ${card('دخل (كل الحركات)', saFmt(a.code, a.totalIn), 'var(--success)')}
+                ${card('خرج (كل الحركات)', saFmt(a.code, -a.totalOut), 'var(--warning)')}
+                ${card('اتخصم زيادة من طلبات الأبليكشن', a.extraOut > SA_EPS ? '<span style="color:var(--danger);">' + saFmt(a.code, a.extraOut) + '</span>' : '✓ مفيش', 'var(--danger)')}
+                ${card('تعديلات وجرد يدوي', a.manual ? (a.manual > 0 ? '+' : '') + saFmt(a.code, a.manual) : 'مفيش', 'var(--info)')}</div>`;
+            if (a.issues.length) {
+                html += `<div style="margin-bottom:12px;"><h4 style="margin:6px 0;">المشاكل اللي لقيتها (${a.issues.length})</h4>` + a.issues.map(i => `<div style="padding:8px 12px;margin-bottom:6px;border-radius:8px;background:${i.sev === 'danger' ? 'rgba(231,76,60,0.08)' : 'rgba(243,156,18,0.1)'};border-right:4px solid var(--${i.sev});"><strong>${escapeHtml(i.title)}</strong><div style="font-size:12.5px;color:var(--text-light);">${escapeHtml(i.text)}</div></div>`).join('') +
+                    (a.extraOut > SA_EPS && a.manual ? `<div style="font-size:12.5px;padding:6px 10px;color:var(--text-light);">ملحوظة: فيه تعديلات أو جرد يدوي على الصنف ده — ممكن يكونوا صلّحوا جزء من الخصم الزيادة بالفعل. الأضمن تعد الصنف وتدخله في شيت الجرد.</div>` : '') + '</div>';
+            } else if (a.rows.length) html += '<div style="padding:10px 12px;border-radius:8px;background:rgba(39,174,96,0.08);border-right:4px solid var(--success);margin-bottom:12px;"><strong>✓ حركة الصنف ده سليمة</strong> — كل طلب اتخصم قد فاتورته، وكل فاتورة شراء دخلت، والرصيد مطابق لمجموع الحركات.</div>';
+            if (!a.rows.length) { html += '<p style="color:var(--text-light);">مفيش أي حركات مسجلة للصنف ده.</p>'; document.getElementById('saBody').innerHTML = html; return; }
+            html += `<h4 style="margin:6px 0;">كل الحركات بالترتيب (${a.rows.length})</h4><div class="table-container" style="max-height:55vh;overflow:auto;"><table><thead><tr><th>التاريخ</th><th>المرجع</th><th>البيان</th><th>الكمية</th><th>الرصيد بعدها</th><th>ملاحظة</th></tr></thead><tbody>` +
+                a.rows.map(r => {
+                    const q = Number(r.m.qty) || 0, bad = r.flags.find(f => f.cls === 'danger'), warn = r.flags.find(f => f.cls === 'warning');
+                    const bg = bad ? 'background:rgba(231,76,60,0.10);' : (warn ? 'background:rgba(243,156,18,0.10);' : '');
+                    return `<tr style="${bg}"><td style="white-space:nowrap;font-size:12px;">${new Date(r.m.date).toLocaleString('ar-EG')}</td><td>${escapeHtml(r.m.reference || '')}</td><td style="font-size:12px;">${escapeHtml(r.m.notes || '')}</td>
+                        <td style="font-weight:700;color:${q < 0 ? 'var(--danger)' : 'var(--success)'};white-space:nowrap;" dir="ltr">${q > 0 ? '+' : ''}${saR(q)}</td><td style="white-space:nowrap;">${saR(r.bal)}</td>
+                        <td>${r.flags.map(f => `<span class="badge badge-${f.cls}">${escapeHtml(f.t)}</span>`).join(' ')}</td></tr>`;
+                }).reverse().join('') + '</tbody></table></div><p style="font-size:12px;color:var(--text-light);">الأحدث فوق. "الرصيد بعدها" محسوب بترتيب الحركات من أول رصيد في السجل.</p>';
+            document.getElementById('saBody').innerHTML = html;
+        }
+        function exportStockAuditProduct() {
+            const a = stockAuditCurrent; if (!a) return;
+            const p = products.find(x => x.code === a.code) || { name: a.code };
+            const rows = [['التاريخ', 'المرجع', 'البيان', 'الكمية', 'الرصيد بعدها', 'ملاحظة']].concat(a.rows.map(r => [new Date(r.m.date).toLocaleString('ar-EG'), r.m.reference || '', r.m.notes || '', saR(r.m.qty), saR(r.bal), r.flags.map(f => f.t).join('، ')]));
+            const iss = [['المشكلة', 'التفاصيل']].concat(a.issues.map(i => [i.title, i.text]));
+            xlWrite('حركة_' + p.name, [{ name: 'الحركات', rows, widths: [20, 24, 44, 10, 12, 26] }, { name: 'المشاكل', rows: iss, widths: [50, 90] }]);
+        }
+        function runStockAuditScan(force) {
+            saLoading('بجيب كل حركات المخزون وكل الطلبات من السحابة وبراجع كل الأصناف... (ممكن ياخد دقيقة)');
+            loadStockAuditData(force).then(data => {
+                const codes = new Set(data.moves.map(m => m.productCode));
+                products.forEach(p => codes.add(p.code));
+                const list = [];
+                codes.forEach(code => {
+                    const a = analyzeProductStock(code, data);
+                    if (!a.issues.length) return;
+                    const unexplained = a.issues.filter(i => i.kind === 'balance').reduce((s, i) => s + i.qty, 0);
+                    list.push({ code, name: (products.find(p => p.code === code) || {}).name || code, issues: a.issues.length, extraOut: a.extraOut, extraIn: a.extraIn, purchase: a.issues.filter(i => i.kind === 'purchase').length, unexplained, current: a.current, manual: a.manual });
+                });
+                list.sort((x, y) => (y.extraOut + Math.abs(y.unexplained) + y.purchase) - (x.extraOut + Math.abs(x.unexplained) + x.purchase));
+                stockAuditScan = { at: Date.now(), list, moves: data.moves.length, orders: data.orders.length, products: codes.size };
+                renderStockAuditScan();
+            }).catch(e => { console.error(e); document.getElementById('saBody').innerHTML = '<p style="color:var(--danger);padding:20px;">تعذر الفحص: ' + escapeHtml(e.message || '') + '</p>'; });
+        }
+        function renderStockAuditScan() {
+            const s = stockAuditScan; if (!s) return;
+            const totalExtra = s.list.filter(x => x.extraOut > SA_EPS).length;
+            let html = `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+                <div>اتراجع <strong>${s.products}</strong> صنف على <strong>${s.moves.toLocaleString('ar-EG')}</strong> حركة و<strong>${s.orders.toLocaleString('ar-EG')}</strong> طلب — <strong style="color:${s.list.length ? 'var(--danger)' : 'var(--success)'};">${s.list.length ? s.list.length + ' صنف فيهم مشاكل' : '✓ كل الأصناف سليمة'}</strong>${totalExtra ? ` (منهم ${totalExtra} اتخصم زيادة من طلبات)` : ''}</div>
+                <div style="display:flex;gap:6px;"><button class="btn btn-info btn-sm" onclick="exportStockAuditScan()"><i class="fas fa-file-export"></i> Excel</button><button class="btn btn-secondary btn-sm" onclick="runStockAuditScan(true)"><i class="fas fa-sync"></i> افحص تاني</button></div></div>`;
+            if (s.list.length) html += `<div class="table-container" style="max-height:60vh;overflow:auto;"><table><thead><tr><th>الصنف</th><th>الرصيد الحالي</th><th>اتخصم زيادة من طلبات</th><th>مشاكل فواتير شراء</th><th>فرق من غير حركة</th><th>تعديلات/جرد يدوي</th><th></th></tr></thead><tbody>` +
+                s.list.map(x => `<tr><td>${escapeHtml(x.name)}<br><span style="font-size:11px;color:var(--text-light);">${escapeHtml(x.code)}</span></td><td>${saFmt(x.code, x.current)}</td>
+                    <td style="color:var(--danger);font-weight:700;">${x.extraOut > SA_EPS ? saFmt(x.code, x.extraOut) : '-'}</td><td>${x.purchase || '-'}</td><td>${Math.abs(x.unexplained) > SA_EPS ? (x.unexplained > 0 ? '+' : '') + saR(x.unexplained) : '-'}</td><td>${x.manual ? (x.manual > 0 ? '+' : '') + saR(x.manual) : '-'}</td>
+                    <td><button class="btn btn-primary btn-sm" onclick="showStockAuditProduct('${escapeHtml(x.code)}')"><i class="fas fa-search"></i> الحركة</button></td></tr>`).join('') + '</tbody></table></div>' +
+                '<p style="font-size:12px;color:var(--text-light);margin-top:8px;">"اتخصم زيادة من طلبات" = اللي اتخصم من المخزون أكتر من فاتورة الطلب (أغلبه من مشكلة الخصم المكرر اللي اتصلحت). لو عملت تعديل أو جرد يدوي للصنف بعدها، ممكن يكون الفرق اتصلح جزء منه. الأضمن: تعد الأصناف دي وتدخلها في شيت الجرد.</p>';
+            document.getElementById('saBody').innerHTML = html;
+        }
+        function exportStockAuditScan() {
+            const s = stockAuditScan; if (!s) return;
+            const rows = [['الكود', 'الصنف', 'الرصيد الحالي', 'اتخصم زيادة من طلبات', 'مشاكل فواتير شراء', 'فرق من غير حركة', 'تعديلات/جرد يدوي']].concat(s.list.map(x => [x.code, x.name, saR(x.current), saR(x.extraOut), x.purchase, saR(x.unexplained), saR(x.manual)]));
+            xlWrite('مراجعة_المخزون', [{ name: 'الأصناف', rows, widths: [10, 40, 14, 18, 16, 16, 16] }]);
+        }
+
+        // البضاعة المحجوزة لطلبات لسه جوه المخزن فعلاً (جديد / قيد التجهيز) - موجودة على الرف بس مش متاحة للبيع
+        function heldInWarehouseQty(code) {
+            let q = 0;
+            customerOrders.forEach(o => { if ((o.status === 'pending' || o.status === 'preparing') && reservedStockLedger[o.id]) q += Number(reservedStockLedger[o.id][code]) || 0; });
+            return q;
+        }
         function exportInventoryCountSheet() {
             if (!requireCloudReady()) return;
-            const rows = [['كود الصنف', 'اسم الصنف', 'الوحدة', 'الكمية في السيستم', 'الكمية الفعلية', 'حد الطلب', 'السبب']];
-            products.forEach(p => { const inv = inventory[p.code] || {}; rows.push([p.code, p.name, p.unit || '', Number(inv.qty) || 0, '', inv.minStock || p.minStock || 0, '']); });
-            xlWrite('جرد_مخزون', [{ name: 'الجرد', rows, widths: [12, 34, 10, 16, 16, 10, 24] }]);
-            showToast('اكتب "الكمية الفعلية" بس للأصناف اللي فيها فرق، وارفع الشيت');
+            // *** إصلاح 2026-10-06: الكمية في السيستم = المتاح + البضاعة المحجوزة لطلبات لسه جوه المخزن (جديد / قيد التجهيز). ***
+            // قبل كده كان الشيت بيطلّع "المتاح" بس، فلما تعد البضاعة على الرف (وفيها بضاعة طلبات لسه ماخرجتش)
+            // الفرق كان بيتضاف للمخزون، وبعدها الطلب يتسلّم من غير ما يتخصم تاني (لأنه اتحجز قبل كده) → المخزون يزيد على الورق.
+            const rows = [['كود الصنف', 'اسم الصنف', 'الوحدة', 'الكمية في السيستم', 'الكمية الفعلية', 'حد الطلب', 'السبب', 'منها محجوز لطلبات لسه في المخزن']];
+            products.forEach(p => { const inv = inventory[p.code] || {}; const held = heldInWarehouseQty(p.code);
+                rows.push([p.code, p.name, p.unit || '', Math.round(((Number(inv.qty) || 0) + held) * 1000) / 1000, '', inv.minStock || p.minStock || 0, '', held ? Math.round(held * 1000) / 1000 : '']); });
+            xlWrite('جرد_مخزون', [{ name: 'الجرد', rows, widths: [12, 34, 10, 16, 16, 10, 24, 22] }]);
+            showToast('اعد كل اللي على الرف (حتى بضاعة الطلبات اللي لسه ماخرجتش)، واكتب "الكمية الفعلية" للأصناف اللي فيها فرق بس، وارفع الشيت', 'info', 7000);
         }
         function importInventoryCountSheet(event) {
             if (!requireCloudReady()) { try { if (event && event.target) event.target.value = ''; } catch (e) {} return; }
@@ -9999,7 +10253,7 @@
                     const e = { row: r.__row, cells: [r.code, p ? p.name : r.name, '', '', '', ''], status: 'same', note: '' };
                     if (!p) { e.status = 'error'; e.note = 'كود مش موجود في الأصناف'; entries.push(e); return; }
                     const inv = inventory[p.code] || {};
-                    const nowQty = Number(inv.qty) || 0;
+                    const nowQty = (Number(inv.qty) || 0) + heldInWarehouseQty(p.code);
                     const snap = xlNum(r.sys); const counted = xlNum(r.counted); const min = xlNum(r.min);
                     const base = (snap === null || isNaN(snap)) ? nowQty : snap;
                     e.cells[2] = base;
