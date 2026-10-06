@@ -1259,6 +1259,10 @@
         <!-- Inventory Section -->
         <section id="inventory-section" class="section">
             <div id="myApprovalsPanelInventory" class="no-print"></div>
+            <div class="card" id="repReturnsCard" style="display:none;border-right:4px solid var(--danger);">
+                <div class="card-header"><div class="card-title"><i class="fas fa-rotate-left"></i> مرتجعات مناديب التسليم</div><span style="font-size:12px;color:var(--text-light);">المخزون بيزيد بس لما تستلم المرتجع هنا</span></div>
+                <div id="repReturnsBody" style="padding:0 20px 15px;"></div>
+            </div>
             <div class="card" id="expiryCard" style="display:none;border-right:4px solid var(--warning);">
                 <div class="card-header"><div class="card-title"><i class="fas fa-hourglass-end"></i> قرب انتهاء الصلاحية (خلال أسبوعين)</div><span class="sv-muted" style="font-size:12px;">محسوبة على إن الأقدم بيتباع الأول</span></div>
                 <div class="table-container"><table><thead><tr><th>الصنف</th><th>الكمية الباقية من الدفعة</th><th>تاريخ الانتهاء</th><th>فاضل</th><th>من فاتورة شراء</th></tr></thead><tbody id="expiryTable"></tbody></table></div>
@@ -2207,6 +2211,17 @@
         <div class="modal" style="max-width:900px;width:96%;">
             <div class="modal-header"><h3 class="modal-title" id="pointsHistoryTitle">سجل النقاط</h3><button class="modal-close" onclick="closeModal('pointsHistoryModal')">&times;</button></div>
             <div class="modal-body" id="pointsHistoryBody"></div>
+        </div>
+    </div>
+    <div class="modal-overlay" id="repReturnReceiveModal">
+        <div class="modal" style="max-width:700px;">
+            <div class="modal-header"><h3 class="modal-title"><i class="fas fa-dolly"></i> استلام مرتجع من المندوب</h3><button class="modal-close" onclick="closeModal('repReturnReceiveModal')">&times;</button></div>
+            <div class="modal-body">
+                <div id="rrInfo" style="margin-bottom:10px;"></div>
+                <div class="table-container"><table><thead><tr><th>الصنف</th><th>المندوب سجّل</th><th>السبب</th><th>اللي استلمته فعلاً</th></tr></thead><tbody id="rrItems"></tbody></table></div>
+                <p style="font-size:12.5px;color:var(--text-light);">لو استلمت أقل، الفرق بيتسجل عجز على المندوب بقيمته، وبيزيد المخزون باللي استلمته بس.</p>
+                <div style="display:flex;gap:8px;justify-content:flex-end;"><button class="btn btn-secondary" onclick="closeModal('repReturnReceiveModal')">إلغاء</button><button class="btn btn-success" onclick="confirmRepReturnReceive()"><i class="fas fa-check"></i> تأكيد الاستلام</button></div>
+            </div>
         </div>
     </div>
     <div class="modal-overlay" id="stockAuditModal">
@@ -3249,6 +3264,7 @@
                     startSupplierRecordsListener();
                     startInventoryRecordsListener();
                     try { startSalesZonesListener(); } catch (e) { console.error(e); }
+                    try { startRepReturnsListenerSys(); } catch (e) { console.error(e); }
                     setTimeout(function() { try { startLoyaltyListener(); } catch (e) { console.error(e); } }, 4000);
                     try { activateMoneySplit(); } catch (e) { console.error(e); }
                     try { probeCounters(); } catch (e) { console.error(e); }
@@ -3699,9 +3715,17 @@
         const OPEN_ORDER_STATUSES = ['pending', 'preparing', 'ready'];
         function orderVectorIfComplete(o) {
             // لو أي صنف في الطلب لسه بياناته (الوحدة التانية) ماوصلتش للجهاز، منحسبش - الحساب هيطلع غلط
-            if ((o.items || []).some(it => !products.find(p => p.code === it.productCode))) return undefined;
-            return computeOrderStockVector(o);
+            if ((o.items || []).concat(o.repReturns || []).some(it => !products.find(p => p.code === it.productCode))) return undefined;
+            return ledgerVectorOf(o);
         }
+        // الحجز = أصناف الطلب + أي مرتجع المندوب شايله (البضاعة دي لسه برا المخزن لحد ما تتسلم)
+        function ledgerVectorOf(o) {
+            const v = computeOrderStockVector(o);
+            if (o.holdReturnStock && o.repReturns) { const r = repReturnsDeductVector(o); Object.keys(r).forEach(c => { v[c] = (v[c] || 0) + r[c]; }); }
+            return v;
+        }
+        // طلب اتسلّم، أو رجع مع المندوب: البضاعة خرجت من المخزن خلاص - الدفتر بيتقفل من غير ما المخزون يتغير
+        function ledgerClosesWithoutChange(o) { return o.status === 'delivered' || (o.status === 'returned' && o.holdReturnStock); }
         function applyLedgerChangeTransactional(order) {
             if (!db) return;
             if (ledgerTxInFlight.has(order.id)) return; // فيه محاولة شغالة بالفعل لنفس الطلب - متبدأش واحدة تانية فوقها
@@ -3717,7 +3741,7 @@
                     const fresh = Object.assign({ id: order.id }, oSnap.data());
                     const cloudVec = snap.exists ? ((snap.data() || {}).vector || {}) : {};
                     let newVec;
-                    if (fresh.status === 'delivered') {
+                    if (ledgerClosesWithoutChange(fresh)) {
                         // اتسلّم: البضاعة اتخصمت خلاص وقت الحجز - بنمسح الدفتر بس من غير أي تغيير في المخزون
                         if (snap.exists) t.delete(ledgerRef);
                         outcome = { vec: null };
@@ -3792,7 +3816,7 @@
             orders.forEach(function(order) {
                 const prevVec = reservedStockLedger[order.id] || null;
                 if (!order.stockReserved && !prevVec) return;
-                if (order.status === 'delivered') {
+                if (ledgerClosesWithoutChange(order)) {
                     if (prevVec) clearLedgerDoc(order.id);
                     return;
                 }
@@ -3840,7 +3864,7 @@
             if (!reservationLedgerLoaded) return out;
             customerOrders.forEach(o => {
                 if (!o.stockReserved || !['pending', 'preparing', 'ready'].includes(o.status)) return;
-                const cur = computeOrderStockVector(o), booked = reservedStockLedger[o.id] || {};
+                const cur = ledgerVectorOf(o), booked = reservedStockLedger[o.id] || {};
                 Object.keys(cur).forEach(c => { const d = (cur[c] || 0) - (booked[c] || 0); if (d) out[c] = (out[c] || 0) + d; });
             });
             return out;
@@ -4954,7 +4978,8 @@
                     customerCode: order.customerCode || '', customerName: order.customerName || '',
                     salesmanCode: order.repCode || '', salesmanName: order.repName || '',
                     paymentMethod: 'دفع عند الاستلام',
-                    notes: 'طلب وارد من أبليكشن العملاء #' + order.id.slice(-6) + (appliedDiscount > 0 ? ` (خصم نقاط ولاء: ${appliedDiscount.toFixed(2)} ر.س)` : ''),
+                    notes: 'طلب وارد من أبليكشن العملاء #' + order.id.slice(-6) + (appliedDiscount > 0 ? ` (خصم نقاط ولاء: ${appliedDiscount.toFixed(2)} ر.س)` : '') + (order.repReturns && order.repReturns.length ? ' — مرتجع عند التسليم: ' + order.repReturns.map(r => r.productName + ' × ' + r.qty + ' (' + r.reason + ')').join('، ') : ''),
+                    deliveryReturns: order.repReturns || null,
                     items: order.items, grandTotal: grandTotal,
                     discount: appliedDiscount,
                     totalCost: order.items.reduce((sum, it) => sum + ((it.cost || 0) * (it.stockDeductQty != null ? it.stockDeductQty : it.qty)), 0),
@@ -7966,6 +7991,98 @@
             openModal('customerModal');
         }
 
+        // ==================== مرتجعات مناديب التسليم (2026-10-06) ====================
+        // المندوب بيسجل المرتجع عند العميل من الأبليكشن (صنف أو الطلب كله). البضاعة دي بتفضل "مع المندوب" ومش بتزود المخزون
+        // لحد ما أمين المخزن يستلمها هنا. لو فيه ناقص، بيتسجل عجز على المندوب بقيمته.
+        let repReturnOrders = [], repReturnsListenerStarted = false;
+        function startRepReturnsListenerSys() {
+            if (!db || repReturnsListenerStarted) return;
+            repReturnsListenerStarted = true;
+            db.collection('customerOrders').where('hasRepReturn', '==', true).onSnapshot(function(snap) {
+                repReturnOrders = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+                try { renderRepReturnsCard(); } catch (e) { console.error(e); }
+            }, function(err) { console.error('rep returns listener error:', err); });
+        }
+        function repReturnsDeductVector(o) {
+            const v = {};
+            (o.repReturns || []).forEach(r => {
+                const p = products.find(x => x.code === r.productCode);
+                const d = r.deductQty != null ? Number(r.deductQty) : (p && p.secondaryUnit && r.unit === p.secondaryUnit.name ? (Number(r.qty) || 0) / (Number(p.secondaryUnit.factor) || 1) : (Number(r.qty) || 0));
+                v[r.productCode] = (v[r.productCode] || 0) + d;
+            });
+            return v;
+        }
+        function renderRepReturnsCard() {
+            const card = document.getElementById('repReturnsCard'); if (!card) return;
+            const pending = repReturnOrders.filter(o => o.repReturnPending);
+            const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+            const fromEl = document.getElementById('repReturnsFrom');
+            const from = fromEl && fromEl.value ? new Date(fromEl.value + 'T00:00:00').getTime() : dayStart.getTime();
+            const received = repReturnOrders.filter(o => !o.repReturnPending && o.repReturnReceived && o.repReturnReceived.at >= from).sort((a, b) => b.repReturnReceived.at - a.repReturnReceived.at);
+            card.style.display = (pending.length || received.length || repReturnOrders.length) ? '' : 'none';
+            const byRep = {};
+            pending.forEach(o => { const k = o.repReturnRepCode || '-'; (byRep[k] = byRep[k] || { name: o.repReturnRepName || k, list: [], value: 0 }).list.push(o); byRep[k].value += Number(o.repReturnValue) || 0; });
+            const itemsTxt = o => (o.repReturns || []).map(r => `${escapeHtml(r.productName)} × ${r.qty} ${escapeHtml(r.unit || '')} <span style="color:var(--text-light);">(${escapeHtml(r.reason || '')})</span>`).join('<br>');
+            document.getElementById('repReturnsBody').innerHTML =
+                (pending.length ? Object.keys(byRep).map(k => `<div style="margin-bottom:12px;"><div style="font-weight:800;margin-bottom:6px;"><i class="fas fa-user"></i> ${escapeHtml(byRep[k].name)} — <span style="color:var(--danger);">${byRep[k].list.length} طلب بـ ${byRep[k].value.toFixed(2)} ج مستني استلام</span></div>
+                    <div class="table-container"><table><thead><tr><th>العميل</th><th>المرتجع</th><th>القيمة</th><th>إمتى</th><th></th></tr></thead><tbody>` +
+                    byRep[k].list.map(o => `<tr><td>${escapeHtml(o.customerName || '')}<br><span style="font-size:11px;color:var(--text-light);">#${o.id.slice(-6)} ${o.repReturnKind === 'full' ? '— الطلب كله رجع' : ''}</span></td><td style="font-size:12.5px;">${itemsTxt(o)}</td><td><strong>${(Number(o.repReturnValue) || 0).toFixed(2)}</strong></td><td style="font-size:12px;">${new Date(o.repReturnAt).toLocaleString('ar-EG')}</td>
+                        <td><button class="btn btn-success btn-sm" onclick="openRepReturnReceive('${o.id}')"><i class="fas fa-dolly"></i> استلام</button></td></tr>`).join('') + '</tbody></table></div></div>').join('')
+                 : '<p style="color:var(--success);margin:0 0 10px;">✓ مفيش مرتجعات مستنية استلام</p>') +
+                `<div style="display:flex;gap:8px;align-items:center;margin:10px 0 6px;flex-wrap:wrap;"><strong>اتسلّم من يوم</strong> <input type="date" id="repReturnsFrom" class="form-control" style="width:auto;" value="${fromEl && fromEl.value ? fromEl.value : new Date(dayStart.getTime() - dayStart.getTimezoneOffset() * 60000).toISOString().slice(0, 10)}" onchange="renderRepReturnsCard()"> <button class="btn btn-info btn-sm" onclick="exportRepReturns()"><i class="fas fa-file-export"></i> Excel</button></div>` +
+                (received.length ? '<div class="table-container"><table><thead><tr><th>المندوب</th><th>العميل</th><th>المرتجع</th><th>القيمة</th><th>استلمه</th><th>عجز</th></tr></thead><tbody>' + received.map(o => `<tr><td>${escapeHtml(o.repReturnRepName || '')}</td><td>${escapeHtml(o.customerName || '')}</td><td style="font-size:12.5px;">${itemsTxt(o)}</td><td>${(Number(o.repReturnValue) || 0).toFixed(2)}</td><td style="font-size:12px;">${escapeHtml((o.repReturnReceived.by || ''))}<br>${new Date(o.repReturnReceived.at).toLocaleString('ar-EG')}</td><td style="color:var(--danger);font-weight:700;">${o.repReturnReceived.shortageValue ? o.repReturnReceived.shortageValue.toFixed(2) : '-'}</td></tr>`).join('') + '</tbody></table></div>' : '<p style="color:var(--text-light);font-size:13px;">مفيش مرتجعات اتسلمت في الفترة دي</p>');
+        }
+        function exportRepReturns() {
+            const rows = [['المندوب', 'العميل', 'رقم الطلب', 'نوع', 'الصنف', 'الكمية', 'الوحدة', 'القيمة', 'السبب', 'وقت المرتجع', 'الحالة', 'المستلم فعلاً', 'استلمه']];
+            repReturnOrders.slice().sort((a, b) => (b.repReturnAt || 0) - (a.repReturnAt || 0)).forEach(o => (o.repReturns || []).forEach(r => {
+                const got = o.repReturnReceived ? ((o.repReturnReceived.items || []).find(x => x.productCode === r.productCode && x.unit === r.unit) || {}).received : '';
+                rows.push([o.repReturnRepName || '', o.customerName || '', o.id.slice(-6), o.repReturnKind === 'full' ? 'الطلب كله' : 'جزئي', r.productName, r.qty, r.unit || '', Number(r.value) || 0, r.reason || '', new Date(o.repReturnAt).toLocaleString('ar-EG'), o.repReturnPending ? 'مع المندوب' : 'اتسلّم', got, o.repReturnReceived ? (o.repReturnReceived.by || '') : '']);
+            }));
+            xlWrite('مرتجعات_المناديب', [{ name: 'المرتجعات', rows, widths: [16, 24, 10, 10, 30, 8, 8, 10, 18, 20, 12, 12, 16] }]);
+        }
+        let receivingReturnId = null;
+        function openRepReturnReceive(id) {
+            const o = repReturnOrders.find(x => x.id === id); if (!o) return;
+            receivingReturnId = id;
+            document.getElementById('rrInfo').innerHTML = `<strong>${escapeHtml(o.repReturnRepName || '')}</strong> — من ${escapeHtml(o.customerName || '')} (#${o.id.slice(-6)}) — ${new Date(o.repReturnAt).toLocaleString('ar-EG')}`;
+            document.getElementById('rrItems').innerHTML = (o.repReturns || []).map((r, i) => `<tr><td>${escapeHtml(r.productName)}</td><td>${r.qty} ${escapeHtml(r.unit || '')}</td><td>${escapeHtml(r.reason || '')}</td><td><input type="number" class="form-control rr-got" data-i="${i}" min="0" max="${r.qty}" value="${r.qty}" style="width:90px;"></td></tr>`).join('');
+            openModal('repReturnReceiveModal');
+        }
+        function confirmRepReturnReceive() {
+            const o0 = repReturnOrders.find(x => x.id === receivingReturnId); if (!o0 || !db) return;
+            const got = Array.from(document.querySelectorAll('#rrItems .rr-got')).map(inp => Math.max(0, Number(inp.value) || 0));
+            const by = (currentUser && (currentUser.fullName || currentUser.username)) || '';
+            const ref = db.collection('customerOrders').doc(o0.id);
+            let rec = null, fresh = null;
+            db.runTransaction(t => t.get(ref).then(snap => {
+                if (!snap.exists) throw new Error('الطلب مش موجود');
+                fresh = Object.assign({ id: o0.id }, snap.data());
+                if (!fresh.repReturnPending) throw new Error('المرتجع ده اتسلّم قبل كده');
+                const items = (fresh.repReturns || []).map((r, i) => {
+                    const received = Math.min(Number(r.qty) || 0, got[i] != null ? got[i] : (Number(r.qty) || 0));
+                    const per = (Number(r.qty) || 0) ? (Number(r.deductQty) || 0) / Number(r.qty) : 0;
+                    return { productCode: r.productCode, productName: r.productName, unit: r.unit, expected: Number(r.qty) || 0, received, deductQty: per * received, missingValue: Math.round((Number(r.price) || 0) * ((Number(r.qty) || 0) - received) * 100) / 100 };
+                });
+                const shortageValue = items.reduce((s, x) => s + x.missingValue, 0);
+                rec = { at: Date.now(), by, items, shortageValue };
+                t.update(ref, { repReturnPending: false, repReturnReceived: rec });
+            })).then(() => {
+                // المخزون بيزيد دلوقتي بس، بالكمية اللي اتسلمت فعلاً
+                rec.items.forEach(x => {
+                    if (!x.deductQty) return;
+                    if (!inventory[x.productCode]) { const pr = products.find(p => p.code === x.productCode); inventory[x.productCode] = { code: x.productCode, qty: 0, cost: pr ? (pr.cost || 0) : 0, minStock: 0 }; }
+                    inventory[x.productCode].qty += x.deductQty;
+                    addStockMovement(x.productCode, x.productName, 'in', x.deductQty, inventory[x.productCode].qty, 'طلب أبليكشن #' + fresh.id.slice(-6), `استلام مرتجع من المندوب ${fresh.repReturnRepName || ''} (${x.received} ${x.unit || ''})`);
+                });
+                saveInventory();
+                const missing = rec.items.filter(x => x.received < x.expected);
+                logAction('استلام مرتجع مندوب', `${fresh.repReturnRepName || ''} — ${fresh.customerName || ''} #${fresh.id.slice(-6)}: ${rec.items.map(x => x.productName + ' ' + x.received + '/' + x.expected).join('، ')}` + (rec.shortageValue ? ` — عجز ${rec.shortageValue.toFixed(2)} ج` : ''));
+                closeModal('repReturnReceiveModal');
+                showToast(missing.length ? `اتسلّم المرتجع — وفيه عجز ${rec.shortageValue.toFixed(2)} ج على المندوب` : 'اتسلّم المرتجع ورجع المخزون ✓', missing.length ? 'warning' : 'success', 5000);
+                try { renderInventory(); renderMovements(); } catch (e) {}
+            }).catch(e => { console.error(e); showToast(e.message || 'تعذر الاستلام', 'error'); });
+        }
+
         // ==================== مناطق البيع ومندوب كل عميل ====================
         // كل منطقة بيع بتضم كذا حي، وليها مندوب بيع (أو أكتر). العميل اللي حيّه في المنطقة بيتسجل على مندوبها أوتوماتيك.
         // لو المنطقة فيها أكتر من مندوب: العميل الجديد بيتساب من غير مندوب وإنت تحدد. (قرار عيسى 6 أكتوبر 2026)
@@ -10454,6 +10571,11 @@
                     if (deliveredAt && (Number(r.m.qty) || 0) < 0 && String(r.m.date) > deliveredAt) { r.flags.push({ cls: 'danger', t: 'اتخصم تاني بعد تسليم الطلب' }); afterDelivery += Number(r.m.qty) || 0; }
                 });
                 if (expected === null) return;
+                if (o && o.holdReturnStock && o.repReturns) {
+                    expected -= repReturnsDeductVector(o)[code] || 0;
+                    if (o.repReturnReceived) expected += (o.repReturnReceived.items || []).filter(x => x.productCode === code).reduce((s, x) => s + (Number(x.deductQty) || 0), 0);
+                    if (inv) expected = -(inv.items || []).filter(it => it.productCode === code).reduce((s, it) => s + saItemDeduct(it), 0) - (repReturnsDeductVector(o)[code] || 0) + (o.repReturnReceived ? (o.repReturnReceived.items || []).filter(x => x.productCode === code).reduce((s, x) => s + (Number(x.deductQty) || 0), 0) : 0);
+                }
                 const diff = net - expected;
                 if (Math.abs(diff) > SA_EPS) {
                     if (diff < 0) extraOut += -diff; else extraIn += diff;
