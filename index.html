@@ -1773,6 +1773,8 @@
                         <button class="btn btn-primary btn-sm" onclick="document.getElementById('excelFileInput').click()"><i class="fas fa-file-excel"></i> رفع ملف Excel</button>
                         <button class="btn btn-secondary btn-sm" onclick="downloadCustomerTemplate()"><i class="fas fa-download"></i> تحميل نموذج فارغ</button>
                         <button class="btn btn-warning btn-sm" onclick="restoreCustomerRepsFromInvoices()"><i class="fas fa-user-check"></i> رجّع المناديب للعملاء</button>
+                        <button class="btn btn-info btn-sm" onclick="openSalesZonesModal()"><i class="fas fa-map-marked-alt"></i> مناطق البيع</button>
+                        <button class="btn btn-primary btn-sm" onclick="distributeCustomersByZone()"><i class="fas fa-random"></i> وزّع حسب المنطقة</button>
                         <button class="btn btn-danger btn-sm" onclick="openDeleteAllCustomersModal()"><i class="fas fa-trash-alt"></i> مسح الكل</button>
                         <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleExcelUpload(event)">
                     </div>
@@ -1842,7 +1844,7 @@
         <!-- Salesmen Section -->
         <section id="salesmen-section" class="section">
             <div class="card">
-                <div class="card-header"><div class="card-title"><i class="fas fa-user-tie"></i> قاعدة بيانات المناديب</div><div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn btn-success btn-sm" onclick="openSalesmanModal()"><i class="fas fa-plus"></i> إضافة مندوب</button><button class="btn btn-info btn-sm" onclick="exportSalesmenExcel()"><i class="fas fa-file-export"></i> تصدير Excel</button><button class="btn btn-primary btn-sm" onclick="document.getElementById('salesmenFileInput').click()"><i class="fas fa-file-excel"></i> رفع Excel</button><input type="file" id="salesmenFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importSalesmenExcel(event)"></div></div>
+                <div class="card-header"><div class="card-title"><i class="fas fa-user-tie"></i> قاعدة بيانات المناديب</div><div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn btn-success btn-sm" onclick="openSalesmanModal()"><i class="fas fa-plus"></i> إضافة مندوب</button><button class="btn btn-warning btn-sm" onclick="openSalesZonesModal()"><i class="fas fa-map-marked-alt"></i> مناطق البيع</button><button class="btn btn-info btn-sm" onclick="exportSalesmenExcel()"><i class="fas fa-file-export"></i> تصدير Excel</button><button class="btn btn-primary btn-sm" onclick="document.getElementById('salesmenFileInput').click()"><i class="fas fa-file-excel"></i> رفع Excel</button><input type="file" id="salesmenFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importSalesmenExcel(event)"></div></div>
                 <div class="search-box"><i class="fas fa-search"></i><input type="text" id="salesmanSearch" placeholder="بحث في المناديب..." oninput="filterSalesmen()"></div>
                 <div class="table-container">
                     <table><thead><tr><th>الكود</th><th>اسم المندوب</th><th>النوع</th><th>رقم الهاتف</th><th>المنطقة</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="salesmenTable"></tbody></table>
@@ -2180,6 +2182,27 @@
     </div>
 
     <!-- Stock Adjustment Modal -->
+    <div class="modal-overlay" id="salesZonesModal">
+        <div class="modal" style="max-width:1000px;width:96%;">
+            <div class="modal-header"><h3 class="modal-title"><i class="fas fa-map-marked-alt" style="color:var(--info);"></i> مناطق البيع (مناديب البيع)</h3><button class="modal-close" onclick="closeModal('salesZonesModal')">&times;</button></div>
+            <div class="modal-body">
+                <p style="font-size:13px;color:var(--text-light);margin-top:0;">كل منطقة بيع بتضم كذا حي ولها مندوب بيع. أي عميل حيّه في المنطقة بيتسجل على مندوبها أوتوماتيك (العميل الجديد من الأبليكشن، الإضافة من السيستم، ورفع الإكسل). لو المنطقة فيها أكتر من مندوب، العميل الجديد بيتساب من غير مندوب وإنت تحدد. المناطق دي منفصلة عن مناطق التسليم.</p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"><button class="btn btn-success btn-sm" onclick="openSalesZoneEditor()"><i class="fas fa-plus"></i> إضافة منطقة بيع</button><button class="btn btn-primary btn-sm" onclick="distributeCustomersByZone()"><i class="fas fa-random"></i> وزّع العملاء حسب المنطقة</button></div>
+                <div id="salesZonesBody"></div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-overlay" id="salesZoneEditorModal">
+        <div class="modal" style="max-width:820px;width:96%;">
+            <div class="modal-header"><h3 class="modal-title" id="szEditorTitle">منطقة بيع</h3><button class="modal-close" onclick="closeModal('salesZoneEditorModal')">&times;</button></div>
+            <div class="modal-body">
+                <div class="form-group"><label class="form-label">اسم المنطقة</label><input type="text" class="form-control" id="szName" placeholder="مثال: الصحاري وكيما"></div>
+                <div class="form-group"><label class="form-label">مندوب البيع (يفضّل واحد بس)</label><div id="szReps" style="display:flex;flex-wrap:wrap;gap:8px;"></div></div>
+                <div class="form-group"><label class="form-label">الأحياء</label><div id="szNeighborhoods" style="display:flex;flex-wrap:wrap;gap:8px;max-height:45vh;overflow:auto;"></div></div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;"><button class="btn btn-secondary" onclick="closeModal('salesZoneEditorModal')">إلغاء</button><button class="btn btn-success" onclick="saveSalesZone()"><i class="fas fa-save"></i> حفظ</button></div>
+            </div>
+        </div>
+    </div>
     <div class="modal-overlay" id="stockAuditModal">
         <div class="modal" style="max-width:1150px;width:96%;">
             <div class="modal-header"><h3 class="modal-title"><i class="fas fa-search-plus" style="color:var(--warning);"></i> مراجعة حركة الصنف</h3><button class="modal-close" onclick="closeModal('stockAuditModal')">&times;</button></div>
@@ -2477,7 +2500,7 @@
                 <div class="form-group"><label class="form-label">العنوان</label><input type="text" class="form-control" id="customerAddress" placeholder="عنوان العميل"></div>
                 <div class="form-group"><label class="form-label">الحي الجغرافي</label><select class="form-control" id="customerNeighborhood" onchange="updateCustomerZoneDisplay()"><option value="">— اختر الحي —</option></select></div>
                 <div class="form-group"><label class="form-label">منطقة التسليم</label><input type="text" class="form-control" id="customerZoneDisplay" disabled placeholder="بتتحدد تلقائيًا حسب الحي"></div>
-                <div class="form-group"><label class="form-label">مندوب البيع المتابع</label><select class="form-control" id="customerSalesman"><option value="">— بدون مندوب —</option></select></div>
+                <div class="form-group"><label class="form-label">مندوب البيع المتابع</label><select class="form-control" id="customerSalesman"><option value="">— بدون مندوب —</option></select><div id="customerSalesZoneInfo" style="font-size:12px;color:var(--info);margin-top:4px;"></div><div id="customerRepHistory"></div></div>
                 <div class="form-group"><label class="form-label">الحد الائتماني الأقصى (أقصى دين مسموح به)</label><input type="number" class="form-control" id="customerCreditLimit" placeholder="اتركه فارغاً لعدم وضع حد" min="0"></div>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('customerModal')">إلغاء</button><button class="btn btn-success" onclick="saveCustomer()">حفظ</button></div>
@@ -3218,6 +3241,7 @@
                     startCustomerRecordsListener();
                     startSupplierRecordsListener();
                     startInventoryRecordsListener();
+                    try { startSalesZonesListener(); } catch (e) { console.error(e); }
                     try { activateMoneySplit(); } catch (e) { console.error(e); }
                     try { probeCounters(); } catch (e) { console.error(e); }
                 });
@@ -3870,6 +3894,9 @@
                 address: addressParts.join(' - '),
                 creditLimit: null,
                 shopName: order.shopName || '',
+                neighborhood: order.neighborhood || '',
+                salesmanCode: zoneRepForNeighborhood(order.neighborhood).code || '',
+                repHistory: zoneRepForNeighborhood(order.neighborhood).code ? [{ from: '', to: zoneRepForNeighborhood(order.neighborhood).code, at: Date.now(), by: 'تلقائي', src: 'عميل جديد من الأبليكشن (حسب منطقة البيع)' }] : [],
                 source: 'app'
             });
             return true;
@@ -4233,8 +4260,11 @@
                  <div>${escapeHtml(r.addressDetail || '')}</div>
                  <div style="margin-top:4px;">${sysCust ? `<span class="badge badge-info">موجود في قاعدة العملاء بكود ${escapeHtml(sysCust.code)}</span>` : '<span class="badge badge-warning">مش موجود في قاعدة العملاء — هيتضاف عند الحفظ</span>'}</div>`;
             const sSel = document.getElementById('appCustReviewSalesman');
-            sSel.innerHTML = '<option value="">— بدون مندوب —</option>' + salesmen.filter(s => s.status === 'نشط').map(s => `<option value="${escapeHtml(s.code)}">${escapeHtml(s.name)}</option>`).join('');
-            sSel.value = (r.review && r.review.salesmanCode) || (sysCust && sysCust.salesmanCode) || '';
+            const curRep = (sysCust && sysCust.salesmanCode) || '';
+            sSel.innerHTML = '<option value="">— بدون مندوب —</option>' + salesmen.filter(s => s.status === 'نشط' || s.code === curRep).map(s => `<option value="${escapeHtml(s.code)}">${escapeHtml(s.name)}</option>`).join('');
+            // الافتراضي: مندوب منطقة البيع، وإلا مندوب العميل الحالي (مش المراجعة القديمة)
+            const zr = zoneRepForNeighborhood((sysCust && sysCust.neighborhood) || r.neighborhood);
+            sSel.value = zr.code || curRep || (r.review && r.review.salesmanCode) || '';
             const nSel = document.getElementById('appCustReviewNeighborhood');
             const names = appNeighborhoods.map(n => n.name);
             if (r.neighborhood && !names.includes(r.neighborhood)) names.unshift(r.neighborhood);
@@ -4260,13 +4290,13 @@
                 // ربطه بقاعدة العملاء: لو موجود نحدّث المندوب والحي بس (باقي بياناته زي ما هي)، ولو مش موجود نضيفه
                 const sysCust = nacFindSystemCustomer(r.phone);
                 if (sysCust) {
-                    sysCust.salesmanCode = salesmanCode || sysCust.salesmanCode || '';
+                    if (salesmanCode) setCustomerRep(sysCust, salesmanCode, 'مراجعة عميل جديد من الأبليكشن');
                     if (neighborhood) sysCust.neighborhood = neighborhood;
                     if (!sysCust.shopName && r.shopName) sysCust.shopName = r.shopName;
                 } else {
                     customers.push({ code: String(r.phone), name: r.customerName || r.shopName || String(r.phone), shopName: r.shopName || '', phone: String(r.phone),
                         address: [r.addressDetail, r.neighborhood, r.city, r.governorate].filter(Boolean).join(' - '), neighborhood: neighborhood || '',
-                        salesmanCode: salesmanCode || '', creditLimit: null, source: 'app' });
+                        salesmanCode: salesmanCode || '', creditLimit: null, source: 'app', repHistory: salesmanCode ? [{ from: '', to: salesmanCode, at: Date.now(), by: (currentUser && (currentUser.fullName || currentUser.username)) || '', src: 'مراجعة عميل جديد من الأبليكشن' }] : [] });
                 }
                 localStorage.setItem('customers', JSON.stringify(customers));
                 logAction('مراجعة عميل جديد من الأبليكشن', `تمت مراجعة العميل ${r.shopName || r.customerName} (${r.phone})${sm ? ' — المندوب: ' + sm.name : ''}`);
@@ -7739,11 +7769,21 @@
         }
 
         // ==================== CUSTOMERS ====================
-        function updateCustomerZoneDisplay() {
+        function updateCustomerZoneDisplay(initial) {
             const neighborhood = document.getElementById('customerNeighborhood').value;
             const zoneId = neighborhoodZoneMap[neighborhood];
             const zone = zoneId ? deliveryZones.find(z => z.id === zoneId) : null;
             document.getElementById('customerZoneDisplay').value = neighborhood ? (zone ? zone.name : 'بدون منطقة تسليم محددة') : '';
+            // مندوب البيع بيتبع منطقة البيع بتاعة الحي
+            const zr = zoneRepForNeighborhood(neighborhood);
+            const info = document.getElementById('customerSalesZoneInfo');
+            if (info) info.textContent = !neighborhood ? '' : !zr.zone ? 'الحي ده مش في أي منطقة بيع' : zr.code ? `منطقة البيع: ${zr.zone.name} — مندوبها ${repName(zr.code)}` : zr.reps.length > 1 ? `منطقة البيع: ${zr.zone.name} — فيها أكتر من مندوب، اختار واحد` : `منطقة البيع: ${zr.zone.name} — مالهاش مندوب`;
+            const sSel = document.getElementById('customerSalesman');
+            if (!initial && zr.code && sSel && !sSel.dataset.manual) {
+                if (!Array.from(sSel.options).some(o => o.value === zr.code)) sSel.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(zr.code)}">${escapeHtml(repName(zr.code))}</option>`);
+                sSel.value = zr.code;
+            }
+            if (initial && sSel && !editingCustomer && zr.code) sSel.value = zr.code;
         }
 
         function openCustomerModal(customer = null) {
@@ -7760,10 +7800,166 @@
             nSel.innerHTML = '<option value="">— اختر الحي —</option>' + appNeighborhoods.map(n => `<option value="${n.name}">${n.name}</option>`).join('');
             nSel.value = customer && customer.neighborhood ? customer.neighborhood : '';
             const sSel = document.getElementById('customerSalesman');
-            sSel.innerHTML = '<option value="">— بدون مندوب —</option>' + salesmen.filter(s => s.status === 'نشط').map(s => `<option value="${s.code}">${s.name}</option>`).join('');
-            sSel.value = customer && customer.salesmanCode ? customer.salesmanCode : '';
-            updateCustomerZoneDisplay();
+            // *** إصلاح 2026-10-06: القايمة كانت فيها المناديب "النشطين" بس، فلو مندوب العميل مش نشط كان بيتمسح أول ما تحفظ أي تعديل ***
+            const curRep = customer && customer.salesmanCode ? customer.salesmanCode : '';
+            sSel.innerHTML = '<option value="">— بدون مندوب —</option>' + salesmen.filter(s => s.status === 'نشط' || s.code === curRep).map(s => `<option value="${s.code}">${s.name}${s.status !== 'نشط' ? ' (غير نشط)' : ''}</option>`).join('')
+                + (curRep && !salesmen.some(s => s.code === curRep) ? `<option value="${escapeHtml(curRep)}">${escapeHtml(curRep)} (مش موجود في المناديب)</option>` : '');
+            sSel.value = curRep;
+            sSel.dataset.manual = '';
+            sSel.onchange = function() { this.dataset.manual = '1'; };
+            const hist = document.getElementById('customerRepHistory'); if (hist) hist.innerHTML = customerRepHistoryHtml(customer);
+            updateCustomerZoneDisplay(true);
             openModal('customerModal');
+        }
+
+        // ==================== مناطق البيع ومندوب كل عميل ====================
+        // كل منطقة بيع بتضم كذا حي، وليها مندوب بيع (أو أكتر). العميل اللي حيّه في المنطقة بيتسجل على مندوبها أوتوماتيك.
+        // لو المنطقة فيها أكتر من مندوب: العميل الجديد بيتساب من غير مندوب وإنت تحدد. (قرار عيسى 6 أكتوبر 2026)
+        // متخزنة في مستند لوحدها (meta/salesZones) مش في المستند المشترك، عشان أي جهاز لسه شغال بنسخة قديمة مايمسحهاش.
+        let salesZonesData = JSON.parse(localStorage.getItem('salesZonesData') || 'null') || { zones: [] };
+        let salesZonesListenerStarted = false;
+        function startSalesZonesListener() {
+            if (!db || salesZonesListenerStarted) return;
+            salesZonesListenerStarted = true;
+            db.collection('meta').doc('salesZones').onSnapshot(function(snap) {
+                if (snap.exists) { salesZonesData = Object.assign({ zones: [] }, snap.data()); localStorage.setItem('salesZonesData', JSON.stringify(salesZonesData)); }
+                try { if (document.getElementById('salesZonesModal').classList.contains('active')) renderSalesZones(); } catch (e) {}
+            }, function(err) { console.error('sales zones listener error:', err); });
+        }
+        function saveSalesZonesData() {
+            salesZonesData.updatedAt = Date.now();
+            localStorage.setItem('salesZonesData', JSON.stringify(salesZonesData));
+            if (!db) return Promise.resolve();
+            return db.collection('meta').doc('salesZones').set(JSON.parse(JSON.stringify(salesZonesData))).catch(function(e) { console.error(e); showToast('تعذر حفظ مناطق البيع على السحابة', 'error'); throw e; });
+        }
+        const nbKey = s => (typeof normalizeArabicText === 'function' ? normalizeArabicText(s) : String(s || '').trim()).replace(/\s+/g, ' ').trim();
+        function salesZoneOfNeighborhood(nb) {
+            if (!nb) return null;
+            const k = nbKey(nb);
+            return (salesZonesData.zones || []).find(z => (z.neighborhoods || []).some(n => nbKey(n) === k)) || null;
+        }
+        function activeSalesRep(code) { const s = salesmen.find(x => x.code === code); return s && s.status === 'نشط' && s.repType !== 'delivery' ? s : null; }
+        // { zone, reps, code } — code = مندوب المنطقة لو هو واحد بس، وإلا فاضي
+        function zoneRepForNeighborhood(nb) {
+            const zone = salesZoneOfNeighborhood(nb);
+            if (!zone) return { zone: null, reps: [], code: '' };
+            const reps = (zone.repCodes || []).map(activeSalesRep).filter(Boolean);
+            return { zone, reps, code: reps.length === 1 ? reps[0].code : '' };
+        }
+        function repName(code) { const s = salesmen.find(x => x.code === code); return code ? (s ? s.name : code) : 'بدون مندوب'; }
+        // أي تغيير في مندوب العميل بيعدّي من هنا: بيتسجل على العميل نفسه (من مين لمين، مين، إمتى، ومنين) وفي سجل العمليات
+        function setCustomerRep(c, code, source, opts) {
+            code = code || '';
+            const from = c.salesmanCode || '';
+            if (from === code) return false;
+            c.salesmanCode = code;
+            const by = (currentUser && (currentUser.fullName || currentUser.username)) || '';
+            c.repHistory = (Array.isArray(c.repHistory) ? c.repHistory : []).concat([{ from, to: code, at: Date.now(), by, src: source || '' }]).slice(-15);
+            if (!(opts && opts.silentLog)) { try { logAction('تغيير مندوب عميل', `${c.shopName || c.name || c.code} (${c.code}): ${repName(from)} ← ${repName(code)} — ${source || ''}`); } catch (e) {} }
+            return true;
+        }
+
+        // ---------- شاشة مناطق البيع ----------
+        function openSalesZonesModal() { renderSalesZones(); openModal('salesZonesModal'); }
+        function allNeighborhoodNames() {
+            const names = (appNeighborhoods.length ? appNeighborhoods.map(n => n.name) : SALES_NEIGHBORHOODS).slice();
+            const seen = new Set(names.map(nbKey));
+            customers.forEach(c => { if (c.neighborhood && !seen.has(nbKey(c.neighborhood))) { seen.add(nbKey(c.neighborhood)); names.push(c.neighborhood); } });
+            return names;
+        }
+        function renderSalesZones() {
+            const box = document.getElementById('salesZonesBody'); if (!box) return;
+            const zones = salesZonesData.zones || [];
+            const custCount = z => customers.filter(c => { const zz = salesZoneOfNeighborhood(c.neighborhood); return zz && zz.id === z.id; }).length;
+            const free = allNeighborhoodNames().filter(n => !salesZoneOfNeighborhood(n));
+            const noNb = customers.filter(c => !c.neighborhood).length;
+            box.innerHTML = (zones.length ? `<div class="table-container"><table><thead><tr><th>منطقة البيع</th><th>المندوب</th><th>الأحياء</th><th>العملاء</th><th></th></tr></thead><tbody>` + zones.map(z => {
+                const reps = (z.repCodes || []).map(activeSalesRep).filter(Boolean);
+                const repTxt = reps.length === 1 ? `<strong>${escapeHtml(reps[0].name)}</strong>` : reps.length > 1 ? `<span class="badge badge-warning">${reps.length} مناديب: ${escapeHtml(reps.map(r => r.name).join('، '))}</span><div style="font-size:11px;color:var(--text-light);">العميل الجديد بيتساب من غير مندوب</div>` : '<span class="badge badge-danger">مفيش مندوب</span>';
+                return `<tr><td><strong>${escapeHtml(z.name)}</strong></td><td>${repTxt}</td><td style="font-size:12px;max-width:340px;">${escapeHtml((z.neighborhoods || []).join('، ')) || '<span style="color:#ccc;">-</span>'}</td><td>${custCount(z)}</td>
+                    <td style="white-space:nowrap;"><button class="btn btn-secondary btn-sm" onclick="openSalesZoneEditor('${escapeHtml(z.id)}')"><i class="fas fa-edit"></i></button> <button class="btn btn-danger btn-sm" onclick="deleteSalesZone('${escapeHtml(z.id)}')"><i class="fas fa-trash"></i></button></td></tr>`;
+            }).join('') + '</tbody></table></div>' : '<p style="color:var(--text-light);text-align:center;padding:20px;">لسه مفيش مناطق بيع. دوس "إضافة منطقة بيع".</p>') +
+            `<div style="font-size:12.5px;color:var(--text-light);margin-top:8px;">${free.length ? `أحياء لسه مش في أي منطقة بيع (${free.length}): ${escapeHtml(free.slice(0, 25).join('، '))}${free.length > 25 ? '...' : ''}<br>` : '✓ كل الأحياء متوزعة على مناطق.<br>'}${noNb ? `${noNb} عميل مالهمش حي متسجل — دول مش هيتوزعوا لحد ما يتحدد حيهم.` : ''}</div>`;
+        }
+        let editingSalesZoneId = null;
+        function openSalesZoneEditor(id) {
+            editingSalesZoneId = id || null;
+            const z = id ? (salesZonesData.zones || []).find(x => x.id === id) : null;
+            document.getElementById('szName').value = z ? z.name : '';
+            const reps = salesmen.filter(s => s.repType !== 'delivery');
+            document.getElementById('szReps').innerHTML = reps.length ? reps.map(s => `<label style="display:flex;align-items:center;gap:6px;background:#f8f9fa;border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;"><input type="checkbox" class="sz-rep" value="${escapeHtml(s.code)}" ${z && (z.repCodes || []).includes(s.code) ? 'checked' : ''}> ${escapeHtml(s.name)}${s.status !== 'نشط' ? ' <span style="font-size:11px;color:var(--danger);">(غير نشط)</span>' : ''}</label>`).join('') : '<span style="color:var(--text-light);font-size:13px;">مفيش مناديب بيع.</span>';
+            document.getElementById('szNeighborhoods').innerHTML = allNeighborhoodNames().map(n => {
+                const other = salesZoneOfNeighborhood(n);
+                const mine = z && other && other.id === z.id;
+                const taken = other && !mine;
+                return `<label style="display:flex;align-items:center;gap:6px;background:${taken ? '#fff6e5' : '#f8f9fa'};border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;"><input type="checkbox" class="sz-nb" value="${escapeHtml(n)}" ${mine ? 'checked' : ''}> ${escapeHtml(n)}${taken ? ` <span style="font-size:11px;color:var(--warning);">(في ${escapeHtml(other.name)} — لو علّمته هيتنقل هنا)</span>` : ''}</label>`;
+            }).join('');
+            document.getElementById('szEditorTitle').textContent = z ? 'تعديل منطقة بيع' : 'إضافة منطقة بيع';
+            openModal('salesZoneEditorModal');
+        }
+        function saveSalesZone() {
+            const name = document.getElementById('szName').value.trim();
+            if (!name) { showToast('اكتب اسم المنطقة', 'error'); return; }
+            const repCodes = Array.from(document.querySelectorAll('#szReps .sz-rep:checked')).map(x => x.value);
+            const nbs = Array.from(document.querySelectorAll('#szNeighborhoods .sz-nb:checked')).map(x => x.value);
+            const zones = salesZonesData.zones = salesZonesData.zones || [];
+            let z = editingSalesZoneId ? zones.find(x => x.id === editingSalesZoneId) : null;
+            if (!z) { z = { id: 'sz_' + Date.now(), name: '', repCodes: [], neighborhoods: [] }; zones.push(z); }
+            // الحي يبقى في منطقة واحدة بس: أي حي اتعلّم هنا بيتشال من أي منطقة تانية
+            const picked = new Set(nbs.map(nbKey));
+            zones.forEach(o => { if (o !== z) o.neighborhoods = (o.neighborhoods || []).filter(n => !picked.has(nbKey(n))); });
+            z.name = name; z.repCodes = repCodes; z.neighborhoods = nbs;
+            saveSalesZonesData().then(function() {
+                logAction('تعديل منطقة بيع', `${name}: ${repCodes.map(repName).join('، ') || 'بدون مندوب'} — ${nbs.length} حي`);
+                closeModal('salesZoneEditorModal'); renderSalesZones();
+                const pending = buildZoneDistribution().entries.filter(e => e.status === 'update').length;
+                if (pending && confirm(`اتحفظت المنطقة ✓\n\nفيه ${pending} عميل مندوبهم مختلف عن مندوب منطقتهم. تحب تشوفهم وتوزعهم دلوقتي؟`)) distributeCustomersByZone();
+                else showToast('اتحفظت منطقة البيع ✓');
+            }).catch(function() {});
+        }
+        function deleteSalesZone(id) {
+            const z = (salesZonesData.zones || []).find(x => x.id === id); if (!z) return;
+            if (!confirm(`حذف منطقة البيع "${z.name}"؟\nالعملاء هيفضلوا على مندوبهم الحالي، بس العملاء الجداد في أحياءها مش هيتسجلوا على حد أوتوماتيك.`)) return;
+            salesZonesData.zones = salesZonesData.zones.filter(x => x.id !== id);
+            saveSalesZonesData().then(function() { logAction('حذف منطقة بيع', z.name); renderSalesZones(); }).catch(function() {});
+        }
+
+        // ---------- وزّع العملاء حسب المنطقة ----------
+        function buildZoneDistribution() {
+            const entries = []; let multi = 0, noRep = 0, noZone = 0, noNb = 0, row = 0;
+            customers.forEach(c => {
+                if (!c.neighborhood) { noNb++; return; }
+                const zr = zoneRepForNeighborhood(c.neighborhood);
+                if (!zr.zone) { noZone++; return; }
+                if (zr.reps.length > 1) { multi++; return; }
+                if (!zr.code) { noRep++; return; }
+                if ((c.salesmanCode || '') === zr.code) return;
+                entries.push({ row: ++row, c, to: zr.code, status: 'update', cells: [c.shopName || c.name, c.neighborhood, zr.zone.name, repName(c.salesmanCode || ''), repName(zr.code)] });
+            });
+            return { entries, multi, noRep, noZone, noNb };
+        }
+        function distributeCustomersByZone() {
+            if (!requireCloudReady()) return;
+            if (!(salesZonesData.zones || []).length) { showToast('لسه مفيش مناطق بيع. ضيفها الأول من "مناطق البيع"', 'warning'); openSalesZonesModal(); return; }
+            const d = buildZoneDistribution();
+            if (!d.entries.length) { showToast('كل العملاء على مندوب منطقتهم ✓'); return; }
+            xlPreview({ title: 'توزيع العملاء على مناديب المناطق', confirmLabel: `انقل ${d.entries.length} عميل`,
+                info: `العملاء دول هيتنقلوا لمندوب منطقتهم. كل نقلة بتتسجل على العميل (من مين لمين وإمتى).` +
+                    [d.multi && `${d.multi} عميل في مناطق فيها أكتر من مندوب — مش هيتغيروا`, d.noRep && `${d.noRep} عميل في مناطق مالهاش مندوب`, d.noZone && `${d.noZone} عميل حيهم مش في أي منطقة بيع`, d.noNb && `${d.noNb} عميل مالهمش حي متسجل`].filter(Boolean).map(t => '<br>• ' + t).join(''),
+                headers: ['العميل', 'الحي', 'المنطقة', 'المندوب دلوقتي', 'هيبقى على'], entries: d.entries,
+                onConfirm: function(list) {
+                    let n = 0; list.forEach(e => { if (setCustomerRep(e.c, e.to, 'توزيع حسب منطقة البيع', { silentLog: true })) n++; });
+                    localStorage.setItem('customers', JSON.stringify(customers));
+                    logAction('توزيع العملاء حسب مناطق البيع', `اتنقل ${n} عميل لمندوب منطقتهم`);
+                    try { renderCustomers(); updateInvoiceDropdowns(); } catch (e) {}
+                    showToast(`اتنقل ${n} عميل لمندوب منطقتهم ✓`);
+                } });
+        }
+        // سجل تغييرات مندوب العميل (بيظهر في شاشة تعديل العميل)
+        function customerRepHistoryHtml(c) {
+            const h = (c && Array.isArray(c.repHistory)) ? c.repHistory.slice().reverse() : [];
+            if (!h.length) return '';
+            return '<div style="font-size:11.5px;color:var(--text-light);margin-top:6px;line-height:1.7;"><strong>تغييرات المندوب:</strong><br>' + h.slice(0, 6).map(x => `${new Date(x.at).toLocaleString('ar-EG')} — ${escapeHtml(repName(x.from))} ← ${escapeHtml(repName(x.to))}${x.by ? ' (' + escapeHtml(x.by) + ')' : ''}${x.src ? ' · ' + escapeHtml(x.src) : ''}`).join('<br>') + '</div>';
         }
 
         // بيرجّع كل عميل اتشال منه المندوب لمندوبه، من آخر فاتورة بيع ليه عليها مندوب. بيعرض النتيجة الأول قبل الحفظ.
@@ -7771,28 +7967,30 @@
             if (!requireCloudReady()) return;
             const latest = {};
             (invoices || []).forEach(function(inv) {
-                if (!inv || !inv.customerCode || !inv.salesmanCode) return;
+                if (!inv || !inv.customerCode || !inv.salesmanCode || inv.type !== 'sale') return;
                 const t = new Date(inv.date || inv.createdAt || 0).getTime() || Number(inv.id) || 0;
                 const cur = latest[inv.customerCode];
-                if (!cur || t > cur.t) latest[inv.customerCode] = { t: t, code: inv.salesmanCode };
+                if (!cur || t > cur.t) latest[inv.customerCode] = { t: t, code: inv.salesmanCode, no: inv.number };
             });
-            const fixes = [];
+            const entries = []; let row = 0;
             customers.forEach(function(c) {
-                if (c.salesmanCode) return;
-                const l = latest[c.code];
-                if (!l) return;
-                const sm = (salesmen || []).find(function(x) { return x.code === l.code; });
-                if (!sm) return;
-                fixes.push({ c: c, smCode: sm.code, smName: sm.name });
+                const l = latest[c.code]; if (!l) return;
+                if (!activeSalesRep(l.code) || (c.salesmanCode || '') === l.code) return;
+                const zr = zoneRepForNeighborhood(c.neighborhood);
+                entries.push({ row: ++row, c, to: l.code, status: 'update', note: zr.code && zr.code !== l.code ? `تنبيه: مندوب منطقته ${repName(zr.code)} — "وزّع حسب المنطقة" هيرجّعه له` : '',
+                    cells: [c.shopName || c.name, repName(c.salesmanCode || ''), repName(l.code), '#' + l.no + ' — ' + new Date(l.t).toLocaleDateString('ar-EG')] });
             });
-            if (!fixes.length) { showToast('مفيش عملاء من غير مندوب ليهم فواتير بمندوب. كله تمام ✓'); return; }
-            const preview = fixes.slice(0, 20).map(function(f) { return '• ' + (f.c.shopName || f.c.name || f.c.code) + ' ← ' + f.smName; }).join('\n');
-            if (!confirm('هيترجع ' + fixes.length + ' عميل لمندوبهم (من آخر فاتورة ليهم):\n\n' + preview + (fixes.length > 20 ? '\n... و' + (fixes.length - 20) + ' تانيين' : '') + '\n\nموافق؟')) return;
-            fixes.forEach(function(f) { f.c.salesmanCode = f.smCode; });
-            localStorage.setItem('customers', JSON.stringify(customers));
-            logAction('استرجاع مناديب العملاء', 'تم ربط ' + fixes.length + ' عميل بمندوبهم من آخر فاتورة');
-            try { renderCustomers(); updateInvoiceDropdowns(); } catch (e) {}
-            showToast('تم ربط ' + fixes.length + ' عميل بمندوبهم ✓');
+            if (!entries.length) { showToast('كل العملاء على نفس مندوب آخر فاتورة ليهم ✓'); return; }
+            xlPreview({ title: 'رجّع المناديب من آخر فاتورة', confirmLabel: `رجّع ${entries.length} عميل`,
+                info: 'العملاء دول مندوبهم دلوقتي مختلف عن المندوب اللي عمل آخر فاتورة ليهم (أو اتشال منهم المندوب). الرجوع بيتسجل على كل عميل.',
+                headers: ['العميل', 'المندوب دلوقتي', 'مندوب آخر فاتورة', 'آخر فاتورة'], entries,
+                onConfirm: function(list) {
+                    let n = 0; list.forEach(e => { if (setCustomerRep(e.c, e.to, 'رجوع لمندوب آخر فاتورة', { silentLog: true })) n++; });
+                    localStorage.setItem('customers', JSON.stringify(customers));
+                    logAction('استرجاع مناديب العملاء', 'تم ربط ' + n + ' عميل بمندوب آخر فاتورة ليهم');
+                    try { renderCustomers(); updateInvoiceDropdowns(); } catch (e) {}
+                    showToast('تم ربط ' + n + ' عميل بمندوبهم ✓');
+                } });
         }
 
         function saveCustomer() {
@@ -7822,13 +8020,23 @@
                     if (!confirm(msg + '\n\nتحفظه برضه؟')) return;
                 }
             }
+            {
+                const zr = zoneRepForNeighborhood(neighborhood);
+                if (zr.code && salesmanCode !== zr.code && !confirm(`العميل ده في منطقة البيع "${zr.zone.name}" ومندوبها ${repName(zr.code)}.\nتحفظه على ${repName(salesmanCode)} برضه؟\n\n(ملحوظة: زرار "وزّع حسب المنطقة" هيرجّعه لمندوب المنطقة)`)) return;
+            }
             if (editingCustomer) {
                 const idx = customers.findIndex(c => c.code === editingCustomer.code);
                 // بنحافظ على كل بيانات العميل التانية (النقاط، اللوكيشن، ...) ونغيّر بس اللي في الشاشة
-                if (idx !== -1) customers[idx] = Object.assign({}, customers[idx], { code, name, shopName, phone, address, neighborhood, salesmanCode, creditLimit });
+                if (idx !== -1) {
+                    const updated = Object.assign({}, customers[idx], { code, name, shopName, phone, address, neighborhood, creditLimit });
+                    setCustomerRep(updated, salesmanCode, 'تعديل بيانات العميل');
+                    customers[idx] = updated;
+                }
             } else {
                 if (customers.find(c => c.code === code)) { showToast('كود العميل موجود مسبقاً', 'error'); return; }
-                customers.push({ code, name, shopName, phone, address, neighborhood, salesmanCode, creditLimit });
+                const nc = { code, name, shopName, phone, address, neighborhood, salesmanCode: '', creditLimit };
+                setCustomerRep(nc, salesmanCode, 'إضافة عميل', { silentLog: true });
+                customers.push(nc);
             }
             localStorage.setItem('customers', JSON.stringify(customers));
             logAction(editingCustomer ? 'تعديل عميل' : 'إضافة عميل', `${editingCustomer ? 'تم تعديل' : 'تم إضافة'} العميل "${name}" (${code})`);
@@ -8126,6 +8334,8 @@
         function openSalesmanModal(salesman = null) {
             editingSalesman = salesman;
             document.getElementById('salesmanCode').value = salesman ? salesman.code : '';
+            // الكود بيتقفل وقت التعديل: لو اتغير، كل عملاء المندوب كانوا هيفضلوا على الكود القديم ويختفوا من عنده
+            document.getElementById('salesmanCode').readOnly = !!salesman;
             document.getElementById('salesmanName').value = salesman ? salesman.name : '';
             document.getElementById('salesmanPhone').value = salesman ? salesman.phone : '';
             document.getElementById('salesmanArea').value = salesman ? salesman.area : '';
@@ -8177,7 +8387,8 @@
         }
 
         function deleteSalesman(code) {
-            if (confirm('هل أنت متأكد من حذف هذا المندوب؟')) {
+            const own = customers.filter(c => c.salesmanCode === code).length;
+            if (confirm('هل أنت متأكد من حذف هذا المندوب؟' + (own ? `\n\nتنبيه: عليه ${own} عميل. هيفضلوا متسجلين على كوده، ومش هيظهروا عند أي مندوب لحد ما تنقلهم (من "وزّع حسب المنطقة" أو تعديل العميل).` : ''))) {
                 salesmen = salesmen.filter(s => s.code !== code);
                 localStorage.setItem('salesmen', JSON.stringify(salesmen));
                 renderSalesmen(); updateInvoiceDropdowns(); updateDashboardStats(); showToast('تم حذف المندوب');
@@ -14277,28 +14488,37 @@
         function importExcelCustomers() {
             const updateExisting = document.getElementById('excelUpdateExisting').checked;
             let added = 0, updated = 0, skipped = 0;
+            // *** إصلاح 2026-10-06: قبل كده خانة المندوب الفاضية كانت بتمسح المندوب، والشيت القديم كان بيرجّع كل عميل لمندوبه القديم ***
+            // من غير ما تاخد بالك. دلوقتي: الخانة الفاضية = متغيّرش، وأي تغيير في المندوب بيتعرض عليك الأول.
+            if (updateExisting && excelCustomerColumnsPresent.salesman) {
+                const changes = excelCustomersData.filter(c => { const ex = customers.find(x => x.code === c.code); return ex && c.salesmanCode && !c.salesmanNotFound && c.salesmanCode !== (ex.salesmanCode || ''); })
+                    .map(c => { const ex = customers.find(x => x.code === c.code); return `• ${ex.shopName || ex.name}: ${repName(ex.salesmanCode || '')} ← ${repName(c.salesmanCode)}`; });
+                if (changes.length && !confirm(`الشيت ده هيغيّر مندوب ${changes.length} عميل:\n\n${changes.slice(0, 15).join('\n')}${changes.length > 15 ? '\n... و' + (changes.length - 15) + ' تانيين' : ''}\n\nلو الشيت ده قديم، دوس "إلغاء" وصدّر شيت جديد. تكمل؟`)) return;
+            }
             excelCustomersData.forEach(c => {
                 if (!c.code || !c.name) { skipped++; return; }
                 const idx = customers.findIndex(existing => existing.code === c.code);
                 if (idx !== -1) {
                     if (!updateExisting) { skipped++; return; }
                     const existing = customers[idx];
-                    customers[idx] = {
+                    const newRep = (excelCustomerColumnsPresent.salesman && c.salesmanCode && !c.salesmanNotFound) ? c.salesmanCode : (existing.salesmanCode || '');
+                    customers[idx] = Object.assign({}, existing, {
                         code: existing.code,
                         name: c.name || existing.name,
                         shopName: excelCustomerColumnsPresent.shopName ? (c.shopName || '') : existing.shopName,
                         phone: excelCustomerColumnsPresent.phone ? (c.phone || '') : existing.phone,
                         address: excelCustomerColumnsPresent.address ? (c.address || '') : existing.address,
                         neighborhood: excelCustomerColumnsPresent.neighborhood ? (c.neighborhood || '') : existing.neighborhood,
-                        salesmanCode: excelCustomerColumnsPresent.salesman ? (c.salesmanNotFound ? existing.salesmanCode : (c.salesmanCode || '')) : existing.salesmanCode,
+                        salesmanCode: existing.salesmanCode || '',
                         creditLimit: excelCustomerColumnsPresent.creditLimit ? c.creditLimit : existing.creditLimit
-                    };
+                    });
+                    setCustomerRep(customers[idx], newRep, 'رفع شيت عملاء Excel', { silentLog: true });
                     updated++;
                 } else {
-                    customers.push({
-                        code: c.code, name: c.name, shopName: c.shopName || '', phone: c.phone || '', address: c.address || '',
-                        neighborhood: c.neighborhood || '', salesmanCode: c.salesmanNotFound ? '' : (c.salesmanCode || ''), creditLimit: c.creditLimit
-                    });
+                    const nc = { code: c.code, name: c.name, shopName: c.shopName || '', phone: c.phone || '', address: c.address || '',
+                        neighborhood: c.neighborhood || '', salesmanCode: '', creditLimit: c.creditLimit };
+                    setCustomerRep(nc, (c.salesmanNotFound ? '' : c.salesmanCode) || zoneRepForNeighborhood(nc.neighborhood).code || '', 'رفع شيت عملاء Excel', { silentLog: true });
+                    customers.push(nc);
                     added++;
                 }
             });
