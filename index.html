@@ -533,43 +533,43 @@
             <div class="stats-grid">
                 <div class="stat-card sales" data-role-card="sales" onclick="showSection('invoices')">
                     <div class="stat-icon"><i class="fas fa-money-bill-wave"></i></div>
-                    <div class="stat-value" id="totalSales">0 ر.س</div>
+                    <div class="stat-value" id="totalSales">0 ج.م</div>
                     <div class="stat-label" id="totalSalesLabel">إجمالي المبيعات</div>
                     <div class="stat-change positive"><i class="fas fa-arrow-up"></i> نشط</div>
                 </div>
                 <div class="stat-card purchases" data-role-card="purchases" onclick="showSection('invoices')">
                     <div class="stat-icon"><i class="fas fa-cart-plus"></i></div>
-                    <div class="stat-value" id="totalPurchases">0 ر.س</div>
+                    <div class="stat-value" id="totalPurchases">0 ج.م</div>
                     <div class="stat-label" id="totalPurchasesLabel">إجمالي المشتريات</div>
                     <div class="stat-change positive"><i class="fas fa-arrow-up"></i> جديد</div>
                 </div>
                 <div class="stat-card profit" data-role-card="profit" onclick="showSection('profit')">
                     <div class="stat-icon"><i class="fas fa-chart-line"></i></div>
-                    <div class="stat-value" id="totalProfit">0 ر.س</div>
+                    <div class="stat-value" id="totalProfit">0 ج.م</div>
                     <div class="stat-label" id="totalProfitLabel">صافي الربح بعد المصروفات</div>
                     <div class="stat-change positive"><i class="fas fa-arrow-up"></i> صافي</div>
                 </div>
                 <div class="stat-card expenses" data-role-card="expenses" onclick="showSection('expenses')">
                     <div class="stat-icon"><i class="fas fa-wallet"></i></div>
-                    <div class="stat-value" id="totalExpenses">0 ر.س</div>
+                    <div class="stat-value" id="totalExpenses">0 ج.م</div>
                     <div class="stat-label" id="totalExpensesLabel">إجمالي المصروفات</div>
                     <div class="stat-change negative"><i class="fas fa-arrow-down"></i> خصم</div>
                 </div>
                 <div class="stat-card treasury" data-role-card="treasury" onclick="showSection('treasury')">
                     <div class="stat-icon"><i class="fas fa-coins"></i></div>
-                    <div class="stat-value" id="treasuryBalance">0 ر.س</div>
+                    <div class="stat-value" id="treasuryBalance">0 ج.م</div>
                     <div class="stat-label">رصيد الخزنة (إجمالي)</div>
                     <div class="stat-change positive"><i class="fas fa-wallet"></i> نقدي</div>
                 </div>
                 <div class="stat-card credit" data-role-card="credit" onclick="showSection('collections')">
                     <div class="stat-icon"><i class="fas fa-hand-holding-usd"></i></div>
-                    <div class="stat-value" id="totalCustomersDebt">0 ر.س</div>
+                    <div class="stat-value" id="totalCustomersDebt">0 ج.م</div>
                     <div class="stat-label">ديون العملاء (آجل - إجمالي)</div>
                     <div class="stat-change negative"><i class="fas fa-exclamation-circle"></i> مستحق</div>
                 </div>
                 <div class="stat-card suppliers" data-role-card="suppliers" onclick="showSection('suppliers')">
                     <div class="stat-icon"><i class="fas fa-truck"></i></div>
-                    <div class="stat-value" id="totalSuppliersDebt">0 ر.س</div>
+                    <div class="stat-value" id="totalSuppliersDebt">0 ج.م</div>
                     <div class="stat-label">ديون الموردين (آجل - إجمالي)</div>
                     <div class="stat-change negative"><i class="fas fa-exclamation-circle"></i> مستحق</div>
                 </div>
@@ -744,7 +744,7 @@
                     <div class="invoice-detail-group"><label>ملاحظات</label><input type="text" class="form-control" id="invoiceNotes" placeholder="أي ملاحظات إضافية..."></div>
                 </div>
                 <div class="invoice-detail-group" id="customerBalanceInfo" style="display:none;margin-bottom:15px;padding:10px 15px;background:rgba(243,156,18,0.1);border-radius:8px;border-right:3px solid var(--warning);">
-                    <span style="font-weight:600;color:var(--warning);"><i class="fas fa-info-circle"></i> رصيد العميل الحالي: <span id="customerCurrentBalance">0</span> ر.س</span>
+                    <span style="font-weight:600;color:var(--warning);"><i class="fas fa-info-circle"></i> رصيد العميل الحالي: <span id="customerCurrentBalance">0</span> ج.م</span>
                 </div>
                 <div class="invoice-table-scroll">
                 <table class="invoice-items-table">
@@ -753,7 +753,7 @@
                 </table>
                 </div>
                 <div style="text-align:center;margin-bottom:20px;"><button class="btn btn-secondary" onclick="addInvoiceRow()"><i class="fas fa-plus"></i> إضافة صنف</button></div>
-                <div class="invoice-total"><span class="invoice-total-label">الإجمالي الكلي:</span><span class="invoice-total-value" id="invoiceGrandTotal">0 ر.س</span></div>
+                <div class="invoice-total"><span class="invoice-total-label">الإجمالي الكلي:</span><span class="invoice-total-value" id="invoiceGrandTotal">0 ج.م</span></div>
                 <div class="invoice-actions">
                     <button class="btn btn-success" onclick="saveInvoice()"><i class="fas fa-save"></i> حفظ الفاتورة</button>
                     <button class="btn btn-primary" onclick="printInvoice()"><i class="fas fa-print"></i> طباعة</button>
@@ -805,7 +805,7 @@
                     <div class="invoice-detail-group"><label>صورة فاتورة المورد (اختياري)</label><input type="file" class="form-control" id="purchaseAttachment" accept="image/*"><div id="purchaseAttachmentExisting" style="font-size:12px;margin-top:4px;"></div></div>
                 </div>
                 <div class="invoice-detail-group" id="supplierBalanceInfo" style="display:none;margin-bottom:15px;padding:10px 15px;background:rgba(243,156,18,0.1);border-radius:8px;border-right:3px solid var(--warning);">
-                    <span style="font-weight:600;color:var(--warning);"><i class="fas fa-info-circle"></i> رصيد المورد الحالي: <span id="supplierCurrentBalance">0</span> ر.س</span>
+                    <span style="font-weight:600;color:var(--warning);"><i class="fas fa-info-circle"></i> رصيد المورد الحالي: <span id="supplierCurrentBalance">0</span> ج.م</span>
                 </div>
                 <div class="invoice-table-scroll">
                 <table class="invoice-items-table">
@@ -814,7 +814,7 @@
                 </table>
                 </div>
                 <div style="text-align:center;margin-bottom:20px;"><button class="btn btn-teal" onclick="addPurchaseRow()"><i class="fas fa-plus"></i> إضافة صنف</button></div>
-                <div class="invoice-total"><span class="invoice-total-label">الإجمالي الكلي:</span><span class="invoice-total-value" id="purchaseGrandTotal">0 ر.س</span></div>
+                <div class="invoice-total"><span class="invoice-total-label">الإجمالي الكلي:</span><span class="invoice-total-value" id="purchaseGrandTotal">0 ج.م</span></div>
                 <div class="invoice-actions">
                     <button class="btn btn-success" id="purchaseSaveBtn" onclick="savePurchaseInvoice()"><i class="fas fa-paper-plane"></i> حفظ وإرسال للمراجعة</button>
                     <button class="btn btn-primary" onclick="printPurchaseInvoice()"><i class="fas fa-print"></i> طباعة</button>
@@ -865,7 +865,7 @@
                         <tbody id="salesReturnItemsBody"></tbody>
                     </table>
                 </div>
-                    <div class="invoice-total"><span class="invoice-total-label">إجمالي المرتجع:</span><span class="invoice-total-value" id="salesReturnGrandTotal">0 ر.س</span></div>
+                    <div class="invoice-total"><span class="invoice-total-label">إجمالي المرتجع:</span><span class="invoice-total-value" id="salesReturnGrandTotal">0 ج.م</span></div>
                     <div class="invoice-actions">
                         <button class="btn btn-success" onclick="saveSalesReturn()"><i class="fas fa-save"></i> حفظ المرتجع</button>
                         <button class="btn btn-warning" onclick="resetSalesReturnForm()"><i class="fas fa-redo"></i> إلغاء</button>
@@ -903,7 +903,7 @@
                         <tbody id="purchaseReturnItemsBody"></tbody>
                     </table>
                 </div>
-                    <div class="invoice-total"><span class="invoice-total-label">إجمالي المرتجع:</span><span class="invoice-total-value" id="purchaseReturnGrandTotal">0 ر.س</span></div>
+                    <div class="invoice-total"><span class="invoice-total-label">إجمالي المرتجع:</span><span class="invoice-total-value" id="purchaseReturnGrandTotal">0 ج.م</span></div>
                     <div class="invoice-actions">
                         <button class="btn btn-success" onclick="savePurchaseReturn()"><i class="fas fa-paper-plane"></i> إرسال المرتجع للاعتماد</button>
                         <button class="btn btn-warning" onclick="resetPurchaseReturnForm()"><i class="fas fa-redo"></i> إلغاء</button>
@@ -922,8 +922,8 @@
         <!-- Collections Section -->
         <section id="collections-section" class="section">
             <div class="stats-grid">
-                <div class="stat-card credit"><div class="stat-icon"><i class="fas fa-hand-holding-usd"></i></div><div class="stat-value" id="collTotalDebt">0 ر.س</div><div class="stat-label">إجمالي المستحق على العملاء</div></div>
-                <div class="stat-card sales"><div class="stat-icon"><i class="fas fa-coins"></i></div><div class="stat-value" id="collTotalCollected">0 ر.س</div><div class="stat-label">إجمالي المحصل (كل الأوقات)</div></div>
+                <div class="stat-card credit"><div class="stat-icon"><i class="fas fa-hand-holding-usd"></i></div><div class="stat-value" id="collTotalDebt">0 ج.م</div><div class="stat-label">إجمالي المستحق على العملاء</div></div>
+                <div class="stat-card sales"><div class="stat-icon"><i class="fas fa-coins"></i></div><div class="stat-value" id="collTotalCollected">0 ج.م</div><div class="stat-label">إجمالي المحصل (كل الأوقات)</div></div>
                 <div class="stat-card invoices"><div class="stat-icon"><i class="fas fa-users"></i></div><div class="stat-value" id="collDebtorsCount">0</div><div class="stat-label">عدد العملاء المدينين</div></div>
             </div>
             <div class="card">
@@ -949,6 +949,8 @@
                 <div class="card-header"><div class="card-title"><i class="fas fa-hand-holding-usd"></i> فلوس مع مناديب التسليم</div>
                     <button class="btn btn-secondary btn-sm admin-only" onclick="closeLegacyCustody()"><i class="fas fa-history"></i> قفل العهدة القديمة</button></div>
                 <p style="font-size:13px;color:var(--text-light);margin:0 0 12px;">كل طلب مندوب التسليم بيسلّمه بتتسجل فلوسه في عهدته. لما يسلّمك الفلوس، دوس "استلام"، والمبلغ بيدخل الخزنة. ولو سلّم أقل، الفرق بيتسجل عليه عجز لحد ما يسدّه.</p>
+                <div id="repDeliveryStuckBox" style="display:none;border:1px solid var(--danger);background:rgba(231,76,60,0.05);border-radius:12px;padding:12px;margin-bottom:12px;"></div>
+                <div id="repShortageInitBox" style="display:none;border:1px solid #e6a23c;background:rgba(230,162,60,0.07);border-radius:12px;padding:14px;margin-bottom:12px;"></div>
                 <div id="repCustodyCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px;"></div>
             </div>
             <div class="card">
@@ -1057,14 +1059,14 @@
 
         <section id="sales-tracking-section" class="section">
             <div class="stats-grid">
-                <div class="stat-card sales"><div class="stat-icon"><i class="fas fa-calendar-day"></i></div><div class="stat-value" id="trackTodaySales">0 ر.س</div><div class="stat-label">مبيعات اليوم</div></div>
-                <div class="stat-card purchases"><div class="stat-icon"><i class="fas fa-calendar-week"></i></div><div class="stat-value" id="trackWeekSales">0 ر.س</div><div class="stat-label">مبيعات الأسبوع</div></div>
-                <div class="stat-card profit"><div class="stat-icon"><i class="fas fa-calendar-alt"></i></div><div class="stat-value" id="trackMonthSales">0 ر.س</div><div class="stat-label">مبيعات الشهر</div></div>
+                <div class="stat-card sales"><div class="stat-icon"><i class="fas fa-calendar-day"></i></div><div class="stat-value" id="trackTodaySales">0 ج.م</div><div class="stat-label">مبيعات اليوم</div></div>
+                <div class="stat-card purchases"><div class="stat-icon"><i class="fas fa-calendar-week"></i></div><div class="stat-value" id="trackWeekSales">0 ج.م</div><div class="stat-label">مبيعات الأسبوع</div></div>
+                <div class="stat-card profit"><div class="stat-icon"><i class="fas fa-calendar-alt"></i></div><div class="stat-value" id="trackMonthSales">0 ج.م</div><div class="stat-label">مبيعات الشهر</div></div>
                 <div class="stat-card customers"><div class="stat-icon"><i class="fas fa-crown"></i></div><div class="stat-value" id="trackTopCustomer" style="font-size:16px;">-</div><div class="stat-label">أفضل عميل</div></div>
-                <div class="stat-card invoices"><div class="stat-icon"><i class="fas fa-receipt"></i></div><div class="stat-value" id="trackHighestInvoice">0 ر.س</div><div class="stat-label">أعلى فاتورة</div></div>
+                <div class="stat-card invoices"><div class="stat-icon"><i class="fas fa-receipt"></i></div><div class="stat-value" id="trackHighestInvoice">0 ج.م</div><div class="stat-label">أعلى فاتورة</div></div>
                 <div class="stat-card credit"><div class="stat-icon"><i class="fas fa-user-clock"></i></div><div class="stat-value" id="trackOverdueCount">0</div><div class="stat-label">عملاء متأخرون في السداد</div></div>
                 <div class="stat-card suppliers"><div class="stat-icon"><i class="fas fa-file-invoice"></i></div><div class="stat-value" id="trackUncollectedCount">0</div><div class="stat-label">فواتير آجلة غير محصلة</div></div>
-                <div class="stat-card expenses"><div class="stat-icon"><i class="fas fa-coins"></i></div><div class="stat-value" id="trackUncollectedTotal">0 ر.س</div><div class="stat-label">قيمة الفواتير غير المحصلة</div></div>
+                <div class="stat-card expenses"><div class="stat-icon"><i class="fas fa-coins"></i></div><div class="stat-value" id="trackUncollectedTotal">0 ج.م</div><div class="stat-label">قيمة الفواتير غير المحصلة</div></div>
             </div>
             <div class="card">
                 <div class="card-header"><div class="card-title"><i class="fas fa-trophy"></i> أكثر الأصناف مبيعاً</div></div>
@@ -1097,9 +1099,9 @@
             <div class="card">
                 <div class="card-header"><div class="card-title"><i class="fas fa-chart-line"></i> توقع المبيعات</div></div>
                 <div class="stats-grid">
-                    <div class="stat-card sales"><div class="stat-icon"><i class="fas fa-calendar-day"></i></div><div class="stat-value" id="forecastDailyAvg">0 ر.س</div><div class="stat-label">متوسط المبيعات اليومي</div></div>
-                    <div class="stat-card purchases"><div class="stat-icon"><i class="fas fa-calendar-week"></i></div><div class="stat-value" id="forecastNextWeek">0 ر.س</div><div class="stat-label">توقع مبيعات الأسبوع القادم</div></div>
-                    <div class="stat-card profit"><div class="stat-icon"><i class="fas fa-calendar-alt"></i></div><div class="stat-value" id="forecastNextMonth">0 ر.س</div><div class="stat-label">توقع مبيعات الشهر القادم</div></div>
+                    <div class="stat-card sales"><div class="stat-icon"><i class="fas fa-calendar-day"></i></div><div class="stat-value" id="forecastDailyAvg">0 ج.م</div><div class="stat-label">متوسط المبيعات اليومي</div></div>
+                    <div class="stat-card purchases"><div class="stat-icon"><i class="fas fa-calendar-week"></i></div><div class="stat-value" id="forecastNextWeek">0 ج.م</div><div class="stat-label">توقع مبيعات الأسبوع القادم</div></div>
+                    <div class="stat-card profit"><div class="stat-icon"><i class="fas fa-calendar-alt"></i></div><div class="stat-value" id="forecastNextMonth">0 ج.م</div><div class="stat-label">توقع مبيعات الشهر القادم</div></div>
                     <div class="stat-card customers"><div class="stat-icon"><i class="fas fa-arrow-trend-up"></i></div><div class="stat-value" id="forecastTrend" style="font-size:16px;">-</div><div class="stat-label">اتجاه المبيعات</div></div>
                 </div>
             </div>
@@ -1145,7 +1147,7 @@
         <section id="treasury-section" class="section">
             <div class="treasury-balance">
                 <h3><i class="fas fa-coins"></i> رصيد الخزنة الحالي</h3>
-                <div class="balance-value" id="treasuryCurrentBalance">0 ر.س</div>
+                <div class="balance-value" id="treasuryCurrentBalance">0 ج.م</div>
             </div>
             <div class="card">
                 <div class="card-header"><div class="card-title"><i class="fas fa-wallet"></i> الأرصدة حسب الحساب</div>
@@ -1159,17 +1161,17 @@
             <div class="stats-grid">
                 <div class="stat-card sales">
                     <div class="stat-icon"><i class="fas fa-arrow-down" style="color:var(--accent);"></i></div>
-                    <div class="stat-value" id="treasuryTotalIn">0 ر.س</div>
+                    <div class="stat-value" id="treasuryTotalIn">0 ج.م</div>
                     <div class="stat-label">إجمالي القبض (وارد)</div>
                 </div>
                 <div class="stat-card credit">
                     <div class="stat-icon"><i class="fas fa-arrow-up" style="color:var(--danger);"></i></div>
-                    <div class="stat-value" id="treasuryTotalOut">0 ر.س</div>
+                    <div class="stat-value" id="treasuryTotalOut">0 ج.م</div>
                     <div class="stat-label">إجمالي الصرف (منصرف)</div>
                 </div>
                 <div class="stat-card profit">
                     <div class="stat-icon"><i class="fas fa-balance-scale" style="color:var(--profit);"></i></div>
-                    <div class="stat-value" id="treasuryNetMovement">0 ر.س</div>
+                    <div class="stat-value" id="treasuryNetMovement">0 ج.م</div>
                     <div class="stat-label">صافي الحركة</div>
                 </div>
                 <div class="stat-card invoices">
@@ -1205,7 +1207,7 @@
             <div class="stats-grid">
                 <div class="stat-card expenses">
                     <div class="stat-icon"><i class="fas fa-wallet"></i></div>
-                    <div class="stat-value" id="expTotalAmount">0 ر.س</div>
+                    <div class="stat-value" id="expTotalAmount">0 ج.م</div>
                     <div class="stat-label">إجمالي المصروفات</div>
                 </div>
                 <div class="stat-card sales">
@@ -1280,7 +1282,7 @@
                 </div>
                 <div class="stat-card purchases">
                     <div class="stat-icon"><i class="fas fa-coins"></i></div>
-                    <div class="stat-value" id="invTotalValue">0 ر.س</div>
+                    <div class="stat-value" id="invTotalValue">0 ج.م</div>
                     <div class="stat-label">قيمة المخزون التقديرية</div>
                 </div>
                 <div class="stat-card credit">
@@ -1327,22 +1329,22 @@
             <div class="stats-grid">
                 <div class="stat-card profit">
                     <div class="stat-icon"><i class="fas fa-chart-line"></i></div>
-                    <div class="stat-value" id="profitTotalProfit">0 ر.س</div>
+                    <div class="stat-value" id="profitTotalProfit">0 ج.م</div>
                     <div class="stat-label">صافي الربح (بعد المصروفات)</div>
                 </div>
                 <div class="stat-card sales">
                     <div class="stat-icon"><i class="fas fa-money-bill-wave"></i></div>
-                    <div class="stat-value" id="profitTotalSales">0 ر.س</div>
+                    <div class="stat-value" id="profitTotalSales">0 ج.م</div>
                     <div class="stat-label">إجمالي المبيعات</div>
                 </div>
                 <div class="stat-card purchases">
                     <div class="stat-icon"><i class="fas fa-cart-plus"></i></div>
-                    <div class="stat-value" id="profitTotalCost">0 ر.س</div>
+                    <div class="stat-value" id="profitTotalCost">0 ج.م</div>
                     <div class="stat-label">إجمالي تكلفة البضاعة المباعة</div>
                 </div>
                 <div class="stat-card expenses">
                     <div class="stat-icon"><i class="fas fa-wallet"></i></div>
-                    <div class="stat-value" id="profitTotalExpenses">0 ر.س</div>
+                    <div class="stat-value" id="profitTotalExpenses">0 ج.م</div>
                     <div class="stat-label">إجمالي المصروفات</div>
                 </div>
                 <div class="stat-card invoices">
@@ -1352,7 +1354,7 @@
                 </div>
                 <div class="stat-card treasury">
                     <div class="stat-icon"><i class="fas fa-balance-scale"></i></div>
-                    <div class="stat-value" id="profitNetAfterExpenses">0 ر.س</div>
+                    <div class="stat-value" id="profitNetAfterExpenses">0 ج.م</div>
                     <div class="stat-label">صافي الربح بعد المصروفات</div>
                 </div>
             </div>
@@ -1385,7 +1387,7 @@
                 <div>
                     <div class="profit-card">
                         <div class="profit-label">صافي الربح قبل المصروفات</div>
-                        <div class="profit-value" id="profitCardProfit">0 ر.س</div>
+                        <div class="profit-value" id="profitCardProfit">0 ج.م</div>
                         <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;">
                             <span class="profit-label">هامش الربح</span>
                             <span class="profit-margin" id="profitCardMargin">0%</span>
@@ -1393,10 +1395,10 @@
                     </div>
                     <div class="profit-card" style="border-color:rgba(230,126,34,0.2);background:linear-gradient(135deg, rgba(230,126,34,0.08), rgba(230,126,34,0.02));">
                         <div class="profit-label" style="color:#e67e22;">إجمالي المصروفات</div>
-                        <div class="profit-value" id="profitCardExpenses" style="color:#e67e22;">0 ر.س</div>
+                        <div class="profit-value" id="profitCardExpenses" style="color:#e67e22;">0 ج.م</div>
                         <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;">
                             <span class="profit-label">صافي الربح بعد المصروفات</span>
-                            <span class="profit-margin" id="profitCardNet" style="color:var(--profit);">0 ر.س</span>
+                            <span class="profit-margin" id="profitCardNet" style="color:var(--profit);">0 ج.م</span>
                         </div>
                     </div>
                     <div class="card" style="margin-top:20px;">
@@ -1455,7 +1457,7 @@
                 </p>
                 <div class="form-grid" style="align-items:end;">
                     <div class="form-group">
-                        <label class="form-label">الربح المستهدف (ر.س)</label>
+                        <label class="form-label">الربح المستهدف (ج.م)</label>
                         <input type="number" class="form-control" id="targetProfitInput" placeholder="مثال: 10000" min="0" step="0.01">
                     </div>
                     <div class="form-group">
@@ -1471,7 +1473,7 @@
                 <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin-bottom:20px;">
                     <div class="stat-card sales" style="cursor:default;">
                         <div class="stat-icon"><i class="fas fa-coins"></i></div>
-                        <div class="stat-value" id="profitTargetTotalRevenue">0 ر.س</div>
+                        <div class="stat-value" id="profitTargetTotalRevenue">0 ج.م</div>
                         <div class="stat-label">إجمالي المبيعات المطلوبة</div>
                     </div>
                     <div class="stat-card products" style="cursor:default;">
@@ -1885,9 +1887,9 @@
                 <button class="btn btn-success" onclick="exportAllReportsToExcel()"><i class="fas fa-file-excel"></i> تصدير كل التقارير في ملف إكسيل واحد</button>
             </div>
             <div class="stats-grid">
-                <div class="stat-card sales"><div class="stat-icon"><i class="fas fa-coins"></i></div><div class="stat-value" id="reportTotalSales">0 ر.س</div><div class="stat-label">إجمالي قيمة المبيعات</div></div>
-                <div class="stat-card purchases"><div class="stat-icon"><i class="fas fa-cart-plus"></i></div><div class="stat-value" id="reportTotalPurchases">0 ر.س</div><div class="stat-label">إجمالي قيمة المشتريات</div></div>
-                <div class="stat-card profit profit-only"><div class="stat-icon"><i class="fas fa-chart-line"></i></div><div class="stat-value" id="reportTotalProfit">0 ر.س</div><div class="stat-label">إجمالي الربح</div></div>
+                <div class="stat-card sales"><div class="stat-icon"><i class="fas fa-coins"></i></div><div class="stat-value" id="reportTotalSales">0 ج.م</div><div class="stat-label">إجمالي قيمة المبيعات</div></div>
+                <div class="stat-card purchases"><div class="stat-icon"><i class="fas fa-cart-plus"></i></div><div class="stat-value" id="reportTotalPurchases">0 ج.م</div><div class="stat-label">إجمالي قيمة المشتريات</div></div>
+                <div class="stat-card profit profit-only"><div class="stat-icon"><i class="fas fa-chart-line"></i></div><div class="stat-value" id="reportTotalProfit">0 ج.م</div><div class="stat-label">إجمالي الربح</div></div>
                 <div class="stat-card invoices"><div class="stat-icon"><i class="fas fa-shopping-cart"></i></div><div class="stat-value" id="reportTotalQty">0</div><div class="stat-label">إجمالي الكمية المباعة</div></div>
             </div>
             <div class="card">
@@ -1905,7 +1907,7 @@
                 </div>
                 <div id="dailyShipmentDate" style="padding:0 20px 10px;color:var(--text-light);font-size:14px;"></div>
                 <div class="table-container"><table><thead><tr><th>الصنف</th><th>الوحدة</th><th>إجمالي الكمية المرسلة اليوم</th><th>إجمالي القيمة</th></tr></thead><tbody id="dailyShipmentTable"></tbody></table></div>
-                <div style="text-align:left;padding:15px 20px;font-size:18px;font-weight:700;color:var(--accent);">الإجمالي المالي لليوم: <span id="dailyShipmentGrandTotal">0.00</span> ر.س</div>
+                <div style="text-align:left;padding:15px 20px;font-size:18px;font-weight:700;color:var(--accent);">الإجمالي المالي لليوم: <span id="dailyShipmentGrandTotal">0.00</span> ج.م</div>
             </div>
             <div class="card">
                 <div class="card-header"><div class="card-title"><i class="fas fa-layer-group"></i> تجميع المبيعات حسب القسم</div>
@@ -1980,9 +1982,9 @@
                     <button class="btn btn-primary btn-sm" onclick="exportTableToExcel('treasuryReportTable', 'حركة_الخزنة')"><i class="fas fa-file-excel"></i> تصدير</button>
                 </div>
                 <div class="stats-grid" style="margin-bottom:15px;">
-                    <div class="stat-card sales"><div class="stat-icon"><i class="fas fa-arrow-down"></i></div><div class="stat-value" id="treasReportTotalIn">0 ر.س</div><div class="stat-label">إجمالي الوارد</div></div>
-                    <div class="stat-card credit"><div class="stat-icon"><i class="fas fa-arrow-up"></i></div><div class="stat-value" id="treasReportTotalOut">0 ر.س</div><div class="stat-label">إجمالي المنصرف</div></div>
-                    <div class="stat-card profit"><div class="stat-icon"><i class="fas fa-balance-scale"></i></div><div class="stat-value" id="treasReportNet">0 ر.س</div><div class="stat-label">صافي الحركة</div></div>
+                    <div class="stat-card sales"><div class="stat-icon"><i class="fas fa-arrow-down"></i></div><div class="stat-value" id="treasReportTotalIn">0 ج.م</div><div class="stat-label">إجمالي الوارد</div></div>
+                    <div class="stat-card credit"><div class="stat-icon"><i class="fas fa-arrow-up"></i></div><div class="stat-value" id="treasReportTotalOut">0 ج.م</div><div class="stat-label">إجمالي المنصرف</div></div>
+                    <div class="stat-card profit"><div class="stat-icon"><i class="fas fa-balance-scale"></i></div><div class="stat-value" id="treasReportNet">0 ج.م</div><div class="stat-label">صافي الحركة</div></div>
                 </div>
                 <div class="table-container"><table><thead><tr><th>البيان / النوع</th><th>عدد الحركات</th><th>الوارد</th><th>المنصرف</th></tr></thead><tbody id="treasuryReportTable"></tbody></table></div>
             </div>
@@ -1993,10 +1995,10 @@
                     <button class="btn btn-primary btn-sm" onclick="exportTableToExcel('debtsReportTable', 'الديون_والتحصيلات')"><i class="fas fa-file-excel"></i> تصدير</button>
                 </div>
                 <div class="stats-grid" style="margin-bottom:15px;">
-                    <div class="stat-card credit"><div class="stat-icon"><i class="fas fa-users"></i></div><div class="stat-value" id="debtsReportCustomers">0 ر.س</div><div class="stat-label">إجمالي ديون العملاء</div></div>
-                    <div class="stat-card suppliers"><div class="stat-icon"><i class="fas fa-truck"></i></div><div class="stat-value" id="debtsReportSuppliers">0 ر.س</div><div class="stat-label">إجمالي ديون الموردين (علينا)</div></div>
-                    <div class="stat-card sales"><div class="stat-icon"><i class="fas fa-hand-holding-usd"></i></div><div class="stat-value" id="debtsReportCollected">0 ر.س</div><div class="stat-label">إجمالي المحصل من العملاء</div></div>
-                    <div class="stat-card purchases"><div class="stat-icon"><i class="fas fa-money-bill-wave"></i></div><div class="stat-value" id="debtsReportPaid">0 ر.س</div><div class="stat-label">إجمالي المدفوع للموردين</div></div>
+                    <div class="stat-card credit"><div class="stat-icon"><i class="fas fa-users"></i></div><div class="stat-value" id="debtsReportCustomers">0 ج.م</div><div class="stat-label">إجمالي ديون العملاء</div></div>
+                    <div class="stat-card suppliers"><div class="stat-icon"><i class="fas fa-truck"></i></div><div class="stat-value" id="debtsReportSuppliers">0 ج.م</div><div class="stat-label">إجمالي ديون الموردين (علينا)</div></div>
+                    <div class="stat-card sales"><div class="stat-icon"><i class="fas fa-hand-holding-usd"></i></div><div class="stat-value" id="debtsReportCollected">0 ج.م</div><div class="stat-label">إجمالي المحصل من العملاء</div></div>
+                    <div class="stat-card purchases"><div class="stat-icon"><i class="fas fa-money-bill-wave"></i></div><div class="stat-value" id="debtsReportPaid">0 ج.م</div><div class="stat-label">إجمالي المدفوع للموردين</div></div>
                 </div>
                 <div class="table-container"><table><thead><tr><th>العميل</th><th>إجمالي المبيعات الآجلة</th><th>إجمالي المحصل</th><th>الرصيد المستحق</th></tr></thead><tbody id="debtsReportTable"></tbody></table></div>
             </div>
@@ -2419,7 +2421,7 @@
                         <thead><tr><th style="text-align:right;">الصنف</th><th>الوحدة</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th><th></th></tr></thead>
                         <tbody id="orderInvoiceEditBody"></tbody>
                     </table>
-                    <div style="text-align:left;margin-top:10px;font-weight:800;">الإجمالي الجديد: <span id="orderInvoiceNewTotal">0.00</span> ر.س</div>
+                    <div style="text-align:left;margin-top:10px;font-weight:800;">الإجمالي الجديد: <span id="orderInvoiceNewTotal">0.00</span> ج.م</div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -2471,7 +2473,7 @@
                 <div class="table-container">
                     <table><thead><tr><th>الصنف</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th><th></th></tr></thead><tbody id="editInvoiceItemsTable"></tbody></table>
                 </div>
-                <div style="text-align:left;margin-top:12px;font-size:18px;font-weight:700;color:var(--accent);">الإجمالي الجديد: <span id="editInvoiceGrandTotal">0.00</span> ر.س</div>
+                <div style="text-align:left;margin-top:12px;font-size:18px;font-weight:700;color:var(--accent);">الإجمالي الجديد: <span id="editInvoiceGrandTotal">0.00</span> ج.م</div>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('editInvoiceModal')">إلغاء</button><button class="btn btn-success" onclick="saveInvoiceEdit()">حفظ التعديلات</button></div>
         </div>
@@ -2610,7 +2612,7 @@
                 <input type="hidden" id="purchaseReviewId">
                 <div id="purchaseReviewInfo" style="font-size:13px;line-height:1.9;margin-bottom:10px;"></div>
                 <div class="table-container"><table><thead><tr><th>الصنف</th><th>الوحدة</th><th>الكمية</th><th>سعر الشراء</th><th>الإجمالي</th></tr></thead><tbody id="purchaseReviewItems"></tbody></table></div>
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:15px;"><span class="sv-muted">لو فيه سعر غلط صلحه هنا. الكميات بيصلحها أمين المخزن.</span><strong>الإجمالي: <span id="purchaseReviewTotal">0</span> ر.س</strong></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:15px;"><span class="sv-muted">لو فيه سعر غلط صلحه هنا. الكميات بيصلحها أمين المخزن.</span><strong>الإجمالي: <span id="purchaseReviewTotal">0</span> ج.م</strong></div>
                 <div class="form-group" style="margin-top:12px;"><label class="form-label">ملاحظة / سبب الرجوع</label><input type="text" class="form-control" id="purchaseReviewNote" placeholder="مطلوب لو هترجّعها أو تلغيها"></div>
                 <div id="purchaseReviewSelfNote" style="display:none;color:var(--danger);font-size:13px;margin-top:6px;"><i class="fas fa-lock"></i> مينفعش تعتمد فاتورة إنت اللي عاملها. لازم محاسب تاني أو المدير.</div>
             </div>
@@ -3997,14 +3999,26 @@
             }, function(err) { console.error('Customer visit records listener error:', err); });
         }
 
+        // (2026-10-08) آخر 2000 سجل للعرض، + كل السجلات اللي لسه فلوسها مع المندوب (settled == false) مهما كانت قديمة
+        let dcRecent = [], dcOpen = [];
+        function mergeDeliveryCollections() {
+            const m = new Map();
+            dcRecent.concat(dcOpen).forEach(r => m.set(r.id, r));
+            deliveryCollections = Array.from(m.values()).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+            localStorage.setItem('deliveryCollections', JSON.stringify(deliveryCollections));
+            try { renderRepCustody(); } catch (e) { console.error(e); }
+        }
         function startDeliveryCollectionRecordsListener() {
             if (!db || deliveryCollectionRecordsListenerStarted) return;
             deliveryCollectionRecordsListenerStarted = true;
             db.collection('deliveryCollectionRecords').orderBy('date', 'desc').limit(2000).onSnapshot(function(snap) {
-                deliveryCollections = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
-                localStorage.setItem('deliveryCollections', JSON.stringify(deliveryCollections));
-                try { renderRepCustody(); } catch (e) { console.error(e); }
+                dcRecent = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+                mergeDeliveryCollections();
             }, function(err) { console.error('Delivery collection records listener error:', err); });
+            db.collection('deliveryCollectionRecords').where('settled', '==', false).onSnapshot(function(snap) {
+                dcOpen = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+                mergeDeliveryCollections();
+            }, function(err) { console.error('Open delivery collection records listener error:', err); });
         }
 
         // ==================== المنتجات/العملاء/الموردين/المخزون (Collections منفصلة لكل عنصر) ====================
@@ -4590,7 +4604,7 @@
                 return `<tr class="${rowClass}"><td>${cb}</td><td><span class="badge badge-primary">${o.id.slice(-6)}</span></td><td>${o.customerName || o.customerCode || '-'}<br><span style="font-size:11px;color:var(--text-light);">${o.phone || o.customerCode || ''}</span><br>${o.repCode ? `<span class="badge" style="background:#EEEDFE;color:#3C3489;margin-top:4px;"><i class="fas fa-user-tie"></i> من المندوب: ${escapeHtml(o.repName || o.repCode)}</span>` : `<span class="badge" style="background:#E1F5EE;color:#085041;margin-top:4px;"><i class="fas fa-mobile-alt"></i> من العميل</span>`}</td>
                 <td style="max-width:280px;">${itemsSummary}</td>
                 <td style="max-width:200px;font-size:12px;">${addressInfo}<br><span class="badge badge-info" style="margin-top:4px;">${deliveryLabel}</span>${deliveryAssignmentHtml(o)}</td>
-                <td><strong style="color:var(--accent);">${(o.total || 0).toFixed(2)} ر.س</strong>${o.discountFromPoints > 0 ? `<br><span style="font-size:10px;color:var(--text-light);">(خصم نقاط: ${o.discountFromPoints.toFixed(2)})</span>` : ''}</td>
+                <td><strong style="color:var(--accent);">${(o.total || 0).toFixed(2)} ج.م</strong>${o.discountFromPoints > 0 ? `<br><span style="font-size:10px;color:var(--text-light);">(خصم نقاط: ${o.discountFromPoints.toFixed(2)})</span>` : ''}</td>
                 <td>${time}</td><td><span class="badge ${st.cls}">${st.label}</span>${ratingHtml}</td>
                 <td>${actions}</td></tr>`;
             }
@@ -4652,7 +4666,7 @@
                 <tr>
                     <td>${g.customerName}<br><span style="font-size:11px;color:var(--text-light);">${g.phone || g.customerCode || ''}</span></td>
                     <td><span class="badge badge-warning">${g.count}</span></td>
-                    <td><strong style="color:var(--accent);">${g.total.toFixed(2)} ر.س</strong></td>
+                    <td><strong style="color:var(--accent);">${g.total.toFixed(2)} ج.م</strong></td>
                     <td>${g.lastOrderAt ? new Date(g.lastOrderAt).toLocaleString('ar-EG') : '-'}</td>
                     <td><button class="btn btn-primary btn-sm" onclick="viewCustomerOpenOrders('${(g.customerCode || '').replace(/'/g, "\\'")}', '${(g.customerName || '').replace(/'/g, "\\'")}')"><i class="fas fa-eye"></i> عرض طلباته</button></td>
                 </tr>`).join('');
@@ -4696,8 +4710,8 @@
             countEl.textContent = scoped.length.toLocaleString('ar-EG');
             const custEl = document.getElementById('ordersTodayCustomers'); if (custEl) custEl.textContent = uniqueCustomers.toLocaleString('ar-EG');
             const prodEl = document.getElementById('ordersTodayProducts'); if (prodEl) prodEl.textContent = uniqueProducts.size.toLocaleString('ar-EG');
-            const avgEl = document.getElementById('ordersTodayAvg'); if (avgEl) avgEl.textContent = numFmt(scoped.length ? (total / scoped.length) : 0) + ' ر.س';
-            const totalEl = document.getElementById('ordersTodayTotal'); if (totalEl) totalEl.textContent = numFmt(total) + ' ر.س';
+            const avgEl = document.getElementById('ordersTodayAvg'); if (avgEl) avgEl.textContent = numFmt(scoped.length ? (total / scoped.length) : 0) + ' ج.م';
+            const totalEl = document.getElementById('ordersTodayTotal'); if (totalEl) totalEl.textContent = numFmt(total) + ' ج.م';
 
             const scopeLabelEl = document.getElementById('ordersStatsScopeLabel');
             if (scopeLabelEl) scopeLabelEl.textContent = '📊 ملخص: ' + (ORDERS_TAB_LABELS[ordersCurrentTab] || 'الطلبات');
@@ -4921,7 +4935,12 @@
                             : (cust ? (cust.loyaltyPoints || 0) : 0);
 
                         let pointsToDeduct = 0, appliedDiscount = 0;
-                        if (order.pointsRedeemed > 0) {
+                        if (order.repDelivery && order.repDelivery.collected != null) {
+                            // (2026-10-08) مندوب التسليم حصّل فعلاً بخصم معيّن اتعرض عليه: الفاتورة بتطلع بنفس الخصم بالظبط
+                            // عشان مايتسجلش عليه فرق ماحصّلوش. لو رصيد نقاط العميل قل في الوقت ده، الرصيد مابينزلش تحت الصفر
+                            appliedDiscount = Math.min(itemsTotal, Math.max(0, Number(order.repDelivery.discount) || 0));
+                            pointsToDeduct = Math.min(Number(order.repDelivery.points != null ? order.repDelivery.points : order.pointsRedeemed) || 0, currentPoints);
+                        } else if (order.pointsRedeemed > 0) {
                             pointsToDeduct = Math.min(order.pointsRedeemed, currentPoints);
                             appliedDiscount = Math.min(pointsToDeduct * pv, itemsTotal, order.discountFromPoints || Infinity);
                         }
@@ -4974,11 +4993,12 @@
 
                 const invoice = {
                     id: Date.now(), number: String(txResult.invoiceNumber || getNextDocNumber(invoices.filter(i => i.type === 'sale'))).padStart(4, '0'),
-                    type: 'sale', date: new Date().toISOString(),
+                    // (2026-10-08) لو المندوب هو اللي سلّم: تاريخ الفاتورة = وقت التسليم الفعلي (مش وقت ما السيستم اتفتح)
+                    type: 'sale', date: (order.repDelivery && order.repDelivery.at) ? new Date(order.repDelivery.at).toISOString() : new Date().toISOString(),
                     customerCode: order.customerCode || '', customerName: order.customerName || '',
                     salesmanCode: order.repCode || '', salesmanName: order.repName || '',
                     paymentMethod: 'دفع عند الاستلام',
-                    notes: 'طلب وارد من أبليكشن العملاء #' + order.id.slice(-6) + (appliedDiscount > 0 ? ` (خصم نقاط ولاء: ${appliedDiscount.toFixed(2)} ر.س)` : '') + (order.repReturns && order.repReturns.length ? ' — مرتجع عند التسليم: ' + order.repReturns.map(r => r.productName + ' × ' + r.qty + ' (' + r.reason + ')').join('، ') : ''),
+                    notes: 'طلب وارد من أبليكشن العملاء #' + order.id.slice(-6) + (appliedDiscount > 0 ? ` (خصم نقاط ولاء: ${appliedDiscount.toFixed(2)} ج.م)` : '') + (order.repReturns && order.repReturns.length ? ' — مرتجع عند التسليم: ' + order.repReturns.map(r => r.productName + ' × ' + r.qty + ' (' + r.reason + ')').join('، ') : ''),
                     deliveryReturns: order.repReturns || null,
                     items: order.items, grandTotal: grandTotal,
                     discount: appliedDiscount,
@@ -5022,7 +5042,7 @@
                     finalCust = customers.find(c => c.code === finalCust.code) || finalCust;
                     finalCust.loyaltyPoints = newPoints;
                     if (pointsToDeduct > 0) {
-                        logAction('استخدام نقاط ولاء', `العميل ${finalCust.name}: -${pointsToDeduct} نقطة مقابل خصم ${appliedDiscount.toFixed(2)} ر.س (رصيده الآن ${newPoints})`);
+                        logAction('استخدام نقاط ولاء', `العميل ${finalCust.name}: -${pointsToDeduct} نقطة مقابل خصم ${appliedDiscount.toFixed(2)} ج.م (رصيده الآن ${newPoints})`);
                     }
                     const earnedPoints2 = txResult.earnedPoints;
                     if (earnedPoints2 > 0) {
@@ -5035,13 +5055,31 @@
                 // المرتبطة (رقمها، النقاط المخصومة) كتحديث تكميلي غير حرج
                 // لو مندوب التسليم هو اللي سلّم: سجل العهدة بتاعه ياخد رقم الفاتورة والمبلغ النهائي بعد خصم النقاط
                 if (order.repDelivery && db) {
-                    db.collection('deliveryCollectionRecords').doc('DLV-ORD-' + order.id)
-                        .set({ invoiceId: invoice.id, invoiceNumber: invoice.number, amount: grandTotal }, { merge: true })
-                        .catch(function(e) { console.error('custody record update failed:', e); });
+                    // (2026-10-08) قبل كده: لو تسجيل الفلوس فشل في الأبليكشن، هنا كان بيتعمل سجل ناقص (من غير اسم المندوب
+                    // ولا التاريخ) فالفلوس ماكانتش بتظهر في العهدة خالص. دلوقتي لو السجل ناقص بيتكمّل بالكامل.
+                    // والمبلغ اللي المندوب حصّله (repDelivery.collected) مابيتغيرش، عشان مايتسجلش عليه فرق ظالم.
+                    const recRef = db.collection('deliveryCollectionRecords').doc('DLV-ORD-' + order.id);
+                    const collected = order.repDelivery.collected;
+                    recRef.get().then(function(s) {
+                        const d = s.exists ? (s.data() || {}) : {};
+                        const upd = { invoiceId: invoice.id, invoiceNumber: invoice.number };
+                        if (!d.repUsername) {
+                            Object.assign(upd, { id: 'DLV-ORD-' + order.id, date: new Date(order.repDelivery.at || Date.now()).toISOString(),
+                                repUsername: order.repDelivery.code || '', repFullName: order.repDelivery.name || '', orderId: order.id,
+                                customerName: order.customerName || '', amount: collected != null ? collected : grandTotal, settled: false, repairedBySystem: true });
+                            logAction('تكميل سجل عهدة مندوب', `الطلب #${order.id.slice(-6)} — ${order.repDelivery.name || ''}: سجل الفلوس كان ناقص واتكمّل (${(collected != null ? collected : grandTotal).toFixed(2)} ج.م)`);
+                        } else if (collected == null && !d.settledAt) {
+                            upd.amount = grandTotal;   // نسخة أبليكشن قديمة مابتسجلش المبلغ المحصّل: زي الأول
+                        }
+                        if (collected != null && Math.abs(collected - grandTotal) > 0.009) {
+                            logAction('تنبيه: فرق بين التحصيل والفاتورة', `الطلب #${order.id.slice(-6)}: المندوب حصّل ${Number(collected).toFixed(2)} والفاتورة ${grandTotal.toFixed(2)} ج.م`);
+                        }
+                        return recRef.set(upd, { merge: true });
+                    }).catch(function(e) { console.error('custody record update failed:', e); });
                 } else if (opts.cash && opts.cash.mode === 'rep' && db) {
                     // اتقفل من السيستم والفلوس مع مندوب التسليم: بتتسجل في عهدته، وتدخل الخزنة لما يسلّمها
                     const rec = { id: 'DLV-ORD-' + order.id, date: new Date().toISOString(), repUsername: opts.cash.code, repFullName: opts.cash.name,
-                        orderId: order.id, invoiceId: invoice.id, invoiceNumber: invoice.number, customerName: order.customerName || '', amount: grandTotal, manual: true };
+                        orderId: order.id, invoiceId: invoice.id, invoiceNumber: invoice.number, customerName: order.customerName || '', amount: grandTotal, manual: true, settled: false };
                     db.collection('deliveryCollectionRecords').doc(rec.id).set(rec, { merge: true }).catch(function(e) { console.error('custody record create failed:', e); });
                     deliveryCollections.unshift(rec);
                 } else if (opts.cash && opts.cash.mode === 'store' && grandTotal > 0) {
@@ -5073,7 +5111,7 @@
                 const orderTotal = order.total || (order.items || []).reduce((s, it) => s + (it.total || it.price * it.qty || 0), 0);
                 const balanceAfter = currentBalance + orderTotal;
                 if (balanceAfter > cust.creditLimit) {
-                    if (!confirm(`تنبيه: هذا الطلب سيتجاوز الحد الائتماني للعميل "${cust.name}"\nالرصيد الحالي: ${currentBalance.toFixed(2)} ر.س\nالحد الائتماني: ${cust.creditLimit.toFixed(2)} ر.س\nالرصيد بعد الطلب: ${balanceAfter.toFixed(2)} ر.س\n\nهل تريد المتابعة رغم ذلك؟`)) {
+                    if (!confirm(`تنبيه: هذا الطلب سيتجاوز الحد الائتماني للعميل "${cust.name}"\nالرصيد الحالي: ${currentBalance.toFixed(2)} ج.م\nالحد الائتماني: ${cust.creditLimit.toFixed(2)} ج.م\nالرصيد بعد الطلب: ${balanceAfter.toFixed(2)} ج.م\n\nهل تريد المتابعة رغم ذلك؟`)) {
                         return;
                     }
                 }
@@ -6183,7 +6221,7 @@
                 isDebtRelated
             });
             saveTreasury();
-            logAction(type === 'in' ? 'سند قبض' : 'سند صرف', `${reference || ''} - ${notes || ''} - المبلغ: ${amount.toFixed(2)} ر.س`);
+            logAction(type === 'in' ? 'سند قبض' : 'سند صرف', `${reference || ''} - ${notes || ''} - المبلغ: ${amount.toFixed(2)} ج.م`);
         }
 
         // حساب كل حركة: نقدية (الدرج) ولا بنك (تحويل / بطاقة)
@@ -6280,7 +6318,7 @@
             const current = getSupplierBalance(supplierCode);
             document.getElementById('supplierAdjustmentCode').value = supplierCode;
             document.getElementById('supplierAdjustmentName').textContent = supplier.name;
-            document.getElementById('supplierAdjustmentCurrent').textContent = current.toFixed(2) + ' ر.س';
+            document.getElementById('supplierAdjustmentCurrent').textContent = current.toFixed(2) + ' ج.م';
             document.getElementById('supplierAdjustmentNew').value = current.toFixed(2);
             document.getElementById('supplierAdjustmentNotes').value = '';
             openModal('supplierAdjustmentModal');
@@ -6304,7 +6342,7 @@
                 by: currentUser.fullName || currentUser.username
             });
             saveSupplierAdjustments();
-            logAction('تسوية مديونية مورد', `تم تعديل رصيد المورد "${supplier ? supplier.name : code}" من ${current.toFixed(2)} إلى ${newBalance.toFixed(2)} ر.س${notes ? ' — ' + notes : ''}`);
+            logAction('تسوية مديونية مورد', `تم تعديل رصيد المورد "${supplier ? supplier.name : code}" من ${current.toFixed(2)} إلى ${newBalance.toFixed(2)} ج.م${notes ? ' — ' + notes : ''}`);
             renderSuppliers(); renderSupplierStatement(); updateDashboardStats();
             closeModal('supplierAdjustmentModal');
             showToast('تم تعديل رصيد المورد بنجاح');
@@ -7233,7 +7271,7 @@
             tbody.innerHTML = customers.map(c => {
                 const points = c.loyaltyPoints || 0;
                 return `<tr><td><span class="badge badge-warning">${c.code}</span></td><td><strong>${c.name}</strong></td>
-                <td>${points}</td><td>${(points * loyaltySettings.pointValue).toFixed(2)} ر.س</td>
+                <td>${points}</td><td>${(points * loyaltySettings.pointValue).toFixed(2)} ج.م</td>
                 <td style="white-space:nowrap;"><button class="btn btn-info btn-sm" onclick="openPointsHistory('${c.code}')"><i class="fas fa-history"></i> السجل</button> <button class="btn btn-secondary btn-sm" onclick="adjustCustomerPoints('${c.code}')"><i class="fas fa-edit"></i> تعديل</button></td></tr>`;
             }).join('');
         }
@@ -7444,8 +7482,8 @@
                 return `<tr>
                     <td><strong>${o.productName}</strong></td>
                     <td>${o.title}</td>
-                    <td>${o.oldPrice.toFixed(2)} ر.س</td>
-                    <td><strong style="color:var(--accent);">${o.newPrice.toFixed(2)} ر.س</strong></td>
+                    <td>${o.oldPrice.toFixed(2)} ج.م</td>
+                    <td><strong style="color:var(--accent);">${o.newPrice.toFixed(2)} ج.م</strong></td>
                     <td>${discountPct > 0 ? discountPct + '%' : '-'}</td>
                     <td>${o.endDate ? new Date(o.endDate).toLocaleDateString('ar-EG') : 'بدون تاريخ انتهاء'} ${expired ? '<span class="badge badge-danger">منتهي</span>' : ''}</td>
                     <td><span class="badge ${o.active !== false ? 'badge-success' : 'badge-danger'}" style="cursor:pointer;" onclick="toggleAppOfferActive('${o.id}')">${o.active !== false ? 'مفعّل' : 'موقوف'}</span></td>
@@ -7759,9 +7797,9 @@
                 const profit = p.price - (p.cost || 0);
                 const margin = p.cost > 0 ? ((profit / p.price) * 100).toFixed(1) : 0;
                 return `<tr data-code="${escapeHtml(String(p.code))}" data-brand="${escapeHtml(p.brand || '')}"><td><span class="badge badge-primary">${p.code}</span></td><td>${p.imageUrl ? `<img src="${p.imageUrl}" style="width:36px;height:36px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-left:8px;">` : ''}<strong>${p.name}</strong>${p.showInApp === false ? ' <i class="fas fa-mobile-alt" style="color:var(--text-light);" title="مخفي من الأبليكشن"></i><i class="fas fa-slash" style="color:#c0392b;margin-right:-14px;font-size:10px;"></i>' : ''}${p.bestSeller ? ' <i class="fas fa-star" style="color:#d4a017;" title="ضمن الأكثر طلبًا بالأبليكشن"></i>' : ''}${p.brand ? `<div style="font-size:12px;color:var(--text-light);margin-top:2px;">${escapeHtml(p.brand)}</div>` : ''}</td><td>${p.unit}${p.secondaryUnit ? ' / ' + p.secondaryUnit.name : ''}</td><td>${p.category || '-'}</td>
-                <td><strong style="color:var(--accent);">${p.price.toFixed(2)} ر.س</strong></td>
-                <td><span class="cost-highlight">${(p.cost || 0).toFixed(2)} ر.س</span></td>
-                <td><span class="profit-highlight">${profit.toFixed(2)} ر.س</span> <span class="margin-badge ${margin >= 30 ? 'high' : (margin >= 15 ? 'medium' : 'low')}">${margin}%</span></td>
+                <td><strong style="color:var(--accent);">${p.price.toFixed(2)} ج.م</strong></td>
+                <td><span class="cost-highlight">${(p.cost || 0).toFixed(2)} ج.م</span></td>
+                <td><span class="profit-highlight">${profit.toFixed(2)} ج.م</span> <span class="margin-badge ${margin >= 30 ? 'high' : (margin >= 15 ? 'medium' : 'low')}">${margin}%</span></td>
                 <td><button class="btn btn-primary btn-icon btn-sm admin-only" onclick='openProductModal(${JSON.stringify(p).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
                 <button class="btn btn-danger btn-icon btn-sm admin-only" onclick="deleteProduct('${p.code}')"><i class="fas fa-trash"></i></button></td></tr>`;
             }).join('');
@@ -7820,8 +7858,8 @@
                     <td><strong>${p.name}</strong></td><td>${p.unit}</td>
                     <td><strong style="color:${isCritical ? 'var(--danger)' : (isLow ? 'var(--warning)' : 'var(--accent)')};">${inv.qty}</strong></td>
                     <td>${inv.minStock || p.minStock || 0}</td>
-                    <td>${(inv.cost || p.cost || 0).toFixed(2)} ر.س</td>
-                    <td>${p.price.toFixed(2)} ر.س</td>
+                    <td>${(inv.cost || p.cost || 0).toFixed(2)} ج.م</td>
+                    <td>${p.price.toFixed(2)} ج.م</td>
                     <td><span class="stock-badge ${stockClass}"><i class="fas fa-${isCritical ? 'times-circle' : (isLow ? 'exclamation-triangle' : 'check-circle')}"></i> ${stockText}</span></td>
                     <td style="white-space:nowrap;"><button class="btn btn-purple btn-icon btn-sm" onclick="openStockAdjustmentFor('${p.code}')" title="تعديل مخزون"><i class="fas fa-sliders-h"></i></button> <button class="btn btn-warning btn-icon btn-sm" onclick="openStockAudit('${p.code}')" title="مراجعة حركة الصنف"><i class="fas fa-history"></i></button></td>
                 </tr>`;
@@ -7832,7 +7870,7 @@
         function updateInventoryStats(productsCount, totalQty, totalValue, lowStock) {
             document.getElementById('invTotalProducts').textContent = productsCount;
             document.getElementById('invTotalQty').textContent = totalQty;
-            document.getElementById('invTotalValue').textContent = totalValue.toFixed(2) + ' ر.س';
+            document.getElementById('invTotalValue').textContent = totalValue.toFixed(2) + ' ج.م';
             document.getElementById('invLowStock').textContent = lowStock;
         }
 
@@ -8027,7 +8065,7 @@
                 (pending.length ? Object.keys(byRep).map(k => `<div style="margin-bottom:12px;"><div style="font-weight:800;margin-bottom:6px;"><i class="fas fa-user"></i> ${escapeHtml(byRep[k].name)} — <span style="color:var(--danger);">${byRep[k].list.length} طلب بـ ${byRep[k].value.toFixed(2)} ج مستني استلام</span></div>
                     <div class="table-container"><table><thead><tr><th>العميل</th><th>المرتجع</th><th>القيمة</th><th>إمتى</th><th></th></tr></thead><tbody>` +
                     byRep[k].list.map(o => `<tr><td>${escapeHtml(o.customerName || '')}<br><span style="font-size:11px;color:var(--text-light);">#${o.id.slice(-6)} ${o.repReturnKind === 'full' ? '— الطلب كله رجع' : ''}</span></td><td style="font-size:12.5px;">${itemsTxt(o)}</td><td><strong>${(Number(o.repReturnValue) || 0).toFixed(2)}</strong></td><td style="font-size:12px;">${new Date(o.repReturnAt).toLocaleString('ar-EG')}</td>
-                        <td><button class="btn btn-success btn-sm" onclick="openRepReturnReceive('${o.id}')"><i class="fas fa-dolly"></i> استلام</button></td></tr>`).join('') + '</tbody></table></div></div>').join('')
+                        <td>${canReceiveRepReturns() ? `<button class="btn btn-success btn-sm" onclick="openRepReturnReceive('${o.id}')"><i class="fas fa-dolly"></i> استلام</button>` : '<span style="font-size:11px;color:var(--text-light);">لأمين المخزن</span>'}</td></tr>`).join('') + '</tbody></table></div></div>').join('')
                  : '<p style="color:var(--success);margin:0 0 10px;">✓ مفيش مرتجعات مستنية استلام</p>') +
                 `<div style="display:flex;gap:8px;align-items:center;margin:10px 0 6px;flex-wrap:wrap;"><strong>اتسلّم من يوم</strong> <input type="date" id="repReturnsFrom" class="form-control" style="width:auto;" value="${fromEl && fromEl.value ? fromEl.value : new Date(dayStart.getTime() - dayStart.getTimezoneOffset() * 60000).toISOString().slice(0, 10)}" onchange="renderRepReturnsCard()"> <button class="btn btn-info btn-sm" onclick="exportRepReturns()"><i class="fas fa-file-export"></i> Excel</button></div>` +
                 (received.length ? '<div class="table-container"><table><thead><tr><th>المندوب</th><th>العميل</th><th>المرتجع</th><th>القيمة</th><th>استلمه</th><th>عجز</th></tr></thead><tbody>' + received.map(o => `<tr><td>${escapeHtml(o.repReturnRepName || '')}</td><td>${escapeHtml(o.customerName || '')}</td><td style="font-size:12.5px;">${itemsTxt(o)}</td><td>${(Number(o.repReturnValue) || 0).toFixed(2)}</td><td style="font-size:12px;">${escapeHtml((o.repReturnReceived.by || ''))}<br>${new Date(o.repReturnReceived.at).toLocaleString('ar-EG')}</td><td style="color:var(--danger);font-weight:700;">${o.repReturnReceived.shortageValue ? o.repReturnReceived.shortageValue.toFixed(2) : '-'}</td></tr>`).join('') + '</tbody></table></div>' : '<p style="color:var(--text-light);font-size:13px;">مفيش مرتجعات اتسلمت في الفترة دي</p>');
@@ -8041,20 +8079,26 @@
             xlWrite('مرتجعات_المناديب', [{ name: 'المرتجعات', rows, widths: [16, 24, 10, 10, 30, 8, 8, 10, 18, 20, 12, 12, 16] }]);
         }
         let receivingReturnId = null;
+        const canReceiveRepReturns = () => ['admin', 'warehouse_keeper'].includes(xlRole());
         function openRepReturnReceive(id) {
+            if (!canReceiveRepReturns()) { showToast('استلام المرتجع لأمين المخزن أو المدير بس', 'error'); return; }
             const o = repReturnOrders.find(x => x.id === id); if (!o) return;
             receivingReturnId = id;
             document.getElementById('rrInfo').innerHTML = `<strong>${escapeHtml(o.repReturnRepName || '')}</strong> — من ${escapeHtml(o.customerName || '')} (#${o.id.slice(-6)}) — ${new Date(o.repReturnAt).toLocaleString('ar-EG')}`;
-            document.getElementById('rrItems').innerHTML = (o.repReturns || []).map((r, i) => `<tr><td>${escapeHtml(r.productName)}</td><td>${r.qty} ${escapeHtml(r.unit || '')}</td><td>${escapeHtml(r.reason || '')}</td><td><input type="number" class="form-control rr-got" data-i="${i}" min="0" max="${r.qty}" value="${r.qty}" style="width:90px;"></td></tr>`).join('');
+            document.getElementById('rrItems').innerHTML = (o.repReturns || []).map((r, i) => `<tr><td>${escapeHtml(r.productName)}</td><td>${r.qty} ${escapeHtml(r.unit || '')}</td><td>${escapeHtml(r.reason || '')}</td><td><input type="number" class="form-control rr-got" data-i="${i}" min="0" max="${r.qty}" step="1" value="${r.qty}" style="width:90px;"></td></tr>`).join('');
             openModal('repReturnReceiveModal');
         }
         function confirmRepReturnReceive() {
+            if (!canReceiveRepReturns()) { showToast('استلام المرتجع لأمين المخزن أو المدير بس', 'error'); return; }
             const o0 = repReturnOrders.find(x => x.id === receivingReturnId); if (!o0 || !db) return;
-            const got = Array.from(document.querySelectorAll('#rrItems .rr-got')).map(inp => Math.max(0, Number(inp.value) || 0));
+            const gotRaw = Array.from(document.querySelectorAll('#rrItems .rr-got')).map(inp => Number(inp.value) || 0);
+            if (gotRaw.some(v => v < 0 || Math.floor(v) !== v)) { showToast('الكمية لازم تكون رقم صحيح من غير كسور', 'error'); return; }
+            const got = gotRaw.map(v => Math.max(0, v));
+            const metaRef = db.collection('meta').doc('repShortages');
             const by = (currentUser && (currentUser.fullName || currentUser.username)) || '';
             const ref = db.collection('customerOrders').doc(o0.id);
             let rec = null, fresh = null;
-            db.runTransaction(t => t.get(ref).then(snap => {
+            db.runTransaction(t => Promise.all([t.get(ref), t.get(metaRef)]).then(([snap, metaSnap]) => {
                 if (!snap.exists) throw new Error('الطلب مش موجود');
                 fresh = Object.assign({ id: o0.id }, snap.data());
                 if (!fresh.repReturnPending) throw new Error('المرتجع ده اتسلّم قبل كده');
@@ -8065,6 +8109,14 @@
                 });
                 const shortageValue = items.reduce((s, x) => s + x.missingValue, 0);
                 rec = { at: Date.now(), by, items, shortageValue };
+                // (2026-10-08) الناقص من المرتجع بيتضاف فعلاً على رصيد عجز المندوب (قبل كده كان بيتعرض بس)
+                const meta = metaSnap.exists ? (metaSnap.data() || {}) : {};
+                const rc = fresh.repReturnRepCode;
+                if (meta.initializedAt && rc && shortageValue > 0) {
+                    const cur = Number(((meta.balances || {})[rc] || {}).balance) || 0;
+                    t.set(metaRef, { balances: { [rc]: { balance: Math.round((cur + shortageValue) * 100) / 100, updatedAt: Date.now() } } }, { merge: true });
+                    rec.shortageApplied = true;
+                }
                 t.update(ref, { repReturnPending: false, repReturnReceived: rec });
             })).then(() => {
                 // المخزون بيزيد دلوقتي بس، بالكمية اللي اتسلمت فعلاً
@@ -8333,13 +8385,13 @@
             }
             tbody.innerHTML = customers.map(c => {
                 const balance = getCustomerBalance(c.code);
-                let balanceClass = 'zero'; let balanceText = '0.00 ر.س';
-                if (balance > 0) { balanceClass = 'debtor'; balanceText = balance.toFixed(2) + ' ر.س (مدين)'; }
-                else if (balance < 0) { balanceClass = 'creditor'; balanceText = Math.abs(balance).toFixed(2) + ' ر.س (دائن)'; }
-                else balanceText = '0.00 ر.س';
+                let balanceClass = 'zero'; let balanceText = '0.00 ج.م';
+                if (balance > 0) { balanceClass = 'debtor'; balanceText = balance.toFixed(2) + ' ج.م (مدين)'; }
+                else if (balance < 0) { balanceClass = 'creditor'; balanceText = Math.abs(balance).toFixed(2) + ' ج.م (دائن)'; }
+                else balanceText = '0.00 ج.م';
                 return `<tr><td><span class="badge badge-warning">${c.code}</span></td><td><strong>${c.name}</strong></td><td>${c.phone || '-'}</td><td>${c.address || '-'}</td>
                 <td><span class="customer-balance ${balanceClass}">${balanceText}</span></td>
-                <td>${c.creditLimit != null ? c.creditLimit.toFixed(2) + ' ر.س' : '-'}</td>
+                <td>${c.creditLimit != null ? c.creditLimit.toFixed(2) + ' ج.م' : '-'}</td>
                 <td><button class="btn btn-primary btn-icon btn-sm" onclick='openCustomerModal(${JSON.stringify(c).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
                 <button class="btn btn-danger btn-icon btn-sm" onclick="deleteCustomer('${c.code}')"><i class="fas fa-trash"></i></button></td></tr>`;
             }).join('');
@@ -8399,7 +8451,7 @@
                     <td><strong>${runningBalance.toFixed(2)}</strong></td>
                     <td style="color:var(--text-light);font-size:13px;">${e.notes}</td>
                 </tr>`;
-            }).join('') + `<tr style="background:var(--primary);color:white;font-weight:700;"><td colspan="5">الرصيد النهائي</td><td>${runningBalance.toFixed(2)} ر.س</td><td>${runningBalance > 0 ? 'مدين' : (runningBalance < 0 ? 'دائن' : 'صفر')}</td></tr>`;
+            }).join('') + `<tr style="background:var(--primary);color:white;font-weight:700;"><td colspan="5">الرصيد النهائي</td><td>${runningBalance.toFixed(2)} ج.م</td><td>${runningBalance > 0 ? 'مدين' : (runningBalance < 0 ? 'دائن' : 'صفر')}</td></tr>`;
         }
 
         function printCustomerStatement() {
@@ -8483,10 +8535,10 @@
             }
             tbody.innerHTML = suppliers.map(s => {
                 const balance = getSupplierBalance(s.code);
-                let balanceClass = 'zero'; let balanceText = '0.00 ر.س';
-                if (balance > 0) { balanceClass = 'debtor'; balanceText = balance.toFixed(2) + ' ر.س (علينا)'; }
-                else if (balance < 0) { balanceClass = 'creditor'; balanceText = Math.abs(balance).toFixed(2) + ' ر.س (له)'; }
-                else balanceText = '0.00 ر.س';
+                let balanceClass = 'zero'; let balanceText = '0.00 ج.م';
+                if (balance > 0) { balanceClass = 'debtor'; balanceText = balance.toFixed(2) + ' ج.م (علينا)'; }
+                else if (balance < 0) { balanceClass = 'creditor'; balanceText = Math.abs(balance).toFixed(2) + ' ج.م (له)'; }
+                else balanceText = '0.00 ج.م';
                 return `<tr><td><span class="badge badge-orange">${s.code}</span></td><td><strong>${s.name}</strong></td><td>${s.phone || '-'}</td><td>${s.address || '-'}</td>
                 <td><span class="customer-balance ${balanceClass}">${balanceText}</span></td>
                 <td>${String((currentUser && currentUser.role) || '').toLowerCase() === 'warehouse_keeper' ? '' : `<button class="btn btn-primary btn-icon btn-sm" onclick='openSupplierModal(${JSON.stringify(s).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>`}
@@ -8540,7 +8592,7 @@
                     <td><strong>${runningBalance.toFixed(2)}</strong></td>
                     <td style="color:var(--text-light);font-size:13px;">${e.notes}</td>
                 </tr>`;
-            }).join('') + `<tr style="background:var(--teal);color:white;font-weight:700;"><td colspan="5">الرصيد النهائي</td><td>${runningBalance.toFixed(2)} ر.س</td><td>${runningBalance > 0 ? 'علينا' : (runningBalance < 0 ? 'له' : 'صفر')}</td></tr>`;
+            }).join('') + `<tr style="background:var(--teal);color:white;font-weight:700;"><td colspan="5">الرصيد النهائي</td><td>${runningBalance.toFixed(2)} ج.م</td><td>${runningBalance > 0 ? 'علينا' : (runningBalance < 0 ? 'له' : 'صفر')}</td></tr>`;
         }
 
         // ==================== SALESMEN ====================
@@ -8746,7 +8798,7 @@
 
         function deleteExpense(id) {
             const exp = expenses.find(e => e.id === id);
-            if (!confirm('هل أنت متأكد من حذف هذا المصروف؟' + (exp ? `\nمبلغه (${Number(exp.amount).toFixed(2)} ر.س) هيرجع للخزنة.` : ''))) return;
+            if (!confirm('هل أنت متأكد من حذف هذا المصروف؟' + (exp ? `\nمبلغه (${Number(exp.amount).toFixed(2)} ج.م) هيرجع للخزنة.` : ''))) return;
             expenses = expenses.filter(e => e.id !== id);
             saveExpenses();
             if (exp && parseFloat(exp.amount) > 0) addTreasuryEntry('in', parseFloat(exp.amount), 'نظام', 'expense', `إلغاء مصروف: ${exp.description || exp.type}`, 'إلغاء مصروف', false);
@@ -8774,7 +8826,7 @@
                 tbody.innerHTML = filtered.map(e => `
                     <tr><td>${new Date(e.date).toLocaleDateString('ar-SA')}</td>
                     <td><span class="expense-type-badge ${typeBadges[e.type] || 'expense-type-other'}"><i class="fas fa-tag"></i> ${e.type}</span></td>
-                    <td><strong style="color:var(--danger);">${e.amount.toFixed(2)} ر.س</strong></td>
+                    <td><strong style="color:var(--danger);">${e.amount.toFixed(2)} ج.م</strong></td>
                     <td><span class="badge badge-info">${e.costCenter || 'عام'}</span></td>
                     <td style="color:var(--text-light);font-size:13px;">${e.description || '-'}</td>
                     <td><button class="btn btn-danger btn-icon btn-sm" onclick="deleteExpense(${e.id})"><i class="fas fa-trash"></i></button></td></tr>
@@ -8790,7 +8842,7 @@
             filtered.forEach(e => { typeSummary[e.type] = (typeSummary[e.type] || 0) + e.amount; });
             const topType = Object.entries(typeSummary).sort((a, b) => b[1] - a[1])[0];
 
-            document.getElementById('expTotalAmount').textContent = totalAmount.toFixed(2) + ' ر.س';
+            document.getElementById('expTotalAmount').textContent = totalAmount.toFixed(2) + ' ج.م';
             document.getElementById('expCount').textContent = filtered.length;
             document.getElementById('expToSalesRatio').textContent = ratio + '%';
             document.getElementById('expTopType').textContent = topType ? topType[0] : '-';
@@ -8821,8 +8873,8 @@
 
             tbody.innerHTML = Object.entries(summary).map(([type, data]) => {
                 const pct = total > 0 ? ((data.total / total) * 100).toFixed(1) : 0;
-                return `<tr><td><strong>${type}</strong></td><td>${data.count}</td><td><strong style="color:var(--danger);">${data.total.toFixed(2)} ر.س</strong></td><td><div style="background:var(--bg);border-radius:10px;height:20px;overflow:hidden;"><div style="background:var(--danger);height:100%;width:${pct}%;border-radius:10px;"></div></div><span style="font-size:12px;">${pct}%</span></td></tr>`;
-            }).join('') + `<tr style="background:var(--danger);color:white;font-weight:700;"><td colspan="2">الإجمالي</td><td>${total.toFixed(2)} ر.س</td><td>100%</td></tr>`;
+                return `<tr><td><strong>${type}</strong></td><td>${data.count}</td><td><strong style="color:var(--danger);">${data.total.toFixed(2)} ج.م</strong></td><td><div style="background:var(--bg);border-radius:10px;height:20px;overflow:hidden;"><div style="background:var(--danger);height:100%;width:${pct}%;border-radius:10px;"></div></div><span style="font-size:12px;">${pct}%</span></td></tr>`;
+            }).join('') + `<tr style="background:var(--danger);color:white;font-weight:700;"><td colspan="2">الإجمالي</td><td>${total.toFixed(2)} ج.م</td><td>100%</td></tr>`;
 
             card.style.display = 'block';
         }
@@ -8903,7 +8955,7 @@
                     party: 'رصيد افتتاحي', partyType: 'system', notes: notes || 'رصيد افتتاحي', reference: 'رصيد افتتاحي', balanceAfter: amount, isDebtRelated: false
                 }];
                 saveTreasury();
-                logAction('رصيد افتتاحي للخزنة', `تم تعيين الرصيد الافتتاحي: ${amount.toFixed(2)} ر.س`);
+                logAction('رصيد افتتاحي للخزنة', `تم تعيين الرصيد الافتتاحي: ${amount.toFixed(2)} ج.م`);
                 renderTreasury(); updateDashboardStats();
                 closeModal('treasuryOpeningModal');
                 showToast('تم تعيين الرصيد الافتتاحي');
@@ -8916,8 +8968,8 @@
             }
             const current = getTreasuryBalance();
             const diff = amount - current;
-            if (Math.abs(diff) < 0.005) { showToast('رصيد الخزنة الحالي بالفعل ' + current.toFixed(2) + ' ر.س', 'warning'); return; }
-            if (!confirm(`رصيد الخزنة الحالي: ${current.toFixed(2)} ر.س\nالرصيد الجديد: ${amount.toFixed(2)} ر.س\n\nهتتضاف حركة تسوية ${diff > 0 ? 'قبض' : 'صرف'} بمبلغ ${Math.abs(diff).toFixed(2)} ر.س\nوكل الحركات القديمة (والتحصيلات) هتفضل زي ما هي.\n\nتكمل؟`)) return;
+            if (Math.abs(diff) < 0.005) { showToast('رصيد الخزنة الحالي بالفعل ' + current.toFixed(2) + ' ج.م', 'warning'); return; }
+            if (!confirm(`رصيد الخزنة الحالي: ${current.toFixed(2)} ج.م\nالرصيد الجديد: ${amount.toFixed(2)} ج.م\n\nهتتضاف حركة تسوية ${diff > 0 ? 'قبض' : 'صرف'} بمبلغ ${Math.abs(diff).toFixed(2)} ج.م\nوكل الحركات القديمة (والتحصيلات) هتفضل زي ما هي.\n\nتكمل؟`)) return;
             addTreasuryEntry(diff > 0 ? 'in' : 'out', Math.abs(diff), 'تسوية رصيد', 'system', notes || 'تسوية رصيد الخزنة', 'تسوية رصيد', false);
             renderTreasury(); updateDashboardStats();
             closeModal('treasuryOpeningModal');
@@ -8942,8 +8994,8 @@
                     <td>${new Date(t.date).toLocaleDateString('ar-SA')}</td>
                     <td><span class="badge ${t.type === 'in' ? 'badge-success' : 'badge-danger'}"><i class="fas fa-${t.type === 'in' ? 'arrow-down' : 'arrow-up'}"></i> ${t.type === 'in' ? 'قبض' : 'صرف'}</span></td>
                     <td><strong>${partyName}</strong></td>
-                    <td style="color:${t.type === 'in' ? 'var(--accent)' : 'var(--danger)'};font-weight:700;">${t.type === 'in' ? '+' : '-'}${t.amount.toFixed(2)} ر.س</td>
-                    <td><strong>${t.balanceAfter.toFixed(2)} ر.س</strong></td>
+                    <td style="color:${t.type === 'in' ? 'var(--accent)' : 'var(--danger)'};font-weight:700;">${t.type === 'in' ? '+' : '-'}${t.amount.toFixed(2)} ج.م</td>
+                    <td><strong>${t.balanceAfter.toFixed(2)} ج.م</strong></td>
                     <td style="color:var(--text-light);font-size:12px;">${t.reference || '-'}</td>
                     <td style="color:var(--text-light);font-size:13px;">${t.notes || '-'}</td>
                     <td><button class="btn btn-danger btn-icon btn-sm" onclick="deleteTreasuryEntry(${t.id})"><i class="fas fa-trash"></i></button></td>
@@ -8953,11 +9005,11 @@
         }
 
         function updateTreasuryStats(totalIn, totalOut, net, count) {
-            document.getElementById('treasuryTotalIn').textContent = totalIn.toFixed(2) + ' ر.س';
-            document.getElementById('treasuryTotalOut').textContent = totalOut.toFixed(2) + ' ر.س';
-            document.getElementById('treasuryNetMovement').textContent = (totalIn - totalOut).toFixed(2) + ' ر.س';
+            document.getElementById('treasuryTotalIn').textContent = totalIn.toFixed(2) + ' ج.م';
+            document.getElementById('treasuryTotalOut').textContent = totalOut.toFixed(2) + ' ج.م';
+            document.getElementById('treasuryNetMovement').textContent = (totalIn - totalOut).toFixed(2) + ' ج.م';
             document.getElementById('treasuryCount').textContent = count;
-            document.getElementById('treasuryCurrentBalance').textContent = getTreasuryBalance().toFixed(2) + ' ر.س';
+            document.getElementById('treasuryCurrentBalance').textContent = getTreasuryBalance().toFixed(2) + ' ج.م';
         }
 
         function filterTreasury() {
@@ -8995,7 +9047,7 @@
             }
             const partyName = last.partyType === 'customer' ? (customers.find(c => c.code === last.party)?.name || last.party) :
                                last.partyType === 'supplier' ? (suppliers.find(s => s.code === last.party)?.name || last.party) : last.party;
-            if (!confirm(`تراجع عن آخر حركة؟\nالنوع: ${last.type === 'in' ? 'قبض' : 'صرف'}\nالمبلغ: ${last.amount.toFixed(2)} ر.س\nالجهة: ${partyName}`)) return;
+            if (!confirm(`تراجع عن آخر حركة؟\nالنوع: ${last.type === 'in' ? 'قبض' : 'صرف'}\nالمبلغ: ${last.amount.toFixed(2)} ج.م\nالجهة: ${partyName}`)) return;
             treasury = treasury.filter(t => t.id !== last.id);
             let balance = 0;
             treasury = treasury.reverse().map(t => {
@@ -9003,7 +9055,7 @@
                 return { ...t, balanceAfter: balance };
             }).reverse();
             saveTreasury();
-            logAction('تراجع عن حركة خزنة', `تم التراجع عن حركة ${last.type === 'in' ? 'قبض' : 'صرف'} بمبلغ ${last.amount.toFixed(2)} ر.س (${partyName})`);
+            logAction('تراجع عن حركة خزنة', `تم التراجع عن حركة ${last.type === 'in' ? 'قبض' : 'صرف'} بمبلغ ${last.amount.toFixed(2)} ج.م (${partyName})`);
             renderTreasury(); updateDashboardStats(); showToast('تم التراجع عن آخر حركة');
         }
 
@@ -9828,8 +9880,25 @@
         // المندوب بيدوس "تم التسليم" في الأبليكشن، فبيتكتب على الطلب (repDelivery). أي جهاز فاتح السيستم
         // بيقفل الطلب ويعمل الفاتورة والنقاط. fulfillOrderCore معاملة ذرية، فلو جهازين حاولوا مع بعض واحد بس بينجح.
         const repDeliveryAttempts = {};
+        let repStuckToastAt = 0;
+        // (2026-10-08) طلبات سلّمها المندوب من أكتر من 30 دقيقة ولسه ماتقفلتش (فيه مشكلة في قفلها): بتظهر في شاشة فلوس المناديب
+        function renderRepDeliveryStuck() {
+            const box = document.getElementById('repDeliveryStuckBox');
+            const stuck = customerOrders.filter(o => o.status === 'ready' && o.repDelivery && Date.now() - (Number(o.repDelivery.at) || 0) > 30 * 60000);
+            if (box) {
+                box.style.display = stuck.length ? '' : 'none';
+                box.innerHTML = stuck.length ? `<div style="font-weight:800;color:var(--danger);margin-bottom:8px;"><i class="fas fa-triangle-exclamation"></i> ${stuck.length} طلب المندوب سلّمهم ولسه الفاتورة متعملتش</div>` +
+                    stuck.map(o => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed var(--border);font-size:13px;"><span>${escapeHtml(o.customerName || '')} #${o.id.slice(-6)} — سلّمه ${escapeHtml(o.repDelivery.name || '')} من ${pdAgo(Number(o.repDelivery.at) || Date.now())}</span><button class="btn btn-warning btn-sm" onclick="fulfillOrderCore('${o.id}').then(ok => { if (ok) { renderCustomerOrders(); renderRepDeliveryStuck(); } })"><i class="fas fa-redo"></i> اقفله دلوقتي وشوف السبب</button></div>`).join('') : '';
+            }
+            if (stuck.length && Date.now() - repStuckToastAt > 10 * 60000 && ['admin', 'accountant'].includes(String((currentUser && currentUser.role) || '').toLowerCase())) {
+                repStuckToastAt = Date.now();
+                showToast(`فيه ${stuck.length} طلب سلّمهم مندوب التسليم ومش بيتقفلوا — افتح "فلوس مع مناديب التسليم"`, 'warning', 6000);
+            }
+        }
+        setInterval(function() { try { renderRepDeliveryStuck(); } catch (e) {} }, 120000);
         function processRepDeliveredOrders() {
             if (!db || !currentUser) return;
+            try { renderRepDeliveryStuck(); } catch (e) {}
             if (!['admin', 'accountant', 'warehouse_keeper'].includes(String(currentUser.role || '').trim().toLowerCase())) return;
             customerOrders.forEach(function(o) {
                 if (o.status !== 'ready' || !o.repDelivery) return;
@@ -10054,7 +10123,7 @@
                     history: (editing ? (editing.history || []) : []).concat([{ action: editing ? 'اتبعتت تاني بعد التعديل' : 'اتعملت واتبعتت للمراجعة', by: me.name, at: now }])
                 };
                 db.collection('purchaseDrafts').doc(id).set(doc).then(function() {
-                    logAction(editing ? 'إعادة إرسال فاتورة شراء للمراجعة' : 'فاتورة شراء للمراجعة', `طلب ${id.slice(-6)} من المورد ${doc.supplier} بقيمة ${data.grandTotal.toFixed(2)} ر.س`);
+                    logAction(editing ? 'إعادة إرسال فاتورة شراء للمراجعة' : 'فاتورة شراء للمراجعة', `طلب ${id.slice(-6)} من المورد ${doc.supplier} بقيمة ${data.grandTotal.toFixed(2)} ج.م`);
                     showToast(canApprovePurchases() ? 'الفاتورة اتحفظت وبانتظار الاعتماد من "مراجعة فواتير الشراء"' : 'الفاتورة اتبعتت للمحاسب للمراجعة. المخزون هيزيد بعد الاعتماد', 'success', 4500);
                     resetPurchaseInvoice();
                     done();
@@ -10108,7 +10177,7 @@
                 const waiting = mine.filter(d => d.status === 'pending');
                 let html = '';
                 if (returned.length) html += `<div style="margin-bottom:10px;padding:12px 15px;background:rgba(231,76,60,0.07);border-radius:10px;border-right:4px solid var(--danger);"><strong style="color:var(--danger);"><i class="fas fa-undo"></i> فواتير رجعتلك من المراجعة (${returned.length})</strong>` +
-                    returned.map(d => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:13px;"><span>${escapeHtml(d.supplier || '')} · ${Number(d.grandTotal || 0).toFixed(2)} ر.س · <span style="color:var(--danger);">السبب: ${escapeHtml(d.returnReason || '-')}</span></span><button class="btn btn-warning btn-sm" onclick="loadPurchaseDraftForEdit('${d.id}')"><i class="fas fa-pen"></i> افتح وعدّل</button></div>`).join('') + '</div>';
+                    returned.map(d => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:13px;"><span>${escapeHtml(d.supplier || '')} · ${Number(d.grandTotal || 0).toFixed(2)} ج.م · <span style="color:var(--danger);">السبب: ${escapeHtml(d.returnReason || '-')}</span></span><button class="btn btn-warning btn-sm" onclick="loadPurchaseDraftForEdit('${d.id}')"><i class="fas fa-pen"></i> افتح وعدّل</button></div>`).join('') + '</div>';
                 if (rejectedOther.length) html += `<div style="margin-bottom:10px;padding:12px 15px;background:rgba(231,76,60,0.07);border-radius:10px;border-right:4px solid var(--danger);font-size:13px;"><strong style="color:var(--danger);"><i class="fas fa-times-circle"></i> طلبات اترفضت</strong>` +
                     rejectedOther.map(d => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;"><span>${APPROVAL_KIND_LABEL[draftKind(d)]}: ${escapeHtml(d.productName || d.supplier || '')} · <span style="color:var(--danger);">السبب: ${escapeHtml(d.returnReason || '-')}</span></span><button class="btn btn-secondary btn-sm" onclick="dismissReturnedDraft('${d.id}')">تمام</button></div>`).join('') + '</div>';
                 if (waiting.length) html += `<div style="margin-bottom:10px;padding:10px 15px;background:rgba(52,152,219,0.07);border-radius:10px;border-right:4px solid var(--info);font-size:13px;"><i class="fas fa-hourglass-half" style="color:var(--info);"></i> عندك ${waiting.length} طلب بانتظار الاعتماد: ${waiting.map(d => APPROVAL_KIND_LABEL[draftKind(d)] + ' ' + escapeHtml(d.productName || d.supplier || '')).join('، ')}</div>`;
@@ -10168,7 +10237,7 @@
                 return Object.assign({}, it, { cost: cost, total: (Number(it.qty) || 0) * cost });
             });
             const grandTotal = items.reduce((s, it) => s + it.total, 0);
-            if (!confirm(`اعتماد فاتورة ${d.supplier} بإجمالي ${grandTotal.toFixed(2)} ر.س؟\n\nالمخزون هيزيد دلوقتي${(d.paymentMethod === 'نقدي' || d.paymentMethod === 'تحويل بنكي') ? '، والمبلغ هيتخصم من الخزنة' : '، والمبلغ هيتسجل على المورد'}.`)) return;
+            if (!confirm(`اعتماد فاتورة ${d.supplier} بإجمالي ${grandTotal.toFixed(2)} ج.م؟\n\nالمخزون هيزيد دلوقتي${(d.paymentMethod === 'نقدي' || d.paymentMethod === 'تحويل بنكي') ? '، والمبلغ هيتخصم من الخزنة' : '، والمبلغ هيتسجل على المورد'}.`)) return;
             const btn = document.getElementById('purchaseApproveBtn'); btn.disabled = true;
             const me = pdUser();
             const ref = db.collection('purchaseDrafts').doc(id);
@@ -10222,7 +10291,7 @@
             purchaseInvoices.push(invoice);
             localStorage.setItem('purchaseInvoices', JSON.stringify(purchaseInvoices));
             if (db) db.collection('purchaseInvoiceRecords').doc(String(invoice.id)).set(invoice).catch(function(e) { console.error('purchase invoice sync failed:', e); showToast('تعذر رفع فاتورة الشراء للسحابة', 'error'); });
-            logAction('اعتماد فاتورة شراء', `فاتورة #${number} من ${d.supplier} بقيمة ${d.grandTotal.toFixed(2)} ر.س — عملها ${(d.createdBy && d.createdBy.name) || '-'} واعتمدها ${approver.name}` + (priceChanges && priceChanges.length ? ` — تعديل أسعار: ${priceChanges.join('، ')}` : ''));
+            logAction('اعتماد فاتورة شراء', `فاتورة #${number} من ${d.supplier} بقيمة ${d.grandTotal.toFixed(2)} ج.م — عملها ${(d.createdBy && d.createdBy.name) || '-'} واعتمدها ${approver.name}` + (priceChanges && priceChanges.length ? ` — تعديل أسعار: ${priceChanges.join('، ')}` : ''));
             try { updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderInventory(); renderMovements(); renderLowStock(); renderTreasury(); renderSuppliers(); } catch (e) { console.error(e); }
             document.getElementById('purchaseInvoiceNumber').textContent = 'يتحدد بعد الاعتماد';
             return invoice;
@@ -10298,7 +10367,7 @@
             db.collection('purchaseDrafts').doc(id).set(doc).then(function() {
                 logAction('طلب اعتماد: ' + APPROVAL_KIND_LABEL[kind], kind === 'stock_count' ? `${data.items.length} صنف فيهم فروق` : kind === 'stock_adjust'
                     ? `${data.productName}: من ${data.qtyAtRequest} إلى ${data.requestedNewQty} — السبب: ${data.reason}`
-                    : `لفاتورة شراء #${data.originalInvoiceNumber} من ${data.supplier} بقيمة ${Number(data.grandTotal).toFixed(2)} ر.س`);
+                    : `لفاتورة شراء #${data.originalInvoiceNumber} من ${data.supplier} بقيمة ${Number(data.grandTotal).toFixed(2)} ج.م`);
                 showToast('اتبعت للاعتماد. مفيش أي تغيير هيحصل غير بعد الموافقة', 'success', 4000);
                 if (onDone) onDone();
             }).catch(function(e) { console.error(e); showToast('تعذر إرسال الطلب، جرب تاني', 'error'); })
@@ -10319,7 +10388,7 @@
                     <div class="table-container" style="max-height:340px;overflow-y:auto;margin-top:8px;"><table><thead><tr><th>الصنف</th><th>وقت التصدير</th><th>الفعلية</th><th>الفرق</th><th>دلوقتي</th><th>بعد الاعتماد</th><th>السبب</th></tr></thead><tbody>${(d.items || []).map(it => {
                         const now = inventory[it.productCode] ? (Number(inventory[it.productCode].qty) || 0) : 0, after = now + Number(it.delta || 0);
                         return `<tr><td>${escapeHtml(it.productName)}</td><td>${it.qtyAtExport}</td><td>${it.counted}</td><td style="font-weight:700;color:${it.delta >= 0 ? 'var(--accent)' : 'var(--danger)'};">${it.delta > 0 ? '+' : ''}${it.delta}</td><td>${now}</td><td style="${after < 0 ? 'color:var(--danger);font-weight:700;' : ''}">${after}</td><td style="font-size:12px;">${escapeHtml(it.reason || '')}</td></tr>`; }).join('')}</tbody></table></div>
-                    <div style="font-size:12px;color:var(--text-light);margin-top:8px;">الفرق بيتطبق على الكمية الحالية. قيمة الفروق تقريبًا ${Number(d.grandTotal || 0).toFixed(2)} ر.س</div>`;
+                    <div style="font-size:12px;color:var(--text-light);margin-top:8px;">الفرق بيتطبق على الكمية الحالية. قيمة الفروق تقريبًا ${Number(d.grandTotal || 0).toFixed(2)} ج.م</div>`;
             } else if (draftKind(d) === 'stock_adjust') {
                 const nowQty = inventory[d.productCode] ? (Number(inventory[d.productCode].qty) || 0) : 0;
                 const after = nowQty + Number(d.delta || 0);
@@ -10331,13 +10400,13 @@
                     <div style="background:#f8f9fa;border-radius:10px;padding:10px;"><div style="font-size:12px;color:var(--text-light);">الفرق المطلوب</div><div style="font-size:20px;font-weight:800;color:${d.delta >= 0 ? 'var(--accent)' : 'var(--danger)'};">${d.delta > 0 ? '+' : ''}${d.delta}</div></div>
                     <div style="background:#f8f9fa;border-radius:10px;padding:10px;"><div style="font-size:12px;color:var(--text-light);">الكمية دلوقتي</div><div style="font-size:20px;font-weight:800;">${nowQty}</div></div>
                     <div style="background:${after < 0 ? 'rgba(231,76,60,0.1)' : 'rgba(39,174,96,0.08)'};border-radius:10px;padding:10px;"><div style="font-size:12px;color:var(--text-light);">بعد الاعتماد</div><div style="font-size:20px;font-weight:800;">${after}</div></div></div>
-                    <div style="font-size:12px;color:var(--text-light);margin-top:8px;">الفرق بيتطبق على الكمية الحالية، عشان أي بيع حصل بعد الطلب يتحسب صح. قيمة الفرق تقريبًا ${Number(d.grandTotal || 0).toFixed(2)} ر.س</div>`;
+                    <div style="font-size:12px;color:var(--text-light);margin-top:8px;">الفرق بيتطبق على الكمية الحالية، عشان أي بيع حصل بعد الطلب يتحسب صح. قيمة الفرق تقريبًا ${Number(d.grandTotal || 0).toFixed(2)} ج.م</div>`;
             } else {
                 html = `<div style="font-size:14px;line-height:2;"><strong>المورد:</strong> ${escapeHtml(d.supplier || '')} · <strong>على فاتورة شراء:</strong> #${escapeHtml(String(d.originalInvoiceNumber || ''))} · ${d.isCash ? 'المبلغ هيرجع للخزنة' : 'هيتخصم من حساب المورد'}<br>${who}${d.notes ? ' · <strong>ملاحظات:</strong> ' + escapeHtml(d.notes) : ''}</div>
                     <div class="table-container" style="margin-top:8px;"><table><thead><tr><th>الصنف</th><th>الكمية</th><th>في المخزن دلوقتي</th><th>السعر</th><th>الإجمالي</th></tr></thead><tbody>${(d.items || []).map(it => {
                         const avail = inventory[it.productCode] ? (Number(inventory[it.productCode].qty) || 0) : 0;
                         return `<tr><td>${escapeHtml(it.productName)}</td><td>${it.qty}</td><td style="${avail < it.qty ? 'color:var(--danger);font-weight:700;' : ''}">${avail}</td><td>${Number(it.cost).toFixed(2)}</td><td>${Number(it.total).toFixed(2)}</td></tr>`; }).join('')}</tbody></table></div>
-                    <div style="text-align:left;font-weight:800;margin-top:8px;">الإجمالي: ${Number(d.grandTotal || 0).toFixed(2)} ر.س</div>`;
+                    <div style="text-align:left;font-weight:800;margin-top:8px;">الإجمالي: ${Number(d.grandTotal || 0).toFixed(2)} ج.م</div>`;
             }
             document.getElementById('approvalReviewBody').innerHTML = html;
             const self = isOwnPurchaseDraft(d) && pdRole() !== 'admin';
@@ -10410,7 +10479,7 @@
                     };
                     purchaseReturns.push(ret);
                     savePurchaseReturns();
-                    logAction('اعتماد مرتجع شراء', `مرتجع #${ret.number} لفاتورة #${d.originalInvoiceNumber} — ${d.supplier} بقيمة ${Number(d.grandTotal).toFixed(2)} ر.س — عمله ${(d.createdBy && d.createdBy.name) || '-'} واعتمده ${me.name}`);
+                    logAction('اعتماد مرتجع شراء', `مرتجع #${ret.number} لفاتورة #${d.originalInvoiceNumber} — ${d.supplier} بقيمة ${Number(d.grandTotal).toFixed(2)} ج.م — عمله ${(d.createdBy && d.createdBy.name) || '-'} واعتمده ${me.name}`);
                     try { renderPurchaseReturns(); renderSuppliers(); renderTreasury(); } catch (e) {}
                 }
                 try { renderInventory(); renderMovements(); renderLowStock(); updateDashboardStats(); } catch (e) {}
@@ -11018,18 +11087,77 @@
         // ==================== عهدة مناديب التسليم ====================
         let repSettlements = [];
         let repSettlementsListenerStarted = false;
+        // (2026-10-08) كل عمليات الاستلام (مش آخر 500 بس) — بنستخدمها لحساب الرصيد القديم مرة واحدة قبل الاعتماد
+        const repSettlementsAll = new Map();
+        // رصيد العجز الثابت لكل مندوب: بيتحدّث مع كل استلام فلوس وكل استلام مرتجع ناقص، والأبليكشن بيعرضه للمندوب
+        let repShortagesDoc = null;
         function startRepSettlementsListener() {
             if (!db || repSettlementsListenerStarted) return;
             repSettlementsListenerStarted = true;
             db.collection('repSettlements').orderBy('date', 'desc').limit(500).onSnapshot(function(snap) {
                 repSettlements = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+                repSettlements.forEach(s => repSettlementsAll.set(s.id, s));
                 renderRepCustody();
             }, function(err) { console.error('rep settlements listener error:', err); });
+            db.collection('repSettlements').get().then(function(snap) {
+                snap.docs.forEach(d => { if (!repSettlementsAll.has(d.id)) repSettlementsAll.set(d.id, Object.assign({ id: d.id }, d.data())); });
+                renderRepCustody();
+            }).catch(function(e) { console.error('rep settlements full read failed:', e); });
+            db.collection('meta').doc('repShortages').onSnapshot(function(snap) {
+                repShortagesDoc = snap.exists ? (snap.data() || {}) : {};
+                renderRepCustody();
+            }, function(err) { console.error('rep shortages listener error:', err); });
             setInterval(renderRepCustody, 60000);
         }
+        function repShortagesReady() { return !!(repShortagesDoc && repShortagesDoc.initializedAt); }
+        // الحساب القديم: مجموع (فلوس الطلبات − اللي اتسلم) في كل عمليات الاستلام
+        function legacySettlementShortage(code) {
+            return Array.from(repSettlementsAll.values()).filter(s => s.repCode === code && !s.legacy).reduce((t, s) => t + (Number(s.ordersAmount) || 0) - (Number(s.received) || 0), 0);
+        }
+        // عجز مرتجعات اتسلمت ناقصة ولسه ماتضافتش على رصيد المندوب
+        function unappliedReturnShortage(code) {
+            return repReturnOrders.filter(o => o.repReturnRepCode === code && o.repReturnReceived && !o.repReturnReceived.shortageApplied && Number(o.repReturnReceived.shortageValue) > 0)
+                .reduce((t, o) => t + (Number(o.repReturnReceived.shortageValue) || 0), 0);
+        }
         function repShortage(code) {   // موجب = عجز عليه، سالب = زيادة ليه
-            // كل استلام بيزود العجز بـ (فلوس الطلبات − اللي اتسلم)، فالزيادة في مرة بتسد عجز مرة قبلها
-            return repSettlements.filter(s => s.repCode === code && !s.legacy).reduce((t, s) => t + (Number(s.ordersAmount) || 0) - (Number(s.received) || 0), 0);
+            if (repShortagesReady()) { const b = (repShortagesDoc.balances || {})[code]; return b ? (Number(b.balance) || 0) : 0; }
+            return legacySettlementShortage(code);
+        }
+        // مربع للمدير: مراجعة الأرصدة الحالية واعتمادها مرة واحدة (بعد كده كل حاجة بتتحدّث أوتوماتيك)
+        function renderRepShortageInit() {
+            const box = document.getElementById('repShortageInitBox'); if (!box) return;
+            if (!repShortagesDoc || repShortagesReady() || xlRole() !== 'admin') { box.style.display = 'none'; return; }
+            const codes = new Set(salesmen.filter(s => s.repType === 'delivery').map(s => s.code));
+            repSettlementsAll.forEach(s => { if (s.repCode && !s.legacy) codes.add(s.repCode); });
+            repReturnOrders.forEach(o => { if (o.repReturnRepCode) codes.add(o.repReturnRepCode); });
+            const nameOf = c => { const s = salesmen.find(x => x.code === c); if (s) return s.name; const st = Array.from(repSettlementsAll.values()).find(x => x.repCode === c); return (st && st.repName) || c; };
+            const rows = Array.from(codes).map(c => { const a = legacySettlementShortage(c), b = unappliedReturnShortage(c); return { c, name: nameOf(c), a, b, t: a + b }; });
+            const f = n => (Math.round(n * 100) / 100).toFixed(2);
+            box.style.display = '';
+            box.innerHTML = `<div style="font-weight:800;margin-bottom:6px;"><i class="fas fa-scale-balanced"></i> مراجعة رصيد العجز قبل تشغيل الحساب الجديد</div>
+                <div style="font-size:13px;color:var(--text-light);margin-bottom:8px;">من دلوقتي العجز هيتحفظ رصيد ثابت لكل مندوب (مش هيضيع مع الوقت)، وعجز المرتجع الناقص هيتحسب عليه، والمندوب هيشوف رصيده في الأبليكشن. راجع الأرقام دي، ولو مظبوطة دوس اعتماد. لحد ما تعتمد، الحساب شغال بالطريقة القديمة.</div>
+                <div class="table-container"><table><thead><tr><th>المندوب</th><th>عجز الفلوس (من عمليات الاستلام)</th><th>عجز مرتجعات اتسلمت ناقصة</th><th>الرصيد اللي هيتعتمد</th></tr></thead><tbody>` +
+                (rows.map(r => `<tr><td>${escapeHtml(r.name)}</td><td>${f(r.a)}</td><td>${f(r.b)}</td><td><strong style="color:${r.t > 0.004 ? 'var(--danger)' : r.t < -0.004 ? 'var(--accent)' : 'inherit'};">${f(r.t)}</strong></td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;">مفيش مناديب تسليم</td></tr>') +
+                `</tbody></table></div><button class="btn btn-success btn-sm" style="margin-top:10px;" onclick="initRepShortages()"><i class="fas fa-check"></i> الأرقام مظبوطة — اعتماد</button>`;
+        }
+        function initRepShortages() {
+            if (xlRole() !== 'admin' || !db) return;
+            if (!confirm('اعتماد أرصدة العجز دي كبداية للحساب الجديد؟')) return;
+            const codes = new Set(salesmen.filter(s => s.repType === 'delivery').map(s => s.code));
+            repSettlementsAll.forEach(s => { if (s.repCode && !s.legacy) codes.add(s.repCode); });
+            repReturnOrders.forEach(o => { if (o.repReturnRepCode) codes.add(o.repReturnRepCode); });
+            const balances = {};
+            codes.forEach(c => { balances[c] = { balance: Math.round((legacySettlementShortage(c) + unappliedReturnShortage(c)) * 100) / 100, updatedAt: Date.now(), openingBalance: true }; });
+            const applyOrders = repReturnOrders.filter(o => o.repReturnReceived && !o.repReturnReceived.shortageApplied && Number(o.repReturnReceived.shortageValue) > 0);
+            const metaRef = db.collection('meta').doc('repShortages');
+            db.runTransaction(t => t.get(metaRef).then(snap => {
+                if (snap.exists && snap.data().initializedAt) throw new Error('الأرصدة اتعتمدت قبل كده من جهاز تاني');
+                t.set(metaRef, { initializedAt: Date.now(), initializedBy: pdUser(), balances }, { merge: true });
+                applyOrders.forEach(o => t.update(db.collection('customerOrders').doc(o.id), { 'repReturnReceived.shortageApplied': true }));
+            })).then(() => {
+                logAction('اعتماد أرصدة عجز المناديب', Object.keys(balances).map(c => c + ': ' + balances[c].balance.toFixed(2)).join('، '));
+                showToast('اتعتمدت الأرصدة ✓ — من دلوقتي العجز بيتحسب أوتوماتيك');
+            }).catch(e => { console.error(e); showToast(e.message || 'تعذر الاعتماد', 'error'); });
         }
         function unsettledFor(code) { return deliveryCollections.filter(r => r.repUsername === code && !r.settledAt && Number(r.amount) > 0); }
         function renderRepCustody() {
@@ -11047,13 +11175,14 @@
                 if (late) { alertReps++; alertTotal += amount; }
                 return `<div style="border:1px solid var(--border);border-radius:12px;padding:14px;${late ? 'border-color:var(--danger);background:rgba(231,76,60,0.04);' : ''}">
                     <div style="font-weight:800;font-size:15px;margin-bottom:6px;"><i class="fas fa-motorcycle" style="color:var(--text-light);"></i> ${escapeHtml(s.name)}</div>
-                    <div style="font-size:13px;line-height:2;">معاه: <strong style="font-size:18px;">${amount.toFixed(2)}</strong> ر.س من ${list.length} طلب${oldest ? `<br>أقدم طلب: ${pdAgo(oldest)}${late ? ' <span class="badge badge-danger">متأخر</span>' : ''}` : ''}
-                    ${short > 0 ? `<br><span style="color:var(--danger);font-weight:700;">عجز عليه: ${short.toFixed(2)} ر.س</span>` : short < 0 ? `<br><span style="color:var(--accent);">زيادة ليه: ${Math.abs(short).toFixed(2)} ر.س</span>` : ''}</div>
+                    <div style="font-size:13px;line-height:2;">معاه: <strong style="font-size:18px;">${amount.toFixed(2)}</strong> ج.م من ${list.length} طلب${oldest ? `<br>أقدم طلب: ${pdAgo(oldest)}${late ? ' <span class="badge badge-danger">متأخر</span>' : ''}` : ''}
+                    ${short > 0 ? `<br><span style="color:var(--danger);font-weight:700;">عجز عليه: ${short.toFixed(2)} ج.م</span>` : short < 0 ? `<br><span style="color:var(--accent);">زيادة ليه: ${Math.abs(short).toFixed(2)} ج.م</span>` : ''}</div>
                     ${(amount > 0 || short > 0) && ['admin', 'accountant'].includes(xlRole()) ? `<button class="btn btn-success btn-sm" style="margin-top:8px;width:100%;" onclick="openRepSettle('${escapeHtml(s.code)}')"><i class="fas fa-hand-holding-usd"></i> استلام</button>` : '<div class="sv-muted" style="margin-top:8px;">مفيش فلوس معاه</div>'}
                 </div>`;
             });
             const box = document.getElementById('repCustodyCards');
             if (box) box.innerHTML = cards.join('') || '<div class="sv-muted">مفيش مناديب تسليم متسجلين</div>';
+            try { renderRepShortageInit(); renderRepDeliveryStuck(); } catch (e) { console.error(e); }
             const tb = document.getElementById('repSettlementsTable');
             if (tb) tb.innerHTML = repSettlements.filter(s => !s.legacy).slice(0, 60).map(s => {
                 const diff = (Number(s.received) || 0) - (Number(s.expected) || 0);
@@ -11063,7 +11192,7 @@
             if (badge) { badge.textContent = alertReps; badge.style.display = alertReps ? '' : 'none'; }
             const al = document.getElementById('repCustodyAlert');
             if (al) {
-                if (alertReps && ['admin', 'accountant'].includes(xlRole())) { al.style.display = 'block'; al.innerHTML = `<i class="fas fa-hand-holding-usd" style="color:var(--danger);"></i> <strong>${alertReps} مندوب تسليم معاهم فلوس من أكتر من يوم</strong> بإجمالي ${alertTotal.toFixed(2)} ر.س · <u>افتح العهدة</u>`; }
+                if (alertReps && ['admin', 'accountant'].includes(xlRole())) { al.style.display = 'block'; al.innerHTML = `<i class="fas fa-hand-holding-usd" style="color:var(--danger);"></i> <strong>${alertReps} مندوب تسليم معاهم فلوس من أكتر من يوم</strong> بإجمالي ${alertTotal.toFixed(2)} ج.م · <u>افتح العهدة</u>`; }
                 else al.style.display = 'none';
             }
         }
@@ -11092,8 +11221,8 @@
             if (recRaw === '') { res.textContent = ''; return; }
             const diff = Number(recRaw) - expected;
             res.innerHTML = Math.abs(diff) < 0.005 ? '<span style="color:var(--accent);">✓ مظبوط، مفيش فرق</span>'
-                : diff < 0 ? `<span style="color:var(--danger);">عجز ${Math.abs(diff).toFixed(2)} ر.س هيتسجل عليه</span>`
-                : `<span style="color:var(--accent);">زيادة ${diff.toFixed(2)} ر.س هتتسجل ليه</span>`;
+                : diff < 0 ? `<span style="color:var(--danger);">عجز ${Math.abs(diff).toFixed(2)} ج.م هيتسجل عليه</span>`
+                : `<span style="color:var(--accent);">زيادة ${diff.toFixed(2)} ج.م هتتسجل ليه</span>`;
         }
         function saveRepSettlement() {
             if (!db) { showToast('لازم يكون فيه إنترنت', 'error'); return; }
@@ -11107,20 +11236,32 @@
             if (!ids.length && oldShort <= 0) { showToast('اختار طلب واحد على الأقل', 'error'); return; }
             const expected = ordersAmt + oldShort;
             const diff = received - expected;
-            if (!confirm(`استلام ${received.toFixed(2)} ر.س من المفروض ${expected.toFixed(2)} ر.س` + (Math.abs(diff) >= 0.005 ? `\n${diff < 0 ? 'عجز' : 'زيادة'}: ${Math.abs(diff).toFixed(2)} ر.س` : '') + '\nالمبلغ هيدخل الخزنة. تأكيد؟')) return;
+            if (!confirm(`استلام ${received.toFixed(2)} ج.م من المفروض ${expected.toFixed(2)} ج.م` + (Math.abs(diff) >= 0.005 ? `\n${diff < 0 ? 'عجز' : 'زيادة'}: ${Math.abs(diff).toFixed(2)} ج.م` : '') + '\nالمبلغ هيدخل الخزنة. تأكيد؟')) return;
             const btn = document.getElementById('repSettleBtn'); btn.disabled = true;
             const me = pdUser();
             const rep = salesmen.find(s => s.code === code);
             const repName = rep ? rep.name : ((deliveryCollections.find(r => r.repUsername === code) || {}).repFullName || code);
             const sid = 'RS-' + Date.now();
             const refs = ids.map(id => db.collection('deliveryCollectionRecords').doc(id));
+            const metaRef = db.collection('meta').doc('repShortages');
             // معاملة ذرية: كل الطلبات لازم تكون لسه متسلّمتش، وإلا مفيش حاجة بتتسجل (عشان محدش يستلم نفس الفلوس مرتين)
+            // (2026-10-08) ورصيد العجز الثابت بيتحدّث جوه نفس المعاملة
             db.runTransaction(function(t) {
-                return Promise.all(refs.map(r => t.get(r))).then(function(snaps) {
+                return Promise.all(refs.map(r => t.get(r)).concat([t.get(metaRef)])).then(function(all) {
+                    const metaSnap = all.pop(), snaps = all;
                     snaps.forEach(s => { if (!s.exists || s.data().settledAt) throw new Error('فيه طلبات اتسلمت فلوسها قبل كده، اعمل تحديث'); });
-                    refs.forEach(r => t.update(r, { settledAt: Date.now(), settlementId: sid }));
+                    const meta = metaSnap.exists ? (metaSnap.data() || {}) : {};
+                    let shortageAfter;
+                    if (meta.initializedAt) {
+                        const cur = Number(((meta.balances || {})[code] || {}).balance) || 0;
+                        shortageAfter = Math.round((cur + ordersAmt - received) * 100) / 100;
+                        t.set(metaRef, { balances: { [code]: { balance: shortageAfter, updatedAt: Date.now() } } }, { merge: true });
+                    } else {
+                        shortageAfter = Math.round((repShortage(code) + ordersAmt - received) * 100) / 100;
+                    }
+                    refs.forEach(r => t.update(r, { settledAt: Date.now(), settlementId: sid, settled: true }));
                     t.set(db.collection('repSettlements').doc(sid), { date: new Date().toISOString(), repCode: code, repName, recordIds: ids, ordersAmount: ordersAmt,
-                        oldShortage: oldShort, expected, received, shortageAfter: Math.round((repShortage(code) + ordersAmt - received) * 100) / 100, by: me, notes: document.getElementById('repSettleNotes').value.trim() });
+                        oldShortage: oldShort, expected, received, shortageAfter, by: me, notes: document.getElementById('repSettleNotes').value.trim() });
                 });
             }).then(function() {
                 if (received > 0) addTreasuryEntry('in', received, repName, 'delivery_rep', `تسليم عهدة ${repName} (${ids.length} طلب)`, 'عهدة مندوب', false);
@@ -11142,9 +11283,9 @@
             if (isNaN(cutoff)) { showToast('التاريخ مش مظبوط', 'error'); return; }
             const list = deliveryCollections.filter(r => !r.settledAt && new Date(r.date).getTime() <= cutoff);
             if (!list.length) { showToast('مفيش طلبات قديمة مفتوحة قبل التاريخ ده', 'warning'); return; }
-            if (!confirm(`هيتقفل ${list.length} طلب بإجمالي ${list.reduce((t, r) => t + (Number(r.amount) || 0), 0).toFixed(2)} ر.س على إن فلوسهم اتسلمت قبل كده.\nمش هيدخل حاجة الخزنة. تأكيد؟`)) return;
+            if (!confirm(`هيتقفل ${list.length} طلب بإجمالي ${list.reduce((t, r) => t + (Number(r.amount) || 0), 0).toFixed(2)} ج.م على إن فلوسهم اتسلمت قبل كده.\nمش هيدخل حاجة الخزنة. تأكيد؟`)) return;
             const batch = db.batch();
-            list.slice(0, 450).forEach(r => batch.update(db.collection('deliveryCollectionRecords').doc(r.id), { settledAt: Date.now(), settlementId: 'legacy', legacy: true }));
+            list.slice(0, 450).forEach(r => batch.update(db.collection('deliveryCollectionRecords').doc(r.id), { settledAt: Date.now(), settlementId: 'legacy', legacy: true, settled: true }));
             batch.commit().then(() => { list.slice(0, 450).forEach(r => { r.settledAt = Date.now(); }); logAction('قفل عهدة قديمة', `${Math.min(list.length, 450)} طلب قبل ${d}`); renderRepCustody(); showToast('اتقفلت' + (list.length > 450 ? '، وفيه باقي، دوس تاني' : '')); })
                 .catch(e => { console.error(e); showToast('تعذر القفل', 'error'); });
         }
@@ -11254,10 +11395,10 @@
                 const a = o ? getOrderDeliveryAssignment(o) : { reps: [] };
                 if (a.reps[0] && reps.some(s => s.code === a.reps[0].code)) sel.value = a.reps[0].code;
                 const total = o ? (Number(o.total) || 0) : 0;
-                document.getElementById('deliveryCashInfo').textContent = o ? `${o.customerName || ''} — ${total.toFixed(2)} ر.س` : '';
+                document.getElementById('deliveryCashInfo').textContent = o ? `${o.customerName || ''} — ${total.toFixed(2)} ج.م` : '';
             } else {
                 const total = ids.reduce((t, id) => t + (Number((customerOrders.find(x => x.id === id) || {}).total) || 0), 0);
-                document.getElementById('deliveryCashInfo').textContent = `إجمالي ${total.toFixed(2)} ر.س تقريبًا (قبل خصم النقاط)`;
+                document.getElementById('deliveryCashInfo').textContent = `إجمالي ${total.toFixed(2)} ج.م تقريبًا (قبل خصم النقاط)`;
             }
             const repRadio = document.querySelector('input[name="deliveryCashMode"][value="rep"]');
             repRadio.checked = !!reps.length;
@@ -11304,7 +11445,7 @@
             const el = document.getElementById('profitStatement');
             if (!el) return;
             const f = n => (n < 0 ? '−' : '') + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            const line = (label, val, opts) => `<div style="display:flex;justify-content:space-between;padding:8px 4px;border-bottom:1px solid var(--border);${opts && opts.bold ? 'font-weight:800;font-size:15px;' : ''}${opts && opts.bg ? 'background:' + opts.bg + ';' : ''}"><span>${label}</span><span style="${opts && opts.color ? 'color:' + opts.color + ';' : ''}">${f(val)} ر.س</span></div>`;
+            const line = (label, val, opts) => `<div style="display:flex;justify-content:space-between;padding:8px 4px;border-bottom:1px solid var(--border);${opts && opts.bold ? 'font-weight:800;font-size:15px;' : ''}${opts && opts.bg ? 'background:' + opts.bg + ';' : ''}"><span>${label}</span><span style="${opts && opts.color ? 'color:' + opts.color + ';' : ''}">${f(val)} ج.م</span></div>`;
             el.innerHTML =
                 line(`إجمالي المبيعات بالسعر الكامل (${ps.count} فاتورة)`, ps.gross) +
                 line('− خصم نقاط الولاء', -ps.discount, { color: 'var(--danger)' }) +
@@ -11346,7 +11487,7 @@
 
         // ==================== حسابات الخزنة (نقدية / بنك) + التزام نقاط الولاء ====================
         function renderTreasuryAccounts() {
-            const f = n => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ر.س';
+            const f = n => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م';
             const c = document.getElementById('treasuryCashBalance'); if (c) c.textContent = f(getTreasuryBalance('cash'));
             const b = document.getElementById('treasuryBankBalance'); if (b) b.textContent = f(getTreasuryBalance('bank'));
         }
@@ -11374,7 +11515,7 @@
             db.collection('customerLoyaltyPoints').get().then(snap => {
                 const pts = snap.docs.reduce((s, d) => s + (Number((d.data() || {}).points) || 0), 0);
                 const pv = Number(loyaltySettings.pointValue) || 1;
-                el.textContent = (pts * pv).toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' ر.س';
+                el.textContent = (pts * pv).toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' ج.م';
                 el.title = pts.toLocaleString('en-US') + ' نقطة × ' + pv;
             }).catch(e => { console.error(e); el.textContent = 'تعذر الحساب'; });
         }
@@ -11795,7 +11936,7 @@
         function calculateGrandTotal() {
             let grandTotal = 0;
             document.querySelectorAll('#invoiceItemsBody .total-field').forEach(t => grandTotal += parseFloat(t.value) || 0);
-            document.getElementById('invoiceGrandTotal').textContent = grandTotal.toFixed(2) + ' ر.س';
+            document.getElementById('invoiceGrandTotal').textContent = grandTotal.toFixed(2) + ' ج.م';
         }
 
         function removeInvoiceRow(btn) {
@@ -11844,7 +11985,7 @@
                     const currentBalance = getCustomerBalance(customerCode);
                     const balanceAfter = currentBalance + grandTotal;
                     if (balanceAfter > cust.creditLimit) {
-                        if (!confirm(`تنبيه: هذه الفاتورة ستتجاوز الحد الائتماني للعميل "${cust.name}"\nالرصيد الحالي: ${currentBalance.toFixed(2)} ر.س\nالحد الائتماني: ${cust.creditLimit.toFixed(2)} ر.س\nالرصيد بعد الفاتورة: ${balanceAfter.toFixed(2)} ر.س\n\nهل تريد المتابعة رغم ذلك؟`)) {
+                        if (!confirm(`تنبيه: هذه الفاتورة ستتجاوز الحد الائتماني للعميل "${cust.name}"\nالرصيد الحالي: ${currentBalance.toFixed(2)} ج.م\nالحد الائتماني: ${cust.creditLimit.toFixed(2)} ج.م\nالرصيد بعد الفاتورة: ${balanceAfter.toFixed(2)} ج.م\n\nهل تريد المتابعة رغم ذلك؟`)) {
                             return;
                         }
                     }
@@ -11891,7 +12032,7 @@
                 if (num !== invoice.number) { invoice.number = num; localStorage.setItem('invoices', JSON.stringify(invoices)); if (db) db.collection('invoiceRecords').doc(String(invoice.id)).set(invoice, { merge: true }).catch(function() {}); try { renderInvoices(); } catch (e) {} }
             });
             if (db) db.collection('invoiceRecords').doc(String(invoice.id)).set(invoice).catch(function(e) { console.error('invoice sync failed:', e); showToast('تعذر رفع الفاتورة للسحابة (' + (e && e.code ? e.code : e) + ')', 'error', 8000); });
-            logAction('فاتورة بيع', `تم إنشاء فاتورة بيع #${invoice.number} للعميل ${invoice.customerName} بقيمة ${grandTotal.toFixed(2)} ر.س`);
+            logAction('فاتورة بيع', `تم إنشاء فاتورة بيع #${invoice.number} للعميل ${invoice.customerName} بقيمة ${grandTotal.toFixed(2)} ج.م`);
             showToast('تم حفظ الفاتورة وخصم المخزون بنجاح');
             resetInvoice(); updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderTopProducts(); renderPaymentSummary(); updateSalesChart(); renderInventory(); renderMovements(); renderLowStock(); renderTreasury();
         }
@@ -11905,7 +12046,7 @@
             document.getElementById('invoiceNotes').value = '';
             document.getElementById('customerBalanceInfo').style.display = 'none';
             document.getElementById('invoiceItemsBody').innerHTML = '';
-            document.getElementById('invoiceGrandTotal').textContent = '0 ر.س';
+            document.getElementById('invoiceGrandTotal').textContent = '0 ج.م';
             addInvoiceRow();
             clearInvoiceDraft('sale');
         }
@@ -11973,7 +12114,7 @@
         function calculatePurchaseGrandTotal() {
             let grandTotal = 0;
             document.querySelectorAll('#purchaseItemsBody .total-field').forEach(t => grandTotal += parseFloat(t.value) || 0);
-            document.getElementById('purchaseGrandTotal').textContent = grandTotal.toFixed(2) + ' ر.س';
+            document.getElementById('purchaseGrandTotal').textContent = grandTotal.toFixed(2) + ' ج.م';
         }
 
         function removePurchaseRow(btn) {
@@ -11989,7 +12130,7 @@
             const supplierInvoiceNo = document.getElementById('purchaseSupplierInvoice').value.trim();
             if (supplierInvoiceNo) {
                 const dupInv = purchaseInvoices.find(inv => inv.supplierCode === supplierCode && normalizeArabicText(inv.supplierInvoice) === normalizeArabicText(supplierInvoiceNo));
-                if (dupInv && !confirm(`تنبيه: فاتورة المورد رقم "${supplierInvoiceNo}" اتسجلت قبل كده\nفي فاتورة الشراء #${dupInv.number} بتاريخ ${new Date(dupInv.date).toLocaleDateString('ar-EG')} بقيمة ${Number(dupInv.grandTotal || 0).toFixed(2)} ر.س\n\nلو سجلتها تاني المخزون هيتزود مرتين. متأكد إنك عايز تسجلها؟`)) return;
+                if (dupInv && !confirm(`تنبيه: فاتورة المورد رقم "${supplierInvoiceNo}" اتسجلت قبل كده\nفي فاتورة الشراء #${dupInv.number} بتاريخ ${new Date(dupInv.date).toLocaleDateString('ar-EG')} بقيمة ${Number(dupInv.grandTotal || 0).toFixed(2)} ج.م\n\nلو سجلتها تاني المخزون هيتزود مرتين. متأكد إنك عايز تسجلها؟`)) return;
             }
             const items = []; let hasItems = false; let badQty = false, badCost = false, zeroCost = 0;
             document.querySelectorAll('#purchaseItemsBody tr').forEach(row => {
@@ -12025,7 +12166,7 @@
             document.getElementById('purchaseNotes').value = '';
             document.getElementById('supplierBalanceInfo').style.display = 'none';
             document.getElementById('purchaseItemsBody').innerHTML = '';
-            document.getElementById('purchaseGrandTotal').textContent = '0 ر.س';
+            document.getElementById('purchaseGrandTotal').textContent = '0 ج.م';
             addPurchaseRow();
             clearInvoiceDraft('purchase');
             editingPurchaseDraftId = null;
@@ -12057,7 +12198,7 @@
                 const salesman = isSale ? (inv.salesmanName || '-') : '-';
                 return `<tr><td><span class="badge ${isSale ? 'badge-primary' : 'badge-teal'}">#${inv.number}</span></td>
                 <td>${typeBadge}</td><td>${date}</td><td><strong>${party}</strong></td>
-                <td>${salesman}</td><td>${inv.items.length}</td><td><strong style="color:${isSale ? 'var(--accent)' : 'var(--teal)'};">${inv.grandTotal.toFixed(2)} ر.س</strong></td>
+                <td>${salesman}</td><td>${inv.items.length}</td><td><strong style="color:${isSale ? 'var(--accent)' : 'var(--teal)'};">${inv.grandTotal.toFixed(2)} ج.م</strong></td>
                 <td><button class="btn btn-primary btn-icon btn-sm" onclick='viewInvoice(${inv.id}, "${inv.type}")'><i class="fas fa-eye"></i></button>
                 <button class="btn btn-warning btn-icon btn-sm admin-only" onclick='openEditInvoiceModal(${inv.id}, "${inv.type}")'><i class="fas fa-edit"></i></button>
                 <button class="btn btn-danger btn-icon btn-sm admin-only" onclick="deleteAnyInvoice(${inv.id}, '${inv.type}')"><i class="fas fa-trash"></i></button></td></tr>`;
@@ -12080,7 +12221,7 @@
                 const pmBadge = isSale ? (inv.paymentMethod === 'آجل' ? 'badge-danger' : (inv.paymentMethod === 'نقدي' ? 'badge-success' : 'badge-info')) : 'badge-teal';
                 return `<tr><td>#${inv.number}</td><td>${typeBadge}</td><td>${date}</td><td>${party}</td><td>${salesman}</td>
                 <td><span class="badge ${pmBadge}">${inv.paymentMethod}</span></td>
-                <td><strong>${inv.grandTotal.toFixed(2)} ر.س</strong></td><td><span class="badge badge-success">مكتملة</span></td></tr>`;
+                <td><strong>${inv.grandTotal.toFixed(2)} ج.م</strong></td><td><span class="badge badge-success">مكتملة</span></td></tr>`;
             }).join('');
         }
 
@@ -12173,8 +12314,8 @@
                 grandTotal += total;
                 return `<tr><td><strong>${item.productName}</strong></td>
                 <td><input type="number" class="form-control" style="width:90px;" value="${item.qty}" min="0" onchange="updateEditInvoiceItemQty(${idx}, this.value)"></td>
-                <td>${item.price.toFixed(2)} ر.س</td>
-                <td>${total.toFixed(2)} ر.س</td>
+                <td>${item.price.toFixed(2)} ج.م</td>
+                <td>${total.toFixed(2)} ج.م</td>
                 <td><button class="btn btn-danger btn-icon btn-sm" onclick="removeEditInvoiceItem(${idx})"><i class="fas fa-trash"></i></button></td></tr>`;
             }).join('') || `<tr><td colspan="5" class="empty-state"><h3>لا توجد أصناف</h3></td></tr>`;
             document.getElementById('editInvoiceGrandTotal').textContent = grandTotal.toFixed(2);
@@ -12342,11 +12483,11 @@
                     </table>
                     <div style="text-align:left;margin-top:20px;padding-top:15px;border-top:2px dashed #ddd;">
                         ${orderDiscount > 0 ? `
-                        <div style="font-size:14px;color:#555;margin-bottom:4px;">إجمالي الأصناف: ${itemsTotal.toFixed(2)} ر.س</div>
-                        <div style="font-size:14px;color:#8b1e1e;margin-bottom:8px;">خصم (نقاط ولاء): -${orderDiscount.toFixed(2)} ر.س</div>
+                        <div style="font-size:14px;color:#555;margin-bottom:4px;">إجمالي الأصناف: ${itemsTotal.toFixed(2)} ج.م</div>
+                        <div style="font-size:14px;color:#8b1e1e;margin-bottom:8px;">خصم (نقاط ولاء): -${orderDiscount.toFixed(2)} ج.م</div>
                         ` : ''}
                         <div style="font-size:20px;font-weight:800;color:#8b1e1e;">
-                        الإجمالي الكلي: ${grandTotal.toFixed(2)} ر.س
+                        الإجمالي الكلي: ${grandTotal.toFixed(2)} ج.م
                         </div>
                     </div>
                 </div>
@@ -12654,11 +12795,11 @@
                     </table>
                     <div style="text-align:left;margin-top:20px;padding-top:15px;border-top:2px dashed #ddd;">
                         ${invoice.discount > 0 ? `
-                        <div style="font-size:14px;color:#555;margin-bottom:4px;">إجمالي الأصناف: ${invoice.items.reduce((s, it) => s + (it.total || 0), 0).toFixed(2)} ر.س</div>
-                        <div style="font-size:14px;color:#8b1e1e;margin-bottom:8px;">خصم${invoice.notes && invoice.notes.includes('نقاط ولاء') ? ' (نقاط ولاء)' : ''}: -${invoice.discount.toFixed(2)} ر.س</div>
+                        <div style="font-size:14px;color:#555;margin-bottom:4px;">إجمالي الأصناف: ${invoice.items.reduce((s, it) => s + (it.total || 0), 0).toFixed(2)} ج.م</div>
+                        <div style="font-size:14px;color:#8b1e1e;margin-bottom:8px;">خصم${invoice.notes && invoice.notes.includes('نقاط ولاء') ? ' (نقاط ولاء)' : ''}: -${invoice.discount.toFixed(2)} ج.م</div>
                         ` : ''}
                         <div style="font-size:20px;font-weight:800;color:#8b1e1e;">
-                        الإجمالي الكلي: ${invoice.grandTotal.toFixed(2)} ر.س
+                        الإجمالي الكلي: ${invoice.grandTotal.toFixed(2)} ج.م
                         </div>
                     </div>
                     ${invoice.notes ? `<div style="margin-top:10px;font-size:13px;color:#888;">ملاحظات: ${invoice.notes}</div>` : ''}
@@ -12689,7 +12830,7 @@
             if (!select) return;
             const saleInvoices = invoices.slice().sort((a, b) => b.id - a.id);
             select.innerHTML = '<option value="">اختر الفاتورة...</option>' + saleInvoices.map(inv =>
-                `<option value="${inv.id}">#${inv.number} - ${inv.customerName} - ${inv.grandTotal.toFixed(2)} ر.س</option>`).join('');
+                `<option value="${inv.id}">#${inv.number} - ${inv.customerName} - ${inv.grandTotal.toFixed(2)} ج.م</option>`).join('');
         }
 
         function loadSalesReturnItems() {
@@ -12743,7 +12884,7 @@
             document.querySelectorAll('#salesReturnItemsBody tr').forEach(row => {
                 total += parseFloat(row.querySelector('.return-total-field').textContent) || 0;
             });
-            document.getElementById('salesReturnGrandTotal').textContent = total.toFixed(2) + ' ر.س';
+            document.getElementById('salesReturnGrandTotal').textContent = total.toFixed(2) + ' ج.م';
         }
 
         function saveSalesReturn() {
@@ -12799,7 +12940,7 @@
                 if (num !== ret.number) { ret.number = num; saveSalesReturns(); try { renderSalesReturns && renderSalesReturns(); } catch (e) {} }
             });
             saveSalesReturns();
-            logAction('مرتجع بيع', `تم تسجيل مرتجع بيع #${ret.number} لفاتورة #${invoice.number} - العميل ${invoice.customerName} بقيمة ${grandTotal.toFixed(2)} ر.س`);
+            logAction('مرتجع بيع', `تم تسجيل مرتجع بيع #${ret.number} لفاتورة #${invoice.number} - العميل ${invoice.customerName} بقيمة ${grandTotal.toFixed(2)} ج.م`);
             showToast('تم حفظ مرتجع البيع وتحديث المخزون والحسابات بنجاح');
             resetSalesReturnForm();
             renderSalesReturns(); renderCustomers(); updateDashboardStats(); renderInventory(); renderMovements(); renderLowStock(); renderTreasury(); renderProfitData();
@@ -12826,7 +12967,7 @@
                 <td>#${r.originalInvoiceNumber}</td>
                 <td><strong>${r.customerName}</strong></td>
                 <td>${r.items.length}</td>
-                <td><strong style="color:var(--danger);">${r.grandTotal.toFixed(2)} ر.س</strong></td>
+                <td><strong style="color:var(--danger);">${r.grandTotal.toFixed(2)} ج.م</strong></td>
                 <td><button class="btn btn-danger btn-icon btn-sm" onclick="deleteSalesReturn(${r.id})"><i class="fas fa-trash"></i></button></td>
             </tr>`).join('');
         }
@@ -12868,7 +13009,7 @@
             if (!select) return;
             const list = purchaseInvoices.slice().sort((a, b) => b.id - a.id);
             select.innerHTML = '<option value="">اختر الفاتورة...</option>' + list.map(inv =>
-                `<option value="${inv.id}">#${inv.number} - ${inv.supplier} - ${inv.grandTotal.toFixed(2)} ر.س</option>`).join('');
+                `<option value="${inv.id}">#${inv.number} - ${inv.supplier} - ${inv.grandTotal.toFixed(2)} ج.م</option>`).join('');
         }
 
         function loadPurchaseReturnItems() {
@@ -12921,7 +13062,7 @@
             document.querySelectorAll('#purchaseReturnItemsBody tr').forEach(row => {
                 total += parseFloat(row.querySelector('.return-total-field').textContent) || 0;
             });
-            document.getElementById('purchaseReturnGrandTotal').textContent = total.toFixed(2) + ' ر.س';
+            document.getElementById('purchaseReturnGrandTotal').textContent = total.toFixed(2) + ' ج.م';
         }
 
         function savePurchaseReturn() {
@@ -12974,7 +13115,7 @@
                 <td>#${r.originalInvoiceNumber}</td>
                 <td><strong>${r.supplierName}</strong></td>
                 <td>${r.items.length}</td>
-                <td><strong style="color:var(--teal);">${r.grandTotal.toFixed(2)} ر.س</strong></td>
+                <td><strong style="color:var(--teal);">${r.grandTotal.toFixed(2)} ج.م</strong></td>
                 <td><button class="btn btn-danger btn-icon btn-sm" onclick="deletePurchaseReturn(${r.id})"><i class="fas fa-trash"></i></button></td>
             </tr>`).join('');
         }
@@ -13012,8 +13153,8 @@
             const debtors = customers.map(c => ({ c, balance: getCustomerBalance(c.code) })).filter(x => x.balance > 0.001).sort((a, b) => b.balance - a.balance);
             const totalDebt = debtors.reduce((s, x) => s + x.balance, 0);
             const totalCollected = treasury.filter(t => t.type === 'in' && t.partyType === 'customer' && t.isDebtRelated !== false).reduce((s, t) => s + t.amount, 0);
-            document.getElementById('collTotalDebt').textContent = totalDebt.toFixed(2) + ' ر.س';
-            document.getElementById('collTotalCollected').textContent = totalCollected.toFixed(2) + ' ر.س';
+            document.getElementById('collTotalDebt').textContent = totalDebt.toFixed(2) + ' ج.م';
+            document.getElementById('collTotalCollected').textContent = totalCollected.toFixed(2) + ' ج.م';
             document.getElementById('collDebtorsCount').textContent = debtors.length;
 
             if (debtors.length === 0) {
@@ -13022,8 +13163,8 @@
                 tbody.innerHTML = debtors.map(x => `<tr>
                     <td><span class="badge badge-warning">${x.c.code}</span></td>
                     <td><strong>${x.c.name}</strong></td>
-                    <td><span class="customer-balance debtor">${x.balance.toFixed(2)} ر.س</span></td>
-                    <td>${getCustomerTotalCollected(x.c.code).toFixed(2)} ر.س</td>
+                    <td><span class="customer-balance debtor">${x.balance.toFixed(2)} ج.م</span></td>
+                    <td>${getCustomerTotalCollected(x.c.code).toFixed(2)} ج.م</td>
                     <td><button class="btn btn-success btn-sm" onclick="openCollectionModal('${x.c.code}')"><i class="fas fa-hand-holding-usd"></i> تحصيل</button></td>
                 </tr>`).join('');
             }
@@ -13038,8 +13179,8 @@
                     return `<tr>
                         <td>${new Date(t.date).toLocaleDateString('ar-SA')}</td>
                         <td><strong>${cust ? cust.name : t.party}</strong></td>
-                        <td style="color:var(--accent);font-weight:700;">${t.amount.toFixed(2)} ر.س</td>
-                        <td>${cust ? getCustomerBalance(cust.code).toFixed(2) : '-'} ر.س</td>
+                        <td style="color:var(--accent);font-weight:700;">${t.amount.toFixed(2)} ج.م</td>
+                        <td>${cust ? getCustomerBalance(cust.code).toFixed(2) : '-'} ج.م</td>
                         <td style="color:var(--text-light);font-size:13px;">${t.notes || '-'}</td>
                     </tr>`;
                 }).join('');
@@ -13064,7 +13205,7 @@
         function updateCollectionBalance() {
             const code = document.getElementById('collectionCustomer').value;
             const balance = code ? getCustomerBalance(code) : 0;
-            document.getElementById('collectionCurrentBalance').value = balance.toFixed(2) + ' ر.س';
+            document.getElementById('collectionCurrentBalance').value = balance.toFixed(2) + ' ج.م';
         }
 
         function fillFullCollectionAmount() {
@@ -13098,9 +13239,9 @@
 
             const sales = invoices;
             const sumSince = (since) => sales.filter(inv => new Date(inv.date) >= since).reduce((s, inv) => s + inv.grandTotal, 0);
-            trackTodaySalesEl.textContent = sumSince(startOfToday).toFixed(2) + ' ر.س';
-            document.getElementById('trackWeekSales').textContent = sumSince(startOfWeek).toFixed(2) + ' ر.س';
-            document.getElementById('trackMonthSales').textContent = sumSince(startOfMonth).toFixed(2) + ' ر.س';
+            trackTodaySalesEl.textContent = sumSince(startOfToday).toFixed(2) + ' ج.م';
+            document.getElementById('trackWeekSales').textContent = sumSince(startOfWeek).toFixed(2) + ' ج.م';
+            document.getElementById('trackMonthSales').textContent = sumSince(startOfMonth).toFixed(2) + ' ج.م';
 
             // Top customer by total sales
             const customerTotals = {};
@@ -13108,11 +13249,11 @@
             let topCustomerCode = null, topCustomerTotal = 0;
             Object.entries(customerTotals).forEach(([code, total]) => { if (total > topCustomerTotal) { topCustomerTotal = total; topCustomerCode = code; } });
             const topCustomer = topCustomerCode ? customers.find(c => c.code === topCustomerCode) : null;
-            document.getElementById('trackTopCustomer').textContent = topCustomer ? `${topCustomer.name} (${topCustomerTotal.toFixed(0)} ر.س)` : '-';
+            document.getElementById('trackTopCustomer').textContent = topCustomer ? `${topCustomer.name} (${topCustomerTotal.toFixed(0)} ج.م)` : '-';
 
             // Highest invoice
             const highest = sales.reduce((max, inv) => inv.grandTotal > max ? inv.grandTotal : max, 0);
-            document.getElementById('trackHighestInvoice').textContent = highest.toFixed(2) + ' ر.س';
+            document.getElementById('trackHighestInvoice').textContent = highest.toFixed(2) + ' ج.م';
 
             // Overdue customers (balance > 0)
             const overdue = customers.map(c => ({ c, balance: getCustomerBalance(c.code) })).filter(x => x.balance > 0.001).sort((a, b) => b.balance - a.balance);
@@ -13120,16 +13261,16 @@
             const overdueTable = document.getElementById('trackOverdueTable');
             overdueTable.innerHTML = overdue.length === 0
                 ? `<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text-light);">لا يوجد عملاء متأخرون</td></tr>`
-                : overdue.map(x => `<tr><td><span class="badge badge-warning">${x.c.code}</span></td><td><strong>${x.c.name}</strong></td><td><span class="customer-balance debtor">${x.balance.toFixed(2)} ر.س</span></td><td>${x.c.phone || '-'}</td></tr>`).join('');
+                : overdue.map(x => `<tr><td><span class="badge badge-warning">${x.c.code}</span></td><td><strong>${x.c.name}</strong></td><td><span class="customer-balance debtor">${x.balance.toFixed(2)} ج.م</span></td><td>${x.c.phone || '-'}</td></tr>`).join('');
 
             // Uncollected آجل invoices (from customers with outstanding balance)
             const uncollected = sales.filter(inv => inv.paymentMethod === 'آجل' && getCustomerBalance(inv.customerCode) > 0.001).sort((a, b) => new Date(b.date) - new Date(a.date));
             document.getElementById('trackUncollectedCount').textContent = uncollected.length;
-            document.getElementById('trackUncollectedTotal').textContent = uncollected.reduce((s, inv) => s + inv.grandTotal, 0).toFixed(2) + ' ر.س';
+            document.getElementById('trackUncollectedTotal').textContent = uncollected.reduce((s, inv) => s + inv.grandTotal, 0).toFixed(2) + ' ج.م';
             const uncollectedTable = document.getElementById('trackUncollectedTable');
             uncollectedTable.innerHTML = uncollected.length === 0
                 ? `<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text-light);">لا توجد فواتير آجلة غير محصلة</td></tr>`
-                : uncollected.map(inv => `<tr><td><span class="badge badge-primary">#${inv.number}</span></td><td>${new Date(inv.date).toLocaleDateString('ar-SA')}</td><td><strong>${inv.customerName}</strong></td><td><strong style="color:var(--danger);">${inv.grandTotal.toFixed(2)} ر.س</strong></td></tr>`).join('');
+                : uncollected.map(inv => `<tr><td><span class="badge badge-primary">#${inv.number}</span></td><td>${new Date(inv.date).toLocaleDateString('ar-SA')}</td><td><strong>${inv.customerName}</strong></td><td><strong style="color:var(--danger);">${inv.grandTotal.toFixed(2)} ج.م</strong></td></tr>`).join('');
 
             // Top selling products (by qty)
             const productTotals = {};
@@ -13144,7 +13285,7 @@
                 ? `<li style="padding:15px;text-align:center;color:var(--text-light);">لا توجد بيانات مبيعات بعد</li>`
                 : topList.map((p, i) => `<li style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
                     <span><strong>${i + 1}.</strong> ${p.name}</span>
-                    <span style="color:var(--text-light);font-size:13px;">${p.qty} وحدة | ${p.total.toFixed(2)} ر.س</span>
+                    <span style="color:var(--text-light);font-size:13px;">${p.qty} وحدة | ${p.total.toFixed(2)} ج.م</span>
                 </li>`).join('');
         }
 
@@ -13287,16 +13428,16 @@
             renderProfitStatement(ps);
 
             // Update stats
-            document.getElementById('profitTotalProfit').textContent = totalProfit.toFixed(2) + ' ر.س';
-            document.getElementById('profitTotalSales').textContent = totalSales.toFixed(2) + ' ر.س';
-            document.getElementById('profitTotalCost').textContent = totalCost.toFixed(2) + ' ر.س';
-            document.getElementById('profitTotalExpenses').textContent = totalExpenses.toFixed(2) + ' ر.س';
+            document.getElementById('profitTotalProfit').textContent = totalProfit.toFixed(2) + ' ج.م';
+            document.getElementById('profitTotalSales').textContent = totalSales.toFixed(2) + ' ج.م';
+            document.getElementById('profitTotalCost').textContent = totalCost.toFixed(2) + ' ج.م';
+            document.getElementById('profitTotalExpenses').textContent = totalExpenses.toFixed(2) + ' ج.م';
             document.getElementById('profitMargin').textContent = margin + '%';
-            document.getElementById('profitNetAfterExpenses').textContent = netAfterExpenses.toFixed(2) + ' ر.س';
-            document.getElementById('profitCardProfit').textContent = totalProfit.toFixed(2) + ' ر.س';
+            document.getElementById('profitNetAfterExpenses').textContent = netAfterExpenses.toFixed(2) + ' ج.م';
+            document.getElementById('profitCardProfit').textContent = totalProfit.toFixed(2) + ' ج.م';
             document.getElementById('profitCardMargin').textContent = margin + '%';
-            document.getElementById('profitCardExpenses').textContent = totalExpenses.toFixed(2) + ' ر.س';
-            document.getElementById('profitCardNet').textContent = netAfterExpenses.toFixed(2) + ' ر.س';
+            document.getElementById('profitCardExpenses').textContent = totalExpenses.toFixed(2) + ' ج.م';
+            document.getElementById('profitCardNet').textContent = netAfterExpenses.toFixed(2) + ' ج.م';
 
             // Products table
             const pTbody = document.getElementById('profitProductsTable');
@@ -13310,16 +13451,16 @@
                         <td><span class="badge badge-primary">${Object.keys(productProfit).find(k => productProfit[k] === p)}</span></td>
                         <td><strong>${p.name}</strong></td><td>${p.unit}</td>
                         <td>${p.qty}</td>
-                        <td><strong>${p.sales.toFixed(2)} ر.س</strong></td>
-                        <td><span class="cost-highlight">${p.cost.toFixed(2)} ر.س</span></td>
-                        <td><span class="profit-highlight">${p.profit.toFixed(2)} ر.س</span></td>
+                        <td><strong>${p.sales.toFixed(2)} ج.م</strong></td>
+                        <td><span class="cost-highlight">${p.cost.toFixed(2)} ج.م</span></td>
+                        <td><span class="profit-highlight">${p.profit.toFixed(2)} ج.م</span></td>
                         <td><span class="margin-badge ${pMargin >= 30 ? 'high' : (pMargin >= 15 ? 'medium' : 'low')}">${pMargin}%</span></td>
                     </tr>`;
                 }).join('') + `<tr style="background:var(--profit);color:white;font-weight:700;">
                     <td colspan="4">الإجمالي العام</td>
-                    <td>${totalSales.toFixed(2)} ر.س</td>
-                    <td>${totalCost.toFixed(2)} ر.س</td>
-                    <td>${totalProfit.toFixed(2)} ر.س</td>
+                    <td>${totalSales.toFixed(2)} ج.م</td>
+                    <td>${totalCost.toFixed(2)} ج.م</td>
+                    <td>${totalProfit.toFixed(2)} ج.م</td>
                     <td>${margin}%</td>
                 </tr>`;
             }
@@ -13336,7 +13477,7 @@
                     return `<li><div class="top-product-info">
                         <div class="top-product-rank ${rankClass[i] || 'normal'}">${i + 1}</div>
                         <div><div class="top-product-name">${p.name}</div><div class="top-product-qty">${p.qty} وحدة مباعة</div></div>
-                    </div><div class="top-product-total" style="color:var(--profit);">${p.profit.toFixed(2)} ر.س <span style="font-size:12px;color:var(--text-light);">(${pMargin}%)</span></div></li>`;
+                    </div><div class="top-product-total" style="color:var(--profit);">${p.profit.toFixed(2)} ج.م <span style="font-size:12px;color:var(--text-light);">(${pMargin}%)</span></div></li>`;
                 }).join('');
             }
 
@@ -13349,9 +13490,9 @@
                 smTbody.innerHTML = smValues.map(s => {
                     const sMargin = s.sales > 0 ? ((s.profit / s.sales) * 100).toFixed(1) : 0;
                     return `<tr><td><strong>${s.name}</strong></td><td>${s.count}</td>
-                    <td><strong>${s.sales.toFixed(2)} ر.س</strong></td>
-                    <td><span class="cost-highlight">${s.cost.toFixed(2)} ر.س</span></td>
-                    <td><span class="profit-highlight">${s.profit.toFixed(2)} ر.س</span></td>
+                    <td><strong>${s.sales.toFixed(2)} ج.م</strong></td>
+                    <td><span class="cost-highlight">${s.cost.toFixed(2)} ج.م</span></td>
+                    <td><span class="profit-highlight">${s.profit.toFixed(2)} ج.م</span></td>
                     <td><span class="margin-badge ${sMargin >= 30 ? 'high' : (sMargin >= 15 ? 'medium' : 'low')}">${sMargin}%</span></td></tr>`;
                 }).join('');
             }
@@ -13365,9 +13506,9 @@
                 cTbody.innerHTML = cValues.map(c => {
                     const cMargin = c.sales > 0 ? ((c.profit / c.sales) * 100).toFixed(1) : 0;
                     return `<tr><td><strong>${c.name}</strong></td><td>${c.count}</td>
-                    <td><strong>${c.sales.toFixed(2)} ر.س</strong></td>
-                    <td><span class="cost-highlight">${c.cost.toFixed(2)} ر.س</span></td>
-                    <td><span class="profit-highlight">${c.profit.toFixed(2)} ر.س</span></td>
+                    <td><strong>${c.sales.toFixed(2)} ج.م</strong></td>
+                    <td><span class="cost-highlight">${c.cost.toFixed(2)} ج.م</span></td>
+                    <td><span class="profit-highlight">${c.profit.toFixed(2)} ج.م</span></td>
                     <td><span class="margin-badge ${cMargin >= 30 ? 'high' : (cMargin >= 15 ? 'medium' : 'low')}">${cMargin}%</span></td></tr>`;
                 }).join('');
             }
@@ -13394,7 +13535,7 @@
                 ]},
                 options: {
                     responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(context) { return context.parsed.y.toFixed(2) + ' ر.س'; } } } },
+                    plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(context) { return context.parsed.y.toFixed(2) + ' ج.م'; } } } },
                     scales: { y: { beginAtZero: true, ticks: { callback: function(value) { return value.toLocaleString('ar-SA'); } } }, x: { grid: { display: false } } }
                 }
             });
@@ -13498,16 +13639,16 @@
                     <td><strong>${r.name}</strong></td>
                     <td>${(r.share * 100).toFixed(1)}%</td>
                     <td>${Math.ceil(r.requiredUnits)} ${r.unit}</td>
-                    <td>${r.avgPrice.toFixed(2)} ر.س</td>
-                    <td style="font-weight:700;">${r.requiredRevenue.toFixed(2)} ر.س</td>
+                    <td>${r.avgPrice.toFixed(2)} ج.م</td>
+                    <td style="font-weight:700;">${r.requiredRevenue.toFixed(2)} ج.م</td>
                 </tr>
             `).join('');
 
-            document.getElementById('profitTargetTotalRevenue').textContent = totalRequiredRevenue.toFixed(2) + ' ر.س';
+            document.getElementById('profitTargetTotalRevenue').textContent = totalRequiredRevenue.toFixed(2) + ' ج.م';
             document.getElementById('profitTargetTotalUnits').textContent = Math.ceil(totalRequiredUnits);
             const totalHistQty = Object.values(stats).reduce((s, x) => s + x.qty, 0);
             document.getElementById('profitTargetBasisNote').textContent =
-                `* الحساب مبني على مزيج المبيعات وهامش الربح الفعلي من كل الفواتير المسجّلة في النظام حتى الآن (إجمالي ربح تاريخي: ${totalProfit.toFixed(2)} ر.س من ${totalHistQty.toFixed(0)} وحدة مباعة). لو مزيج مبيعاتك بيتغيّر بشكل كبير مستقبلاً، النتيجة هتحتاج مراجعة.`;
+                `* الحساب مبني على مزيج المبيعات وهامش الربح الفعلي من كل الفواتير المسجّلة في النظام حتى الآن (إجمالي ربح تاريخي: ${totalProfit.toFixed(2)} ج.م من ${totalHistQty.toFixed(0)} وحدة مباعة). لو مزيج مبيعاتك بيتغيّر بشكل كبير مستقبلاً، النتيجة هتحتاج مراجعة.`;
             resultsCard.style.display = 'block';
         }
 
@@ -13531,7 +13672,7 @@
             } else {
                 tbody.innerHTML = values.map(s => {
                     grandTotal += s.total;
-                    return `<tr><td><strong>${s.name}</strong></td><td>${s.unit}</td><td><strong style="color:var(--primary);">${s.qty}</strong></td><td><strong style="color:var(--accent);">${s.total.toFixed(2)} ر.س</strong></td></tr>`;
+                    return `<tr><td><strong>${s.name}</strong></td><td>${s.unit}</td><td><strong style="color:var(--primary);">${s.qty}</strong></td><td><strong style="color:var(--accent);">${s.total.toFixed(2)} ج.م</strong></td></tr>`;
                 }).join('');
             }
             document.getElementById('dailyShipmentGrandTotal').textContent = grandTotal.toFixed(2);
@@ -13545,7 +13686,7 @@
                 <h2 style="text-align:center;">بيان نهاية اليوم - كميات الأصناف المرسلة</h2>
                 <p>${dateLabel}</p>
                 <table style="width:100%;border-collapse:collapse;">${tableHtml}</table>
-                <h3 style="text-align:left;">الإجمالي المالي: ${grandTotal} ر.س</h3>
+                <h3 style="text-align:left;">الإجمالي المالي: ${grandTotal} ج.م</h3>
             </div>`);
         }
 
@@ -13561,14 +13702,14 @@
                     totalSales += item.total; totalQty += item.qty;
                 });
             });
-            document.getElementById('reportTotalSales').textContent = totalSales.toFixed(2) + ' ر.س';
+            document.getElementById('reportTotalSales').textContent = totalSales.toFixed(2) + ' ج.م';
             document.getElementById('reportTotalQty').textContent = totalQty;
 
             const totalPurchases = purchaseInvoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
-            document.getElementById('reportTotalPurchases').textContent = totalPurchases.toFixed(2) + ' ر.س';
+            document.getElementById('reportTotalPurchases').textContent = totalPurchases.toFixed(2) + ' ج.م';
 
             const allPs = profitSummary(0, Date.now() + 86400000);
-            document.getElementById('reportTotalProfit').textContent = allPs.grossProfit.toFixed(2) + ' ر.س';
+            document.getElementById('reportTotalProfit').textContent = allPs.grossProfit.toFixed(2) + ' ج.م';
 
             const tbody = document.getElementById('salesSummaryTable');
             const values = Object.values(summary);
@@ -13576,9 +13717,9 @@
                 tbody.innerHTML = `<tr><td colspan="5" class="empty-state"><i class="fas fa-chart-pie"></i><h3>لا توجد بيانات مبيعات</h3></td></tr>`;
             } else {
                 tbody.innerHTML = values.map(s => `
-                    <tr><td><strong>${s.name}</strong></td><td>${s.unit}</td><td>${s.price.toFixed(2)} ر.س</td>
-                    <td><strong style="color:var(--primary);">${s.qty}</strong></td><td><strong style="color:var(--accent);">${s.total.toFixed(2)} ر.س</strong></td></tr>
-                `).join('') + `<tr style="background:var(--primary);color:white;font-weight:700;"><td colspan="3">الإجمالي العام</td><td>${totalQty}</td><td>${totalSales.toFixed(2)} ر.س</td></tr>`;
+                    <tr><td><strong>${s.name}</strong></td><td>${s.unit}</td><td>${s.price.toFixed(2)} ج.م</td>
+                    <td><strong style="color:var(--primary);">${s.qty}</strong></td><td><strong style="color:var(--accent);">${s.total.toFixed(2)} ج.م</strong></td></tr>
+                `).join('') + `<tr style="background:var(--primary);color:white;font-weight:700;"><td colspan="3">الإجمالي العام</td><td>${totalQty}</td><td>${totalSales.toFixed(2)} ج.م</td></tr>`;
             }
             const salesmanSummary = {};
             invoices.forEach(inv => {
@@ -13592,7 +13733,7 @@
             if (smValues.length === 0) {
                 smTbody.innerHTML = `<tr><td colspan="3" class="empty-state"><i class="fas fa-user-chart"></i><h3>لا توجد بيانات مناديب</h3></td></tr>`;
             } else {
-                smTbody.innerHTML = smValues.map(s => `<tr><td><strong>${s.name}</strong></td><td>${s.count}</td><td><strong style="color:var(--accent);">${s.total.toFixed(2)} ر.س</strong></td></tr>`).join('');
+                smTbody.innerHTML = smValues.map(s => `<tr><td><strong>${s.name}</strong></td><td>${s.count}</td><td><strong style="color:var(--accent);">${s.total.toFixed(2)} ج.م</strong></td></tr>`).join('');
             }
 
             const purchaseSummary = {}; 
@@ -13610,7 +13751,7 @@
             if (pValues.length === 0) {
                 pTbody.innerHTML = `<tr><td colspan="4" class="empty-state"><i class="fas fa-cart-plus"></i><h3>لا توجد بيانات مشتريات</h3></td></tr>`;
             } else {
-                pTbody.innerHTML = pValues.map(s => `<tr><td><strong>${s.name}</strong></td><td>${s.unit}</td><td><strong style="color:var(--teal);">${s.qty}</strong></td><td><strong style="color:var(--teal);">${s.total.toFixed(2)} ر.س</strong></td></tr>`).join('');
+                pTbody.innerHTML = pValues.map(s => `<tr><td><strong>${s.name}</strong></td><td>${s.unit}</td><td><strong style="color:var(--teal);">${s.qty}</strong></td><td><strong style="color:var(--teal);">${s.total.toFixed(2)} ج.م</strong></td></tr>`).join('');
             }
 
             // تقرير المبيعات حسب القسم
@@ -13634,7 +13775,7 @@
                     const grandTotal = catValues.reduce((s, [, v]) => s + v.total, 0);
                     catTbody.innerHTML = catValues.map(([cat, v]) => {
                         const pct = grandTotal > 0 ? ((v.total / grandTotal) * 100).toFixed(1) : 0;
-                        return `<tr><td><strong>${cat}</strong></td><td>${v.qty}</td><td><strong style="color:var(--accent);">${v.total.toFixed(2)} ر.س</strong></td><td>${pct}%</td></tr>`;
+                        return `<tr><td><strong>${cat}</strong></td><td>${v.qty}</td><td><strong style="color:var(--accent);">${v.total.toFixed(2)} ج.م</strong></td><td>${pct}%</td></tr>`;
                     }).join('');
                 }
             }
@@ -13739,9 +13880,9 @@
             tbody.innerHTML = entries.map(([period, g]) => `<tr>
                 <td><strong>${period}</strong></td>
                 <td>${g.count}</td>
-                <td>${g.sales.toFixed(2)} ر.س</td>
-                <td>${g.cost.toFixed(2)} ر.س</td>
-                <td><strong style="color:var(--profit);">${g.profit.toFixed(2)} ر.س</strong></td>
+                <td>${g.sales.toFixed(2)} ج.م</td>
+                <td>${g.cost.toFixed(2)} ج.م</td>
+                <td><strong style="color:var(--profit);">${g.profit.toFixed(2)} ج.م</strong></td>
             </tr>`).join('');
         }
 
@@ -13766,9 +13907,9 @@
             tbody.innerHTML = entries.map(([code, d]) => `<tr>
                 <td><strong>${d.name}</strong></td>
                 <td>${d.count}</td>
-                <td>${d.sales.toFixed(2)} ر.س</td>
-                <td style="color:var(--profit);">${d.profit.toFixed(2)} ر.س</td>
-                <td><span class="customer-balance ${getCustomerBalance(code) > 0 ? 'debtor' : 'zero'}">${getCustomerBalance(code).toFixed(2)} ر.س</span></td>
+                <td>${d.sales.toFixed(2)} ج.م</td>
+                <td style="color:var(--profit);">${d.profit.toFixed(2)} ج.م</td>
+                <td><span class="customer-balance ${getCustomerBalance(code) > 0 ? 'debtor' : 'zero'}">${getCustomerBalance(code).toFixed(2)} ج.م</span></td>
             </tr>`).join('');
         }
 
@@ -13793,7 +13934,7 @@
                 <td><strong>${p.name}</strong></td>
                 <td>${p.unit}</td>
                 <td><strong style="color:var(--primary);">${p.qty}</strong></td>
-                <td>${p.total.toFixed(2)} ر.س</td>
+                <td>${p.total.toFixed(2)} ج.م</td>
             </tr>`).join('');
         }
 
@@ -13833,8 +13974,8 @@
             }
             tbody.innerHTML = entries.map(([type, d]) => {
                 const pct = total > 0 ? ((d.total / total) * 100).toFixed(1) : 0;
-                return `<tr><td><strong>${type}</strong></td><td>${d.count}</td><td style="color:var(--danger);">${d.total.toFixed(2)} ر.س</td><td>${pct}%</td></tr>`;
-            }).join('') + `<tr style="background:#e67e22;color:white;font-weight:700;"><td colspan="2">الإجمالي</td><td>${total.toFixed(2)} ر.س</td><td>100%</td></tr>`;
+                return `<tr><td><strong>${type}</strong></td><td>${d.count}</td><td style="color:var(--danger);">${d.total.toFixed(2)} ج.م</td><td>${pct}%</td></tr>`;
+            }).join('') + `<tr style="background:#e67e22;color:white;font-weight:700;"><td colspan="2">الإجمالي</td><td>${total.toFixed(2)} ج.م</td><td>100%</td></tr>`;
         }
 
         function renderTreasuryReportTable() {
@@ -13842,9 +13983,9 @@
             if (!tbody) return;
             const totalIn = treasury.filter(t => t.type === 'in').reduce((s, t) => s + t.amount, 0);
             const totalOut = treasury.filter(t => t.type === 'out').reduce((s, t) => s + t.amount, 0);
-            document.getElementById('treasReportTotalIn').textContent = totalIn.toFixed(2) + ' ر.س';
-            document.getElementById('treasReportTotalOut').textContent = totalOut.toFixed(2) + ' ر.س';
-            document.getElementById('treasReportNet').textContent = (totalIn - totalOut).toFixed(2) + ' ر.س';
+            document.getElementById('treasReportTotalIn').textContent = totalIn.toFixed(2) + ' ج.م';
+            document.getElementById('treasReportTotalOut').textContent = totalOut.toFixed(2) + ' ج.م';
+            document.getElementById('treasReportNet').textContent = (totalIn - totalOut).toFixed(2) + ' ج.م';
 
             const summary = {};
             treasury.forEach(t => {
@@ -13860,8 +14001,8 @@
             }
             tbody.innerHTML = entries.map(([label, d]) => `<tr>
                 <td><strong>${label}</strong></td><td>${d.count}</td>
-                <td style="color:var(--accent);">${d.in > 0 ? d.in.toFixed(2) + ' ر.س' : '-'}</td>
-                <td style="color:var(--danger);">${d.out > 0 ? d.out.toFixed(2) + ' ر.س' : '-'}</td>
+                <td style="color:var(--accent);">${d.in > 0 ? d.in.toFixed(2) + ' ج.م' : '-'}</td>
+                <td style="color:var(--danger);">${d.out > 0 ? d.out.toFixed(2) + ' ج.م' : '-'}</td>
             </tr>`).join('');
         }
 
@@ -13872,10 +14013,10 @@
             const totalSuppliersDebt = suppliers.reduce((s, sup) => s + Math.max(0, getSupplierBalance(sup.code)), 0);
             const totalCollected = treasury.filter(t => t.type === 'in' && t.partyType === 'customer' && t.isDebtRelated !== false).reduce((s, t) => s + t.amount, 0);
             const totalPaid = treasury.filter(t => t.type === 'out' && t.partyType === 'supplier' && t.isDebtRelated !== false).reduce((s, t) => s + t.amount, 0);
-            document.getElementById('debtsReportCustomers').textContent = totalCustomersDebt.toFixed(2) + ' ر.س';
-            document.getElementById('debtsReportSuppliers').textContent = totalSuppliersDebt.toFixed(2) + ' ر.س';
-            document.getElementById('debtsReportCollected').textContent = totalCollected.toFixed(2) + ' ر.س';
-            document.getElementById('debtsReportPaid').textContent = totalPaid.toFixed(2) + ' ر.س';
+            document.getElementById('debtsReportCustomers').textContent = totalCustomersDebt.toFixed(2) + ' ج.م';
+            document.getElementById('debtsReportSuppliers').textContent = totalSuppliersDebt.toFixed(2) + ' ج.م';
+            document.getElementById('debtsReportCollected').textContent = totalCollected.toFixed(2) + ' ج.م';
+            document.getElementById('debtsReportPaid').textContent = totalPaid.toFixed(2) + ' ج.م';
 
             const rows = customers.map(c => {
                 const creditSales = invoices.filter(inv => inv.customerCode === c.code && inv.paymentMethod === 'آجل').reduce((s, inv) => s + inv.grandTotal, 0);
@@ -13890,9 +14031,9 @@
             }
             tbody.innerHTML = rows.map(r => `<tr>
                 <td><strong>${r.name}</strong></td>
-                <td>${r.creditSales.toFixed(2)} ر.س</td>
-                <td style="color:var(--accent);">${r.collected.toFixed(2)} ر.س</td>
-                <td><span class="customer-balance ${r.balance > 0.001 ? 'debtor' : (r.balance < -0.001 ? 'creditor' : 'zero')}">${r.balance.toFixed(2)} ر.س</span></td>
+                <td>${r.creditSales.toFixed(2)} ج.م</td>
+                <td style="color:var(--accent);">${r.collected.toFixed(2)} ج.م</td>
+                <td><span class="customer-balance ${r.balance > 0.001 ? 'debtor' : (r.balance < -0.001 ? 'creditor' : 'zero')}">${r.balance.toFixed(2)} ج.م</span></td>
             </tr>`).join('');
         }
 
@@ -13982,9 +14123,9 @@
                 trendText = 'لا توجد بيانات كافية';
             }
 
-            document.getElementById('forecastDailyAvg').textContent = avgDaily.toFixed(2) + ' ر.س';
-            document.getElementById('forecastNextWeek').textContent = weekForecast.toFixed(2) + ' ر.س';
-            document.getElementById('forecastNextMonth').textContent = monthForecast.toFixed(2) + ' ر.س';
+            document.getElementById('forecastDailyAvg').textContent = avgDaily.toFixed(2) + ' ج.م';
+            document.getElementById('forecastNextWeek').textContent = weekForecast.toFixed(2) + ' ج.م';
+            document.getElementById('forecastNextMonth').textContent = monthForecast.toFixed(2) + ' ج.م';
             const trendEl = document.getElementById('forecastTrend');
             trendEl.textContent = trendText;
             trendEl.style.color = trendColor;
@@ -14052,10 +14193,10 @@
             }
             tbody.innerHTML = rows.slice(0, 20).map(r => `<tr>
                 <td><strong>${r.name}</strong></td>
-                <td>${r.cost.toFixed(2)} ر.س</td>
-                <td>${r.currentPrice.toFixed(2)} ر.س</td>
+                <td>${r.cost.toFixed(2)} ج.م</td>
+                <td>${r.currentPrice.toFixed(2)} ج.م</td>
                 <td>${r.margin !== null ? (r.margin * 100).toFixed(1) + '%' : '-'}</td>
-                <td><strong style="color:${r.suggestedPrice > r.currentPrice ? 'var(--accent)' : 'var(--danger)'};">${r.suggestedPrice.toFixed(2)} ر.س</strong></td>
+                <td><strong style="color:${r.suggestedPrice > r.currentPrice ? 'var(--accent)' : 'var(--danger)'};">${r.suggestedPrice.toFixed(2)} ج.م</strong></td>
             </tr>`).join('');
         }
 
@@ -14088,7 +14229,7 @@
             tbody.innerHTML = rows.map(r => `<tr>
                 <td><strong>${r.name}</strong></td>
                 <td>${r.currentStock} ${r.unit}</td>
-                <td style="color:var(--danger);">${r.stockValue.toFixed(2)} ر.س</td>
+                <td style="color:var(--danger);">${r.stockValue.toFixed(2)} ج.م</td>
                 <td>${r.lastSale ? new Date(r.lastSale).toLocaleDateString('ar-SA') : 'لم يُباع مطلقًا'}</td>
                 <td><span class="badge badge-danger">${r.daysSince === Infinity ? 'بدون مبيعات' : r.daysSince + ' يوم بدون بيع'}</span></td>
             </tr>`).join('');
@@ -14119,8 +14260,8 @@
                 return `<tr>
                     <td><strong>${i + 1}</strong></td>
                     <td><strong>${r.name}</strong></td>
-                    <td>${r.sales.toFixed(2)} ر.س</td>
-                    <td style="color:var(--profit);font-weight:700;">${r.profit.toFixed(2)} ر.س</td>
+                    <td>${r.sales.toFixed(2)} ج.م</td>
+                    <td style="color:var(--profit);font-weight:700;">${r.profit.toFixed(2)} ج.م</td>
                     <td>${margin.toFixed(1)}%</td>
                     <td>${badge}</td>
                 </tr>`;
@@ -14151,9 +14292,9 @@
                     <td>${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1)}</td>
                     <td><strong>${r.name}</strong></td>
                     <td>${r.count}</td>
-                    <td>${r.sales.toFixed(2)} ر.س</td>
-                    <td style="color:var(--profit);font-weight:700;">${r.profit.toFixed(2)} ر.س</td>
-                    <td>${avgInvoice.toFixed(2)} ر.س</td>
+                    <td>${r.sales.toFixed(2)} ج.م</td>
+                    <td style="color:var(--profit);font-weight:700;">${r.profit.toFixed(2)} ج.م</td>
+                    <td>${avgInvoice.toFixed(2)} ج.م</td>
                     <td>${margin.toFixed(1)}%</td>
                 </tr>`;
             }).join('');
@@ -14270,17 +14411,17 @@
             let totalInventoryQty = 0;
             Object.values(inventory).forEach(inv => totalInventoryQty += inv.qty || 0);
 
-            document.getElementById('totalSales').textContent = totalSales.toFixed(2) + ' ر.س';
-            document.getElementById('totalPurchases').textContent = totalPurchases.toFixed(2) + ' ر.س';
-            document.getElementById('totalProfit').textContent = netProfit.toFixed(2) + ' ر.س';
-            document.getElementById('totalExpenses').textContent = totalExpenses.toFixed(2) + ' ر.س';
+            document.getElementById('totalSales').textContent = totalSales.toFixed(2) + ' ج.م';
+            document.getElementById('totalPurchases').textContent = totalPurchases.toFixed(2) + ' ج.م';
+            document.getElementById('totalProfit').textContent = netProfit.toFixed(2) + ' ج.م';
+            document.getElementById('totalExpenses').textContent = totalExpenses.toFixed(2) + ' ج.م';
             document.getElementById('totalSalesLabel').textContent = 'إجمالي المبيعات' + periodLabel;
             document.getElementById('totalPurchasesLabel').textContent = 'إجمالي المشتريات' + periodLabel;
             document.getElementById('totalProfitLabel').textContent = 'صافي الربح بعد المصروفات' + periodLabel;
             document.getElementById('totalExpensesLabel').textContent = 'إجمالي المصروفات' + periodLabel;
-            document.getElementById('treasuryBalance').textContent = getTreasuryBalance().toFixed(2) + ' ر.س';
-            document.getElementById('totalCustomersDebt').textContent = totalCustomersDebt.toFixed(2) + ' ر.س';
-            document.getElementById('totalSuppliersDebt').textContent = totalSuppliersDebt.toFixed(2) + ' ر.س';
+            document.getElementById('treasuryBalance').textContent = getTreasuryBalance().toFixed(2) + ' ج.م';
+            document.getElementById('totalCustomersDebt').textContent = totalCustomersDebt.toFixed(2) + ' ج.م';
+            document.getElementById('totalSuppliersDebt').textContent = totalSuppliersDebt.toFixed(2) + ' ج.م';
             document.getElementById('totalInventoryItems').textContent = totalInventoryQty;
             document.getElementById('totalInvoices').textContent = invoices.length;
             document.getElementById('totalProducts').textContent = products.length;
@@ -14315,7 +14456,7 @@
                 <li><div class="top-product-info">
                     <div class="top-product-rank ${rankClass[i] || 'normal'}">${i + 1}</div>
                     <div><div class="top-product-name">${c.name}</div><div class="top-product-qty">${c.count} فاتورة</div></div>
-                </div><div class="top-product-total">${c.total.toFixed(2)} ر.س</div></li>
+                </div><div class="top-product-total">${c.total.toFixed(2)} ج.م</div></li>
             `).join('');
         }
 
@@ -14334,7 +14475,7 @@
                 <li><div class="top-product-info">
                     <div class="top-product-rank ${rankClass[i] || 'normal'}">${i + 1}</div>
                     <div><div class="top-product-name">${d.name}</div><div class="top-product-qty">دين آجل مستحق</div></div>
-                </div><div class="top-product-total" style="color:var(--danger);">${d.balance.toFixed(2)} ر.س</div></li>
+                </div><div class="top-product-total" style="color:var(--danger);">${d.balance.toFixed(2)} ج.م</div></li>
             `).join('');
         }
 
@@ -14382,9 +14523,9 @@
                 const up = change >= 0;
                 return `<div class="perf-block">
                     <div class="perf-block-label">${label}</div>
-                    <div class="perf-block-value">${curr.toFixed(2)} ر.س</div>
+                    <div class="perf-block-value">${curr.toFixed(2)} ج.م</div>
                     <div class="perf-block-change ${up ? 'positive' : 'negative'}"><i class="fas fa-arrow-${up ? 'up' : 'down'}"></i> ${Math.abs(change).toFixed(1)}% عن ${prevTag}</div>
-                    <div class="perf-block-sub">${prevTag}: ${prev.toFixed(2)} ر.س</div>
+                    <div class="perf-block-sub">${prevTag}: ${prev.toFixed(2)} ج.م</div>
                 </div>`;
             };
 
@@ -14404,8 +14545,8 @@
                 block('مبيعات الشهر (حتى الآن) مقابل الشهر الماضي', thisMonth.sales, lastMonth.sales, 'هذا الشهر', 'الشهر الماضي (كامل)') +
                 `<div class="perf-block">
                     <div class="perf-block-label">حركة الخزنة اليوم</div>
-                    <div class="perf-block-value" style="color:${netCashToday >= 0 ? 'var(--accent)' : 'var(--danger)'};">${netCashToday.toFixed(2)} ر.س</div>
-                    <div class="perf-block-sub">قبض: ${cashInToday.toFixed(2)} ر.س &nbsp;|&nbsp; صرف: ${cashOutToday.toFixed(2)} ر.س</div>
+                    <div class="perf-block-value" style="color:${netCashToday >= 0 ? 'var(--accent)' : 'var(--danger)'};">${netCashToday.toFixed(2)} ج.م</div>
+                    <div class="perf-block-sub">قبض: ${cashInToday.toFixed(2)} ج.م &nbsp;|&nbsp; صرف: ${cashOutToday.toFixed(2)} ج.م</div>
                 </div>`;
         }
 
@@ -14462,7 +14603,7 @@
                 <li><div class="top-product-info">
                     <div class="top-product-rank ${rankClass[i] || 'normal'}">${i + 1}</div>
                     <div><div class="top-product-name">${p.name}</div><div class="top-product-qty">${p.qty} وحدة مباعة</div></div>
-                </div><div class="top-product-total">${p.total.toFixed(2)} ر.س</div></li>
+                </div><div class="top-product-total">${p.total.toFixed(2)} ج.م</div></li>
             `).join('');
         }
 
@@ -14477,7 +14618,7 @@
             };
             container.innerHTML = Object.entries(methods).map(([method, total]) => {
                 const style = methodIcons[method] || { icon: 'fa-circle', color: 'var(--text-light)', bg: 'var(--bg)' };
-                return `<div class="payment-item"><div class="payment-item-label"><i class="fas ${style.icon}" style="background:${style.bg};color:${style.color};"></i>${method}</div><div class="payment-item-value" style="color:${style.color};">${total.toFixed(2)} ر.س</div></div>`;
+                return `<div class="payment-item"><div class="payment-item-label"><i class="fas ${style.icon}" style="background:${style.bg};color:${style.color};"></i>${method}</div><div class="payment-item-value" style="color:${style.color};">${total.toFixed(2)} ج.م</div></div>`;
             }).join('');
         }
 
@@ -14498,10 +14639,10 @@
             const ctx = document.getElementById('salesChart').getContext('2d');
             salesChartInstance = new Chart(ctx, {
                 type: 'bar',
-                data: { labels: [], datasets: [{ label: 'المبيعات (ر.س)', data: [], backgroundColor: 'rgba(30,58,95,0.8)', borderColor: 'var(--primary)', borderWidth: 1, borderRadius: 6 }] },
+                data: { labels: [], datasets: [{ label: 'المبيعات (ج.م)', data: [], backgroundColor: 'rgba(30,58,95,0.8)', borderColor: 'var(--primary)', borderWidth: 1, borderRadius: 6 }] },
                 options: {
                     responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(context) { return context.parsed.y.toFixed(2) + ' ر.س'; } } } },
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(context) { return context.parsed.y.toFixed(2) + ' ج.م'; } } } },
                     scales: { y: { beginAtZero: true, ticks: { callback: function(value) { return value.toLocaleString('ar-SA'); } } }, x: { grid: { display: false } } }
                 }
             });
