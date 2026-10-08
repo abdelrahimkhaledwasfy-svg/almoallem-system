@@ -4997,6 +4997,9 @@
                     type: 'sale', date: (order.repDelivery && order.repDelivery.at) ? new Date(order.repDelivery.at).toISOString() : new Date().toISOString(),
                     customerCode: order.customerCode || '', customerName: order.customerName || '',
                     salesmanCode: order.repCode || '', salesmanName: order.repName || '',
+                    // (2026-10-08) مندوب العميل المسؤول وقت البيع نفسه: لو العميل اتنقل لمندوب تاني بعدين، مبيعاته القديمة تفضل للمندوب الأولاني
+                    responsibleRepCode: order.repCode || (cust && cust.salesmanCode) || '',
+                    responsibleRepName: order.repName || ((cust && cust.salesmanCode && (salesmen.find(s => s.code === cust.salesmanCode) || {}).name) || ''),
                     paymentMethod: 'دفع عند الاستلام',
                     notes: 'طلب وارد من أبليكشن العملاء #' + order.id.slice(-6) + (appliedDiscount > 0 ? ` (خصم نقاط ولاء: ${appliedDiscount.toFixed(2)} ج.م)` : '') + (order.repReturns && order.repReturns.length ? ' — مرتجع عند التسليم: ' + order.repReturns.map(r => r.productName + ' × ' + r.qty + ' (' + r.reason + ')').join('، ') : ''),
                     deliveryReturns: order.repReturns || null,
@@ -9516,9 +9519,48 @@
         function svRepOf(i) {
             const by = svPlacedByRep(i);
             if (by) return by;
-            if (i.sourceOrderId) return svCustRep[i.customerCode] || '';
+            if (i.responsibleRepCode) return i.responsibleRepCode;   // المندوب المسؤول وقت البيع (الفواتير الجديدة)
+            if (i.sourceOrderId) return svCustRep[i.customerCode] || '';   // الفواتير القديمة: المندوب الحالي
             return '';
         }
+        // نفس القاعدة لكل تقارير المناديب، عشان كل التقارير تطلع نفس الرقم
+        function invRepCode(i) {
+            if (i.salesmanCode) return i.salesmanCode;
+            if (i.responsibleRepCode) return i.responsibleRepCode;
+            if (i.sourceOrderId) { const c = customers.find(x => x.code === i.customerCode); return (c && c.salesmanCode) || ''; }
+            return '';
+        }
+        function invRepName(i, code) { return i.salesmanName || i.responsibleRepName || ((salesmen.find(s => s.code === code) || {}).name) || code; }
+
+        // (2026-10-08) هدف ومحقق كل مندوب بيع بيتبعت للأبليكشن (meta/repProgress) عشان المندوب يشوفهم من الماستر بتاعه
+        // بنفس حساب لوحة مشرف المبيعات بالظبط. أي جهاز فاتح السيستم (مدير/محاسب/مشرف) بيحدّثه كل 10 دقايق
+        let repProgressLastJson = '';
+        function publishRepProgress() {
+            if (!db || !currentUser || !isCloudReady()) return;
+            if (!['admin', 'accountant', 'sales_supervisor'].includes(xlRole())) return;
+            const now = new Date();
+            svCustRep = {}; customers.forEach(c => { if (c.salesmanCode) svCustRep[c.code] = c.salesmanCode; });
+            svOrderRep = {}; customerOrders.forEach(o => { if (o.repCode) svOrderRep[o.id] = o.repCode; });
+            const dayStart = svSalesDayStart(now).getTime(), dayEnd = dayStart + 86400000;
+            const mStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+            const reps = {};
+            invoices.forEach(i => {
+                if (i.type !== 'sale') return;
+                const t = saleTimeOf(i); if (t < mStart) return;
+                const code = svRepOf(i); if (!code) return;
+                const r = reps[code] || (reps[code] = { month: 0, today: 0 });
+                const v = Number(i.grandTotal) || 0;
+                r.month += v; if (t >= dayStart && t < dayEnd) r.today += v;
+            });
+            Object.keys(reps).forEach(k => { reps[k].month = Math.round(reps[k].month); reps[k].today = Math.round(reps[k].today); });
+            const payload = { monthKey: svMonthKey(now), reps };
+            const js = JSON.stringify(payload);
+            if (js === repProgressLastJson) return;
+            repProgressLastJson = js;
+            db.collection('meta').doc('repProgress').set(Object.assign({ updatedAt: Date.now() }, payload)).catch(e => { repProgressLastJson = ''; console.error('rep progress publish failed:', e); });
+        }
+        setInterval(function() { try { publishRepProgress(); } catch (e) { console.error(e); } }, 10 * 60000);
+        setTimeout(function() { try { publishRepProgress(); } catch (e) { console.error(e); } }, 90000);
 
         function renderSupervisorDashboard() {
             const sec = document.getElementById('sales-supervisor-section');
@@ -13372,14 +13414,15 @@
                     productProfit[item.productCode].profit += itemProfit;
                 });
 
-                if (inv.salesmanCode) {
-                    if (!salesmanProfit[inv.salesmanCode]) {
-                        salesmanProfit[inv.salesmanCode] = { name: inv.salesmanName, count: 0, sales: 0, cost: 0, profit: 0 };
+                const invRc = invRepCode(inv);   // (2026-10-08) طلبات العميل بنفسه بتتحسب لمندوبه زي لوحة المشرف
+                if (invRc) {
+                    if (!salesmanProfit[invRc]) {
+                        salesmanProfit[invRc] = { name: invRepName(inv, invRc), count: 0, sales: 0, cost: 0, profit: 0 };
                     }
-                    salesmanProfit[inv.salesmanCode].count++;
-                    salesmanProfit[inv.salesmanCode].sales += inv.grandTotal;
-                    salesmanProfit[inv.salesmanCode].cost += inv.totalCost || 0;
-                    salesmanProfit[inv.salesmanCode].profit += inv.totalProfit || 0;
+                    salesmanProfit[invRc].count++;
+                    salesmanProfit[invRc].sales += inv.grandTotal;
+                    salesmanProfit[invRc].cost += inv.totalCost || 0;
+                    salesmanProfit[invRc].profit += inv.totalProfit || 0;
                 }
 
                 if (inv.customerCode) {
@@ -13723,9 +13766,10 @@
             }
             const salesmanSummary = {};
             invoices.forEach(inv => {
-                if (inv.salesmanCode) {
-                    if (!salesmanSummary[inv.salesmanCode]) salesmanSummary[inv.salesmanCode] = { name: inv.salesmanName, count: 0, total: 0 };
-                    salesmanSummary[inv.salesmanCode].count++; salesmanSummary[inv.salesmanCode].total += inv.grandTotal;
+                const invRc2 = inv.type === 'sale' ? invRepCode(inv) : inv.salesmanCode;
+                if (invRc2) {
+                    if (!salesmanSummary[invRc2]) salesmanSummary[invRc2] = { name: invRepName(inv, invRc2), count: 0, total: 0 };
+                    salesmanSummary[invRc2].count++; salesmanSummary[invRc2].total += inv.grandTotal;
                 }
             });
             const smTbody = document.getElementById('salesmanSummaryTable');
