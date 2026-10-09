@@ -486,6 +486,7 @@
             <li class="nav-item" data-section="daily-sales"><a class="nav-link" href="javascript:void(0)" onclick="showSection('daily-sales')"><i class="fas fa-calendar-day"></i><span class="menu-text">التقرير اليومي للمبيعات</span></a></li>
             <li class="nav-item" data-section="reports"><a class="nav-link" href="javascript:void(0)" onclick="showSection('reports')"><i class="fas fa-chart-pie"></i><span class="menu-text">التقارير والتجميع</span></a></li>
             <li class="nav-item" data-section="users"><a class="nav-link" href="javascript:void(0)" onclick="showSection('users')"><i class="fas fa-user-shield"></i><span class="menu-text">المستخدمون والصلاحيات</span></a></li>
+            <li class="nav-item" data-section="accounting"><a class="nav-link" href="javascript:void(0)" onclick="showSection('accounting')"><i class="fas fa-sitemap"></i><span class="menu-text">الشجرة المحاسبية والقيود</span></a></li>
             <li class="nav-item" data-section="audit-log"><a class="nav-link" href="javascript:void(0)" onclick="showSection('audit-log')"><i class="fas fa-history"></i><span class="menu-text">سجل العمليات</span></a></li>
             <li class="nav-item" data-section="backup"><a class="nav-link" href="javascript:void(0)" onclick="showSection('backup')"><i class="fas fa-database"></i><span class="menu-text">النسخ الاحتياطي</span></a></li>
         </ul>
@@ -2025,6 +2026,23 @@
         </section>
 
         <!-- Audit Log Section -->
+        <section id="accounting-section" class="section">
+            <div class="card">
+                <div class="card-header"><div class="card-title"><i class="fas fa-sitemap"></i> الشجرة المحاسبية والقيود (قيد مزدوج)</div><div id="accInfo" style="font-size:13px;"></div></div>
+                <div id="accTabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+                    <button class="btn btn-sm acc-tab" data-tab="tree" onclick="accSetTab('tree')"><i class="fas fa-sitemap"></i> شجرة الحسابات</button>
+                    <button class="btn btn-sm acc-tab" data-tab="ledger" onclick="accSetTab('ledger')"><i class="fas fa-book"></i> دفتر الأستاذ</button>
+                    <button class="btn btn-sm acc-tab" data-tab="journal" onclick="accSetTab('journal')"><i class="fas fa-list-ol"></i> دفتر اليومية</button>
+                    <button class="btn btn-sm acc-tab" data-tab="trial" onclick="accSetTab('trial')"><i class="fas fa-balance-scale"></i> ميزان المراجعة</button>
+                    <button class="btn btn-sm acc-tab" data-tab="income" onclick="accSetTab('income')"><i class="fas fa-file-invoice-dollar"></i> قائمة الدخل</button>
+                    <button class="btn btn-sm acc-tab" data-tab="balance" onclick="accSetTab('balance')"><i class="fas fa-landmark"></i> الميزانية العمومية</button>
+                    <button class="btn btn-sm acc-tab" data-tab="recon" onclick="accSetTab('recon')"><i class="fas fa-check-double"></i> المطابقات</button>
+                    <button class="btn btn-sm acc-tab" data-tab="manual" onclick="accSetTab('manual')"><i class="fas fa-pen"></i> القيود اليدوية</button>
+                </div>
+                <div id="accBody"><p>جاري التحميل...</p></div>
+            </div>
+        </section>
+
         <section id="audit-log-section" class="section">
             <div class="stats-grid">
                 <div class="stat-card invoices"><div class="stat-icon"><i class="fas fa-list"></i></div><div class="stat-value" id="auditTotalCount">0</div><div class="stat-label">إجمالي العمليات المسجلة</div></div>
@@ -6224,7 +6242,7 @@
             if (db) db.collection('stockMovementRecords').doc(String(movement.id)).set(movement).catch(function(e) { console.error('stock movement sync failed:', e); });
         }
 
-        function addTreasuryEntry(type, amount, party, partyType, notes, reference, isDebtRelated = true, account) {
+        function addTreasuryEntry(type, amount, party, partyType, notes, reference, isDebtRelated = true, account, extra) {
             const currentBalance = getTreasuryBalance();
             const newBalance = type === 'in' ? currentBalance + amount : currentBalance - amount;
             // id فريد حتى لو حركتين اتسجلوا في نفس الملّي ثانية
@@ -6237,6 +6255,7 @@
                 // false = مجرد قيد نقدية تلقائي مصاحب لفاتورة نقدية أو عكس لها، ولا يمثل سداد دين فعلي.
                 isDebtRelated
             });
+            if (extra && typeof extra === 'object') Object.assign(treasury[0], extra);
             saveTreasury();
             logAction(type === 'in' ? 'سند قبض' : 'سند صرف', `${reference || ''} - ${notes || ''} - المبلغ: ${amount.toFixed(2)} ج.م`);
         }
@@ -6483,6 +6502,722 @@
             try { renderExpiry(); } catch(e) { console.error('renderExpiry error:', e); }
         }
 
+        // ==================== الشجرة المحاسبية والقيود (قيد مزدوج) — 2026-10 ====================
+        // الفكرة: مفيش أي بيانات قديمة بتتغير. القيود بتتولّد أوتوماتيك من المستندات الموجودة
+        // (فواتير، مرتجعات، خزنة، مصروفات، عهد مناديب، جرد) من "تاريخ البداية" وطالع،
+        // + قيد أرصدة أول المدة + القيود اليدوية (رأس مال، مسحوبات، أصول...). كل سطر بيرجع لمستنده.
+        const ACC_BASE = [
+            ['1', 'الأصول', ''], ['11', 'الأصول المتداولة', '1'],
+            ['1101', 'الخزنة (نقدي)', '11'], ['1102', 'البنك والتحويلات', '11'], ['1103', 'عهدة مناديب التسليم', '11', 'rep'],
+            ['1104', 'المخزون', '11'], ['1105', 'العملاء', '11', 'cust'], ['1106', 'سلف وعُهد الموظفين', '11'],
+            ['12', 'الأصول الثابتة', '1'], ['1201', 'السيارات', '12'], ['1202', 'الأجهزة والمعدات', '12'], ['1203', 'الأثاث والتجهيزات', '12'], ['1209', 'مجمع الإهلاك (بالسالب)', '12'],
+            ['2', 'الخصوم', ''], ['2101', 'الموردين', '2', 'sup'], ['2102', 'مصروفات تحت السداد (حساب وسيط)', '2'], ['2103', 'تحويلات داخلية (حساب وسيط)', '2'],
+            ['2104', 'القروض', '2'], ['2105', 'أرصدة دائنة أخرى', '2'],
+            ['3', 'حقوق الملكية', ''], ['3101', 'رأس المال', '3'], ['3102', 'جاري الشريك / المسحوبات', '3'], ['3201', 'أرباح مرحّلة', '3'],
+            ['3301', 'تسويات أرصدة سابقة', '3'], ['3302', 'حركات خزنة غير مصنفة', '3'],
+            ['4', 'الإيرادات', ''], ['4101', 'المبيعات', '4'], ['4102', 'مردودات المبيعات (−)', '4'], ['4103', 'خصم نقاط الولاء (−)', '4'], ['4104', 'خصومات مسموح بها (−)', '4'],
+            ['4201', 'زيادات جرد حقيقية', '4'], ['4202', 'عجز مرتجعات محمّل على المناديب', '4'], ['4203', 'إيرادات أخرى', '4'],
+            ['5', 'المصروفات', ''], ['5101', 'تكلفة البضاعة المباعة', '5'], ['5201', 'عجز وتالف المخزون', '5'], ['5301', 'مصروفات التشغيل', '5', 'exp'],
+            ['5302', 'فروقات تسوية الخزنة', '5'], ['5303', 'الإهلاك', '5']
+        ].map(a => ({ code: a[0], name: a[1], parent: a[2] || '', dyn: a[3] || '', system: true }));
+        let accMeta = null;          // meta/accounting: { cutoff, opening, customAccounts }
+        let accJournals = [];        // القيود اليدوية
+        let accExtra = { collections: [], settlements: [], loadedAt: 0 };
+        let accCache = null;
+        const ACC_SRC_LABEL = { opening: 'أرصدة أول المدة', sale: 'فاتورة بيع', sret: 'مرتجع بيع', pur: 'فاتورة شراء', pret: 'مرتجع شراء', trs: 'حركة خزنة', exp: 'مصروف', dlv: 'تحصيل مندوب', dlvlegacy: 'تسوية عهدة قديمة', rrs: 'عجز مرتجع مندوب', adj: 'تعديل مخزون', supadj: 'تسوية رصيد مورد', manual: 'قيد يدوي' };
+
+        function accR(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+        function accF(n) { const v = accR(n); return (v < 0 ? '−' : '') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+        function accAll() { return ACC_BASE.concat(((accMeta && accMeta.customAccounts) || []).map(a => Object.assign({ custom: true }, a))); }
+        function accFind(code) { return accAll().find(a => a.code === code); }
+        function accRoot(code) { return String(code).charAt(0); }
+        function accDebitNature(code) { const r = accRoot(code); return r === '1' || r === '5'; }
+        function accBaseOf(code) { return String(code).split(':')[0]; }
+        function accParentOf(code) { if (String(code).includes(':')) return accBaseOf(code); const a = accFind(code); return a ? a.parent : ''; }
+        function accRepCodeByName(name) {
+            const s = salesmen.find(x => x.code === name) || salesmen.find(x => x.repType === 'delivery' && x.name === name) || salesmen.find(x => x.name === name); if (s) return s.code;
+            const st = Array.from((typeof repSettlementsAll !== 'undefined' ? repSettlementsAll : new Map()).values()).find(x => x.repName === name);
+            return (st && st.repCode) || name || 'غير معروف';
+        }
+        function accName(code) {
+            code = String(code);
+            if (code.includes(':')) {
+                const base = accBaseOf(code), key = code.slice(base.length + 1);
+                if (base === '1103') { const s = salesmen.find(x => x.code === key); return s ? s.name : key; }
+                if (base === '2101') { const s = suppliers.find(x => x.code === key); return s ? s.name : key; }
+                if (base === '1105') { if (key === 'نقدي') return 'عميل نقدي (بدون كود)'; const c = customers.find(x => x.code === key); return c ? (c.shopName || c.name || key) : key; }
+                return key;
+            }
+            const a = accFind(code); return a ? a.name : code;
+        }
+        function accLabel(code) { return String(code).includes(':') ? accBaseOf(code) + ' / ' + accName(code) : code + ' ' + accName(code); }
+        function accCustKey(code) { const c = String(code || '').trim(); return (!c || c === 'عميل' || c === 'عميل عام') ? 'نقدي' : c; }
+        function accSupKey(code) { const c = String(code || '').trim(); return (!c || c === 'مورد') ? 'غير معروف' : c; }
+        function accCostOf(code) { return Number((inventory[code] || {}).cost) || Number((products.find(p => p.code === code) || {}).cost) || 0; }
+        // سند خزنة بيعكس مستند اتعمل قبل تاريخ البداية (تعديل/حذف فاتورة قديمة): مالوش طرف تاني في الدفاتر، فيروح لتسويات أرصدة سابقة
+        function accReversesPreCutoff(t, cms) {
+            if (t.reversesDocDate) return accMs(t.reversesDocDate) < cms;   // (2026-10-09) الحركات الجديدة بتشيل تاريخ المستند نفسه
+            if (!['استرجاع', 'تعديل', 'إلغاء مرتجع'].includes(t.reference)) return false;
+            if (t.reference === 'إلغاء مرتجع') {
+                // المرتجع اتمسح، وحركة الخزنة الأصلية بتاعته مكتوب فيها رقم الفاتورة مش رقم المرتجع: بندوّر بالنوع والطرف والمبلغ
+                const origRef = /بيع/.test(String(t.notes || '')) ? 'مرتجع بيع' : 'مرتجع شراء';
+                const cands = treasury.filter(x => x !== t && x.type !== t.type && x.reference === origRef && String(x.party) === String(t.party) && Math.abs((Number(x.amount) || 0) - (Number(t.amount) || 0)) < 0.005 && accMs(x.date) <= accMs(t.date));
+                return cands.length > 0 && cands.every(x => accMs(x.date) < cms);
+            }
+            const m = String(t.notes || '').match(/#\s*0*(\d+)/); if (!m) return false;
+            const n = Number(m[1]), notes = String(t.notes || '');
+            const sameNo = d => d && Number(d.number) === n;
+            let list = null;
+            if (/مرتجع.*بيع|مرتجع فاتورة بيع/.test(notes) && /مرتجع/.test(notes)) list = salesReturns;
+            else if (/مرتجع/.test(notes)) list = purchaseReturns;
+            else if (/فاتورة بيع/.test(notes)) list = invoices.filter(i => i.type === 'sale');
+            else if (/فاتورة شراء/.test(notes)) list = purchaseInvoices;
+            if (!list) return false;
+            const doc = list.find(sameNo);
+            if (doc) return accMs(doc.date) < cms;
+            // المستند اتمسح: بندوّر على حركة الخزنة الأصلية بتاعته
+            const orig = treasury.find(x => x !== t && x.type !== t.type && String(x.party) === String(t.party) && !['استرجاع', 'تعديل', 'إلغاء مرتجع'].includes(x.reference) && new RegExp('#\\s*0*' + n + '(\\D|$)').test(String(x.notes || '')));
+            return !!(orig && accMs(orig.date) < cms);
+        }
+        // سندات القبض/الصرف اليدوية بتتسجل دايمًا "عميل"/"مورد" حتى لو الجهة "سحب رصيد" أو "أخرى": نوجّهها للحساب الصح
+        function accTreasuryCounter(t) {
+            const pt = t.partyType, party = String(t.party == null ? '' : t.party), ref = t.reference || '';
+            if (pt === 'customer') {
+                if (party === 'إضافة رصيد' || ref === 'إضافة رصيد') return customers.some(c => c.code === party) ? '1105:' + party : '3102';
+                if (party === 'أخرى' || (party === 'عميل عام' && ref === 'مبيعات نقدية')) return '3302';
+                return '1105:' + accCustKey(party);
+            }
+            if (pt === 'supplier') {
+                const real = suppliers.some(x => x.code === party);
+                if (party === 'سحب رصيد' || (!real && ref === 'سحب رصيد')) return '3102';
+                if (!real && ref === 'مصروفات') return '5301:مصروفات من سند صرف';
+                if (party === 'مورد عام' || party === 'أخرى') return '3302';
+                return '2101:' + accSupKey(party);
+            }
+            if (pt === 'expense') return '2102';
+            if (pt === 'delivery_rep') return '1103:' + accRepCodeByName(party);
+            if (pt === 'transfer') return '2103';
+            if (pt === 'system') return '5302';
+            return '3302';
+        }
+        function accCutoffMs() { return accMeta && accMeta.cutoff ? new Date(accMeta.cutoff + 'T00:00:00').getTime() : null; }
+        function accMs(d) { const t = new Date(d).getTime(); return isNaN(t) ? 0 : t; }
+
+        // ---- تحميل البيانات (المدير بس) ----
+        let accMetaListening = false;
+        function accStartListeners() {
+            if (!db || accMetaListening) return;
+            accMetaListening = true;
+            db.collection('meta').doc('accounting').onSnapshot(function(s) { accMeta = s.exists ? (s.data() || {}) : {}; accCache = null; try { if (accSectionActive()) renderAccounting(); } catch (e) { console.error(e); } }, function(e) { console.error('accounting meta', e); accMetaListening = false; });
+            db.collection('journalEntries').onSnapshot(function(snap) { accJournals = snap.docs.map(d => Object.assign({ id: d.id }, d.data())); accCache = null; try { if (accSectionActive()) renderAccounting(); } catch (e) { console.error(e); } }, function(e) { console.error('journal entries', e); });
+        }
+        function accSectionActive() { const s = document.getElementById('accounting-section'); return !!(s && s.classList.contains('active')); }
+        function accLoadExtra(force) {
+            const cms = accCutoffMs(); if (!db || cms == null) return Promise.resolve();
+            if (!force && accExtra.loadedAt && Date.now() - accExtra.loadedAt < 60000 && accExtra.cutoff === accMeta.cutoff) return Promise.resolve();
+            const iso = new Date(cms).toISOString();
+            // عهد المناديب: كل اللي اتسجل من تاريخ البداية + اللي اتسوّى بعده (عشان التسويات القديمة)
+            return Promise.all([
+                db.collection('deliveryCollectionRecords').where('date', '>=', iso).get(),
+                db.collection('repSettlements').where('date', '>=', iso).get(),
+                db.collection('deliveryCollectionRecords').where('settlementId', '==', 'legacy').get(),
+                db.collection('deliveryCollectionRecords').where('cancelledAt', '>=', cms).get(),
+                db.collection('stockMovementRecords').where('reversesDocDate', '<', iso).get()
+            ]).then(function(r) {
+                const m = {}; r[0].docs.concat(r[2].docs).forEach(d => { m[d.id] = Object.assign({ id: d.id }, d.data()); });
+                accExtra = { collections: Object.values(m), settlements: r[1].docs.map(d => Object.assign({ id: d.id }, d.data())),
+                    cancelled: r[3].docs.map(d => Object.assign({ id: d.id }, d.data())), revMovements: r[4].docs.map(d => d.data()), loadedAt: Date.now(), cutoff: accMeta.cutoff };
+                accCache = null;
+            });
+        }
+
+        // ---- بناء القيود ----
+        function accBuildJournal() {
+            if (accCache) return accCache;
+            const cms = accCutoffMs();
+            const E = [];
+            if (cms == null) return (accCache = { entries: [], warnings: [] });
+            const inR = d => accMs(d) >= cms;
+            const add = (date, kind, ref, memo, lines, srcId) => {
+                const ls = lines.filter(l => l && l.acc && (accR(l.dr) !== 0 || accR(l.cr) !== 0)).map(l => ({ acc: l.acc, dr: accR(l.dr), cr: accR(l.cr) }));
+                if (!ls.length) return;
+                E.push({ date: new Date(date).toISOString(), ms: accMs(date), kind, ref, memo, lines: ls, srcId: srcId != null ? srcId : null });
+            };
+            const op = accMeta.opening;
+            if (op && Array.isArray(op.lines)) add(cms, 'opening', '', 'قيد أرصدة أول المدة', op.lines.map(l => ({ acc: l.acc, dr: l.dr, cr: l.cr })), 'opening');
+            try { normalizeAllProfit(); } catch (e) {}
+            const invById = {}; invoices.forEach(i => { invById[String(i.id)] = i; });
+            invoices.filter(i => i.type === 'sale' && inR(i.date)).forEach(i => {
+                const net = Number(i.grandTotal) || 0, gross = Number(i._grossTotal != null ? i._grossTotal : net) || 0, disc = gross - net;
+                const discAcc = (Number(i.pointsRedeemed) > 0 || /نقاط/.test(i.notes || '')) ? '4103' : '4104';
+                const c = '1105:' + accCustKey(i.customerCode);
+                add(i.date, 'sale', '#' + i.number, (i.customerName || 'عميل') + (i.paymentMethod ? ' — ' + i.paymentMethod : ''), [
+                    { acc: c, dr: net }, disc > 0.004 ? { acc: discAcc, dr: disc } : null, { acc: '4101', cr: gross },
+                    disc < -0.004 ? { acc: '4203', cr: -disc } : null,
+                    { acc: '5101', dr: Number(i.totalCost) || 0 }, { acc: '1104', cr: Number(i.totalCost) || 0 }], i.id);
+            });
+            salesReturns.filter(r => inR(r.date)).forEach(r => {
+                add(r.date, 'sret', '#' + (r.number || '-'), (r.customerName || '') + ' — على فاتورة #' + (r.originalInvoiceNumber || r.invoiceNumber || '-'), [
+                    { acc: '4102', dr: Number(r.grandTotal) || 0 }, { acc: '1105:' + accCustKey(r.customerCode), cr: Number(r.grandTotal) || 0 },
+                    { acc: '1104', dr: Number(r.totalCost) || 0 }, { acc: '5101', cr: Number(r.totalCost) || 0 }], r.id);
+            });
+            purchaseInvoices.filter(p => inR(p.date)).forEach(p => {
+                const s = '2101:' + accSupKey(p.supplierCode);
+                add(p.date, 'pur', '#' + p.number, (p.supplier || '') + ' — ' + (p.paymentMethod || ''), [{ acc: '1104', dr: Number(p.grandTotal) || 0 }, { acc: s, cr: Number(p.grandTotal) || 0 }], p.id);
+            });
+            purchaseReturns.filter(r => inR(r.date)).forEach(r => {
+                const s = '2101:' + accSupKey(r.supplierCode);
+                add(r.date, 'pret', '#' + (r.number || '-'), (r.supplierName || r.supplier || '') + ' — على فاتورة #' + (r.originalInvoiceNumber || '-'), [{ acc: s, dr: Number(r.grandTotal) || 0 }, { acc: '1104', cr: Number(r.grandTotal) || 0 }], r.id);
+            });
+            const warnings = [];
+            treasury.filter(t => inR(t.date)).forEach(t => {
+                const cash = treasuryAccountOf(t) === 'bank' ? '1102' : '1101';
+                const other = ((t.partyType === 'customer' || t.partyType === 'supplier') && accReversesPreCutoff(t, cms)) ? '3301' : accTreasuryCounter(t);
+                const a = Number(t.amount) || 0;
+                add(t.date, 'trs', t.reference || '', t.notes || '', t.type === 'in' ? [{ acc: cash, dr: a }, { acc: other, cr: a }] : [{ acc: other, dr: a }, { acc: cash, cr: a }], t.id);
+            });
+            expenses.filter(e => inR(e.date)).forEach(e => {
+                add(e.date, 'exp', e.type || '', (e.description || e.type || '') + (e.costCenter && e.costCenter !== 'عام' ? ' — ' + e.costCenter : ''), [{ acc: '5301:' + (e.type || 'أخرى'), dr: Number(e.amount) || 0 }, { acc: '2102', cr: Number(e.amount) || 0 }], e.id);
+            });
+            (accExtra.collections || []).forEach(r => {
+                const a = Number(r.amount) || 0; if (a <= 0) return;
+                const inv = (r.invoiceId != null ? invById[String(r.invoiceId)] : null) || (r.orderId ? invoices.find(i => i.type === 'sale' && i.sourceOrderId === r.orderId) : null);
+                const rep = '1103:' + (r.repUsername || accRepCodeByName(r.repFullName));
+                if (inR(r.date)) add(r.date, 'dlv', inv ? '#' + inv.number : (r.invoiceNumber ? '#' + r.invoiceNumber : ''), 'فلوس طلب مع المندوب ' + (r.repFullName || '') + ' — ' + (r.customerName || ''), [{ acc: rep, dr: a }, { acc: '1105:' + accCustKey(inv ? inv.customerCode : ''), cr: a }], r.id);
+                if (r.settlementId === 'legacy' && r.settledAt && accMs(r.settledAt) >= cms) add(r.settledAt, 'dlvlegacy', '', 'قفل عهدة قديمة من غير فلوس — ' + (r.repFullName || ''), [{ acc: '3301', dr: a }, { acc: rep, cr: a }], r.id);
+            });
+            (typeof repReturnOrders !== 'undefined' ? repReturnOrders : []).forEach(o => {
+                const rr = o.repReturnReceived; if (!rr || accMs(rr.at) < cms) return;
+                // تكلفة البضاعة اللي ناقصة من المرتجع (اتخصمت من المخزن وماتباعتش ولا رجعت)
+                const missCost = (rr.items || []).reduce((t, x) => { const exp = Number(x.expected) || 0, got = Number(x.received) || 0; const per = exp ? (Number(x.deductQty) || 0) / (got || 1) : 0;
+                    const r0 = (o.repReturns || []).find(y => y.productCode === x.productCode); const perUnit = r0 && Number(r0.qty) ? (Number(r0.deductQty) || 0) / Number(r0.qty) : (got ? per : 1);
+                    return t + Math.max(0, exp - got) * perUnit * accCostOf(x.productCode); }, 0);
+                const sv = Number(rr.shortageValue) || 0;
+                if (!(sv > 0) && !(missCost > 0)) return;
+                const memo = 'مرتجع اتسلّم ناقص — ' + (o.repReturnRepName || '') + ' — ' + (o.customerName || '');
+                if (rr.shortageApplied && sv > 0) {
+                    const gain = sv - missCost;
+                    add(rr.at, 'rrs', '#' + String(o.id).slice(-6), memo, [{ acc: '1103:' + (o.repReturnRepCode || accRepCodeByName(o.repReturnRepName)), dr: sv }, { acc: '1104', cr: missCost },
+                        gain >= 0 ? { acc: '4202', cr: gain } : { acc: '5201', dr: -gain }], o.id);
+                } else add(rr.at, 'rrs', '#' + String(o.id).slice(-6), memo + ' (مش محمّل على المندوب)', [{ acc: '5201', dr: missCost }, { acc: '1104', cr: missCost }], o.id);
+            });
+            allStockCountMovements().filter(m => inR(m.date)).forEach(m => {
+                const q = Number(m.qty) || 0; if (!q) return;
+                const v = Math.abs(q) * (m.unitCost != null ? Number(m.unitCost) : (Number((inventory[m.productCode] || {}).cost) || 0));
+                const real = adjImpact(m) === 'real';
+                const other = real ? (q > 0 ? '4201' : '5201') : '3301';
+                add(m.date, 'adj', m.reference || '', (m.productName || m.productCode) + ' ' + (q > 0 ? '+' : '') + q + (real ? '' : ' (تصحيح)') + ' — ' + (m.notes || ''), q > 0 ? [{ acc: '1104', dr: v }, { acc: other, cr: v }] : [{ acc: other, dr: v }, { acc: '1104', cr: v }], m.id);
+            });
+            // تعديل/حذف مستند اتعمل قبل تاريخ البداية: حركة المخزون بتاعته مالهاش قيد تاني، فتتقابل مع تسويات أرصدة سابقة
+            const revMovs = {}; (accExtra.revMovements || []).concat(stockMovements).forEach(m => { if (m && m.reversesDocDate && m.id != null) revMovs[String(m.id)] = m; });
+            Object.values(revMovs).filter(m => inR(m.date) && accMs(m.reversesDocDate) < cms && m.type !== 'adjustment').forEach(m => {
+                const q = Number(m.qty) || 0; if (!q) return;
+                const v = Math.abs(q) * (m.unitCost != null ? Number(m.unitCost) : accCostOf(m.productCode));
+                add(m.date, 'adj', m.reference || '', (m.productName || m.productCode) + ' ' + (q > 0 ? '+' : '') + q + ' — ' + (m.notes || '') + ' (مستند قبل البداية)', q > 0 ? [{ acc: '1104', dr: v }, { acc: '3301', cr: v }] : [{ acc: '3301', dr: v }, { acc: '1104', cr: v }], m.id);
+            });
+            // عهدة اتسجلت قبل البداية واتلغت بعدها (حذف الفاتورة): كانت في رصيد أول المدة للمندوب
+            (accExtra.cancelled || []).forEach(r => {
+                if (!r.cancelledAt || accMs(r.cancelledAt) < cms || accMs(r.date) >= cms) return;
+                const a = Number(r.originalAmount) || 0; if (a <= 0) return;
+                add(r.cancelledAt, 'dlvlegacy', '', 'إلغاء عهدة قديمة بسبب ' + (r.cancelledReason || 'حذف الفاتورة') + ' — ' + (r.repFullName || ''), [{ acc: '3301', dr: a }, { acc: '1103:' + (r.repUsername || accRepCodeByName(r.repFullName)), cr: a }], r.id);
+            });
+            accJournals.filter(j => j.status !== 'void' && inR(j.date)).forEach(j => add(j.date, 'manual', j.number ? 'ق' + j.number : '', j.memo || '', (j.lines || []).map(l => ({ acc: l.acc, dr: l.dr, cr: l.cr })), j.id));
+            // تسويات رصيد المورد ("الرصيد في التاريخ ده كان كذا"): الفرق بين رقم المدير ورصيد الحساب وقتها يروح لتسويات أرصدة سابقة
+            const anchors = supplierAdjustments.filter(x => x && x.newBalance != null && !isNaN(Number(x.newBalance)) && inR(x.date)).map(x => ({ x, ms: accMs(x.date) }));
+            E.sort((a, b) => a.ms - b.ms || (a.kind === 'opening' ? -1 : b.kind === 'opening' ? 1 : 0));
+            if (anchors.length) {
+                anchors.sort((a, b) => a.ms - b.ms || String(a.x.id).localeCompare(String(b.x.id)));
+                const out = []; const bal = {}; let ai = 0;
+                const flushAnchor = an => {
+                    const acc = '2101:' + an.x.supplierCode, cur = accR(bal[acc] || 0), d = accR(Number(an.x.newBalance) - cur);
+                    if (Math.abs(d) >= 0.01) {
+                        const e = { date: new Date(an.ms).toISOString(), ms: an.ms, kind: 'supadj', ref: '', memo: 'تسوية رصيد المورد لـ ' + accF(an.x.newBalance) + (an.x.notes ? ' — ' + an.x.notes : '') + (an.x.by ? ' (' + an.x.by + ')' : ''), lines: d > 0 ? [{ acc: '3301', dr: d, cr: 0 }, { acc: acc, dr: 0, cr: d }] : [{ acc: acc, dr: -d, cr: 0 }, { acc: '3301', dr: 0, cr: -d }], srcId: an.x.id };
+                        out.push(e); e.lines.forEach(l => { if (l.acc === acc) bal[acc] = (bal[acc] || 0) + l.cr - l.dr; });
+                    }
+                };
+                E.forEach(e => {
+                    while (ai < anchors.length && anchors[ai].ms < e.ms) flushAnchor(anchors[ai++]);
+                    out.push(e); e.lines.forEach(l => { if (l.acc.startsWith('2101:')) bal[l.acc] = (bal[l.acc] || 0) + l.cr - l.dr; });
+                });
+                while (ai < anchors.length) flushAnchor(anchors[ai++]);
+                E.length = 0; out.forEach(e => E.push(e));
+            }
+            E.forEach((e, i) => { e.no = i + 1; const d = e.lines.reduce((s, l) => s + l.dr - l.cr, 0); if (Math.abs(d) > 0.009) warnings.push('القيد ' + e.no + ' (' + (ACC_SRC_LABEL[e.kind] || e.kind) + ' ' + e.ref + ') مش متوازن بفرق ' + accF(d)); });
+            if (!op || !Array.isArray(op.lines)) warnings.push('لسه قيد أرصدة أول المدة متسجلش');
+            return (accCache = { entries: E, warnings });
+        }
+        // أرصدة كل الحسابات (الأوراق) في فترة: { acc: {dr, cr} }
+        function accBalances(fromMs, toMs) {
+            const out = {};
+            accBuildJournal().entries.forEach(e => { if (e.ms < fromMs || e.ms > toMs) return; e.lines.forEach(l => { const o = out[l.acc] || (out[l.acc] = { dr: 0, cr: 0 }); o.dr += l.dr; o.cr += l.cr; }); });
+            return out;
+        }
+        // رصيد حساب (أو حساب أب بكل اللي تحته) بطبيعته: موجب = طبيعي
+        function accSum(bals, code) {
+            let dr = 0, cr = 0;
+            Object.keys(bals).forEach(k => { if (k === code || accIsUnder(k, code)) { dr += bals[k].dr; cr += bals[k].cr; } });
+            return { dr, cr, bal: accDebitNature(code) ? dr - cr : cr - dr };
+        }
+        function accIsUnder(code, ancestor) {
+            let p = accParentOf(code), guard = 0;
+            while (p && guard++ < 10) { if (p === ancestor) return true; p = accParentOf(p); }
+            return false;
+        }
+        function accChildren(code, bals) {
+            const kids = accAll().filter(a => a.parent === code).map(a => a.code);
+            const base = accFind(code);
+            if (base && base.dyn) Object.keys(bals).filter(k => accBaseOf(k) === code && k.includes(':')).sort((a, b) => accName(a).localeCompare(accName(b), 'ar')).forEach(k => kids.push(k));
+            return kids;
+        }
+
+        // ---- الواجهة ----
+        let accTab = 'tree';
+        function accTodayStr() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+        function accEndMs(dStr) { return dStr ? new Date(dStr + 'T23:59:59.999').getTime() : Date.now() + 86400000; }
+        function renderAccounting() {
+            const box = document.getElementById('accBody'); if (!box) return;
+            if (!currentUser || currentUser.role !== 'admin') { box.innerHTML = '<p>الشاشة دي للمدير بس.</p>'; return; }
+            accStartListeners();
+            accCache = null;   // كل مرة بنبني القيود من آخر بيانات (عشان أي فاتورة/سند جديد يظهر على طول)
+            if (accMeta === null) { box.innerHTML = '<p>جاري التحميل...</p>'; return; }
+            document.querySelectorAll('.acc-tab').forEach(b => b.classList.toggle('btn-primary', b.dataset.tab === accTab));
+            document.querySelectorAll('.acc-tab').forEach(b => b.classList.toggle('btn-secondary', b.dataset.tab !== accTab));
+            if (!accMeta.cutoff || !accMeta.opening) { document.getElementById('accTabs').style.display = 'none'; renderAccSetup(box); return; }
+            document.getElementById('accTabs').style.display = '';
+            const info = document.getElementById('accInfo');
+            if (info) info.innerHTML = `بداية الحسابات: <strong>${accMeta.cutoff}</strong> · <a href="javascript:void(0)" onclick="accTab='opening';renderAccounting()">أرصدة أول المدة</a> · <a href="javascript:void(0)" onclick="accRefresh()"><i class="fas fa-sync"></i> تحديث</a>`;
+            box.innerHTML = '<p>جاري تجهيز القيود...</p>';
+            accLoadExtra().then(function() {
+                const j = accBuildJournal();
+                const warn = j.warnings.length ? `<div style="background:rgba(231,76,60,0.08);border-radius:10px;padding:10px;margin-bottom:10px;font-size:13px;">⚠️ ${j.warnings.map(escapeHtml).join('<br>')}</div>` : '';
+                const fn = { tree: accRenderTree, ledger: accRenderLedger, trial: accRenderTrial, income: accRenderIncome, balance: accRenderBalanceSheet, journal: accRenderJournal, recon: accRenderRecon, manual: accRenderManual, opening: accRenderOpeningView }[accTab] || accRenderTree;
+                box.innerHTML = warn + fn();
+            }).catch(function(e) { console.error(e); box.innerHTML = '<p style="color:var(--danger);">تعذر تحميل بيانات العهد: ' + escapeHtml(e.message || '') + '</p>'; });
+        }
+        function accRefresh() { accCache = null; accExtra.loadedAt = 0; renderAccounting(); }
+        function accSetTab(t) { accTab = t; renderAccounting(); }
+        function accDateInputs(prefix, from, to, withFrom) {
+            return `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px;">
+                ${withFrom ? `<div><label class="form-label" style="font-size:12px;">من</label><input type="date" class="form-control" id="${prefix}From" value="${from || accMeta.cutoff}"></div>` : ''}
+                <div><label class="form-label" style="font-size:12px;">${withFrom ? 'إلى' : 'حتى تاريخ'}</label><input type="date" class="form-control" id="${prefix}To" value="${to || accTodayStr()}"></div>
+                <button class="btn btn-primary btn-sm" onclick="renderAccounting()"><i class="fas fa-search"></i> عرض</button></div>`;
+        }
+        function accVal(id, def) { const el = document.getElementById(id); return el && el.value ? el.value : def; }
+        let accTreeOpen = { '1': true, '2': true, '3': true, '4': true, '5': true, '11': true };
+        function accRenderTree() {
+            const to = accVal('accTreeTo', accTodayStr());
+            const bals = accBalances(-Infinity, accEndMs(to));
+            const rows = [];
+            const walk = (code, depth) => {
+                const s = accSum(bals, code), kids = accChildren(code, bals), open = !!accTreeOpen[code];
+                const isLeaf = !kids.length;
+                const dynBase = accFind(code) && accFind(code).dyn;
+                rows.push(`<tr style="${depth === 0 ? 'background:#f3f1ff;font-weight:800;' : depth === 1 ? 'font-weight:700;' : ''}"><td style="padding-right:${8 + depth * 20}px;white-space:nowrap;">
+                    ${!isLeaf ? `<a href="javascript:void(0)" onclick="accTreeOpen['${code}']=!accTreeOpen['${code}'];renderAccounting()" style="text-decoration:none;">${open ? '▾' : '▸'}</a>` : '<span style="opacity:.3;">•</span>'}
+                    <span style="color:var(--text-light);font-size:12px;">${escapeHtml(code.includes(':') ? '' : code)}</span> ${escapeHtml(accName(code))}${dynBase ? ` <span style="font-size:11px;color:var(--text-light);">(${kids.length})</span>` : ''}</td>
+                    <td>${accF(s.dr)}</td><td>${accF(s.cr)}</td><td><strong style="color:${s.bal < -0.004 ? 'var(--danger)' : 'inherit'};">${accF(s.bal)}</strong></td>
+                    <td><a href="javascript:void(0)" onclick="accOpenLedger('${code.replace(/'/g, "\\'")}')">الأستاذ</a></td></tr>`);
+                if (open) kids.forEach(k => walk(k, depth + 1));
+            };
+            ['1', '2', '3', '4', '5'].forEach(c => walk(c, 0));
+            return accDateInputs('accTree', null, to, false) +
+                `<div style="display:flex;gap:8px;margin-bottom:8px;"><button class="btn btn-secondary btn-sm" onclick="accOpenAccountModal()"><i class="fas fa-plus"></i> إضافة حساب</button>
+                <button class="btn btn-secondary btn-sm" onclick="accAll().forEach(a=>accTreeOpen[a.code]=true);renderAccounting()">فتح الكل</button></div>
+                <div class="table-container"><table><thead><tr><th>الحساب</th><th>إجمالي مدين</th><th>إجمالي دائن</th><th>الرصيد</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
+                <div style="font-size:12px;color:var(--text-light);margin-top:6px;">الرصيد بطبيعة الحساب: الأصول والمصروفات (مدين − دائن)، والخصوم وحقوق الملكية والإيرادات (دائن − مدين). الرقم الأحمر = رصيد عكس طبيعته ومحتاج مراجعة.</div>`;
+        }
+        function accOpenLedger(code) { accTab = 'ledger'; accLedgerAcc = code; renderAccounting(); }
+        let accLedgerAcc = '1101';
+        function accAccountOptions(sel, leafOnly) {
+            const bals = accBalances(-Infinity, Infinity);
+            const list = [];
+            const walk = (code, depth) => { const kids = accChildren(code, bals); if (!leafOnly || !kids.length || (accFind(code) && accFind(code).dyn)) list.push([code, depth]); kids.forEach(k => walk(k, depth + 1)); };
+            ['1', '2', '3', '4', '5'].forEach(c => walk(c, 0));
+            if (leafOnly) { // حسابات الموردين والمناديب كلها حتى لو مالهاش حركة
+                suppliers.forEach(s => { const k = '2101:' + s.code; if (!list.some(x => x[0] === k)) list.push([k, 2]); });
+                salesmen.filter(s => s.repType === 'delivery').forEach(s => { const k = '1103:' + s.code; if (!list.some(x => x[0] === k)) list.push([k, 3]); });
+            }
+            return list.map(([c, d]) => `<option value="${escapeHtml(c)}" ${c === sel ? 'selected' : ''}>${'  '.repeat(d)}${escapeHtml(accLabel(c))}</option>`).join('');
+        }
+        function accRenderLedger() {
+            const acc = accVal('accLedgerAccSel', accLedgerAcc); accLedgerAcc = acc;
+            const from = accVal('accLedgerFrom', accMeta.cutoff), to = accVal('accLedgerTo', accTodayStr());
+            const fms = new Date(from + 'T00:00:00').getTime(), tms = accEndMs(to);
+            const match = l => l.acc === acc || accIsUnder(l.acc, acc);
+            const nat = accDebitNature(acc) ? 1 : -1;
+            let open = 0; const rows = [];
+            accBuildJournal().entries.forEach(e => {
+                e.lines.filter(match).forEach(l => {
+                    if (e.ms < fms) { open += nat * (l.dr - l.cr); return; }
+                    if (e.ms > tms) return;
+                    rows.push({ e, l });
+                });
+            });
+            let run = open, tdr = 0, tcr = 0;
+            const body = rows.map(({ e, l }) => { run += nat * (l.dr - l.cr); tdr += l.dr; tcr += l.cr;
+                return `<tr><td style="font-size:12px;white-space:nowrap;">${new Date(e.date).toLocaleDateString('ar-EG')}</td><td><a href="javascript:void(0)" onclick="accShowEntry(${e.no})">${e.no}</a></td>
+                <td style="font-size:12px;">${escapeHtml(ACC_SRC_LABEL[e.kind] || e.kind)} ${escapeHtml(e.ref || '')}</td><td style="font-size:12.5px;">${escapeHtml(e.memo || '')}${l.acc !== acc ? `<br><span style="font-size:11px;color:var(--text-light);">${escapeHtml(accName(l.acc))}</span>` : ''}</td>
+                <td>${l.dr ? accF(l.dr) : ''}</td><td>${l.cr ? accF(l.cr) : ''}</td><td><strong>${accF(run)}</strong></td></tr>`; }).join('');
+            return `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px;">
+                <div style="min-width:260px;flex:1;"><label class="form-label" style="font-size:12px;">الحساب</label><select class="form-control" id="accLedgerAccSel" onchange="renderAccounting()">${accAccountOptions(acc)}</select></div>
+                <div><label class="form-label" style="font-size:12px;">من</label><input type="date" class="form-control" id="accLedgerFrom" value="${from}"></div>
+                <div><label class="form-label" style="font-size:12px;">إلى</label><input type="date" class="form-control" id="accLedgerTo" value="${to}"></div>
+                <button class="btn btn-primary btn-sm" onclick="renderAccounting()"><i class="fas fa-search"></i> عرض</button>
+                <button class="btn btn-success btn-sm" onclick="accExportLedger()"><i class="fas fa-file-excel"></i> تصدير</button></div>
+                <div class="table-container" style="max-height:560px;overflow-y:auto;"><table id="accLedgerTable"><thead><tr><th>التاريخ</th><th>قيد</th><th>المستند</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody>
+                <tr style="background:#f8f9fa;"><td colspan="6"><strong>رصيد أول الفترة</strong></td><td><strong>${accF(open)}</strong></td></tr>${body}
+                <tr style="background:#f3f1ff;font-weight:800;"><td colspan="4">الإجمالي (${rows.length} حركة)</td><td>${accF(tdr)}</td><td>${accF(tcr)}</td><td>${accF(run)}</td></tr></tbody></table></div>`;
+        }
+        function accExportLedger() {
+            const t = document.getElementById('accLedgerTable'); if (!t) return;
+            const rows = Array.from(t.querySelectorAll('tr')).map(tr => Array.from(tr.children).map(td => td.innerText));
+            xlWrite('أستاذ_' + accName(accLedgerAcc).slice(0, 20), [{ name: 'الأستاذ', rows, widths: [12, 8, 20, 50, 14, 14, 16] }]);
+        }
+        function accShowEntry(no) {
+            const e = accBuildJournal().entries.find(x => x.no === no); if (!e) return;
+            let src = '';
+            const findDoc = () => {
+                if (e.kind === 'sale') return invoices.find(i => String(i.id) === String(e.srcId));
+                if (e.kind === 'pur') return purchaseInvoices.find(i => String(i.id) === String(e.srcId));
+                if (e.kind === 'sret') return salesReturns.find(i => String(i.id) === String(e.srcId));
+                if (e.kind === 'pret') return purchaseReturns.find(i => String(i.id) === String(e.srcId));
+                return null;
+            };
+            const doc = findDoc();
+            if (doc && Array.isArray(doc.items)) src = `<div style="margin-top:12px;font-weight:700;">المستند الأصلي</div><div style="font-size:13px;">رقم ${escapeHtml(String(doc.number || ''))} · ${new Date(doc.date).toLocaleString('ar-EG')} · ${escapeHtml(doc.customerName || doc.supplier || '')} · ${escapeHtml(doc.paymentMethod || '')}${doc.createdBy ? ' · ' + escapeHtml(typeof doc.createdBy === 'object' ? (doc.createdBy.name || '') : doc.createdBy) : ''}</div>
+                <div class="table-container"><table><thead><tr><th>الصنف</th><th>الكمية</th><th>السعر/التكلفة</th><th>الإجمالي</th></tr></thead><tbody>${doc.items.map(it => `<tr><td>${escapeHtml(it.productName || it.productCode || '')}</td><td>${it.qty} ${escapeHtml(it.unit || '')}</td><td>${accF(it.price != null ? it.price : it.cost)}</td><td>${accF(it.total != null ? it.total : (Number(it.qty) || 0) * (Number(it.price != null ? it.price : it.cost) || 0))}</td></tr>`).join('')}</tbody></table></div>
+                <div style="text-align:left;font-weight:700;">الإجمالي: ${accF(doc.grandTotal)}${doc.totalCost != null && e.kind === 'sale' ? ' · التكلفة: ' + accF(doc.totalCost) : ''}</div>`;
+            else if (e.kind === 'trs') { const t = treasury.find(x => String(x.id) === String(e.srcId)); if (t) src = `<div style="margin-top:12px;font-size:13px;"><strong>حركة الخزنة:</strong> ${t.type === 'in' ? 'قبض' : 'صرف'} ${accF(t.amount)} · ${escapeHtml(t.reference || '')} · ${escapeHtml(t.notes || '')} · الطرف: ${escapeHtml(String(t.party || ''))} (${escapeHtml(t.partyType || '')}) · ${treasuryAccountOf(t) === 'bank' ? 'بنك' : 'نقدي'}</div>`; }
+            const html = `<div style="font-size:14px;line-height:1.9;"><strong>قيد رقم ${e.no}</strong> · ${new Date(e.date).toLocaleString('ar-EG')} · ${escapeHtml(ACC_SRC_LABEL[e.kind] || e.kind)} ${escapeHtml(e.ref || '')}<br>${escapeHtml(e.memo || '')}</div>
+                <div class="table-container"><table><thead><tr><th>الحساب</th><th>مدين</th><th>دائن</th></tr></thead><tbody>${e.lines.map(l => `<tr><td><a href="javascript:void(0)" onclick="closeModal('accEntryModal');accOpenLedger('${l.acc.replace(/'/g, "\\'")}')">${escapeHtml(accLabel(l.acc))}</a></td><td>${l.dr ? accF(l.dr) : ''}</td><td>${l.cr ? accF(l.cr) : ''}</td></tr>`).join('')}
+                <tr style="font-weight:800;"><td>الإجمالي</td><td>${accF(e.lines.reduce((s, l) => s + l.dr, 0))}</td><td>${accF(e.lines.reduce((s, l) => s + l.cr, 0))}</td></tr></tbody></table></div>${src}`;
+            accModal('accEntryModal', 'تفاصيل القيد', html, '');
+        }
+        function accModal(id, title, body, footer) {
+            let m = document.getElementById(id);
+            if (!m) { m = document.createElement('div'); m.className = 'modal-overlay'; m.id = id; document.body.appendChild(m); }
+            m.innerHTML = `<div class="modal" style="max-width:900px;width:96%;"><div class="modal-header"><h3 class="modal-title">${title}</h3><button class="modal-close" onclick="closeModal('${id}')">&times;</button></div><div class="modal-body">${body}</div>${footer ? `<div class="modal-footer">${footer}</div>` : ''}</div>`;
+            openModal(id);
+        }
+        function accLeafCodes(bals) {
+            const leaves = [];
+            const walk = c => { const kids = accChildren(c, bals); if (!kids.length) leaves.push(c); kids.forEach(walk); };
+            ['1', '2', '3', '4', '5'].forEach(walk);
+            Object.keys(bals).forEach(k => { if (!leaves.includes(k)) leaves.push(k); }); // أي حساب مش في الشجرة (احتياطي)
+            return leaves;
+        }
+        function accRenderTrial() {
+            const from = accVal('accTrialFrom', accMeta.cutoff), to = accVal('accTrialTo', accTodayStr());
+            const fms = new Date(from + 'T00:00:00').getTime(), tms = accEndMs(to);
+            const pre = accBalances(-Infinity, fms - 1), per = accBalances(fms, tms), all = accBalances(-Infinity, tms);
+            const leaves = accLeafCodes(all).filter(c => all[c] && (Math.abs(all[c].dr) > 0.004 || Math.abs(all[c].cr) > 0.004));
+            let T = [0, 0, 0, 0, 0, 0];
+            const rows = leaves.map(c => {
+                const o = pre[c] || { dr: 0, cr: 0 }, p = per[c] || { dr: 0, cr: 0 };
+                const on = o.dr - o.cr, cn = on + p.dr - p.cr;
+                const r = [on > 0 ? on : 0, on < 0 ? -on : 0, p.dr, p.cr, cn > 0 ? cn : 0, cn < 0 ? -cn : 0];
+                r.forEach((v, i) => T[i] += v);
+                return `<tr><td><a href="javascript:void(0)" onclick="accOpenLedger('${c.replace(/'/g, "\\'")}')">${escapeHtml(accLabel(c))}</a></td>${r.map(v => `<td>${v ? accF(v) : ''}</td>`).join('')}</tr>`;
+            }).join('');
+            const ok = Math.abs(T[4] - T[5]) < 0.01 && Math.abs(T[2] - T[3]) < 0.01;
+            return accDateInputs('accTrial', from, to, true) +
+                `<div style="padding:10px;border-radius:10px;margin-bottom:10px;background:${ok ? 'rgba(46,204,113,0.1)' : 'rgba(231,76,60,0.1)'};font-weight:700;">${ok ? '✅ الميزان متوازن: المدين = الدائن' : '❌ الميزان مش متوازن بفرق ' + accF(T[4] - T[5])}</div>
+                <div class="table-container" style="max-height:560px;overflow-y:auto;"><table id="accTrialTable"><thead><tr><th rowspan="2">الحساب</th><th colspan="2">رصيد أول الفترة</th><th colspan="2">حركة الفترة</th><th colspan="2">رصيد آخر الفترة</th></tr><tr><th>مدين</th><th>دائن</th><th>مدين</th><th>دائن</th><th>مدين</th><th>دائن</th></tr></thead>
+                <tbody>${rows}<tr style="background:#f3f1ff;font-weight:800;"><td>الإجمالي</td>${T.map(v => `<td>${accF(v)}</td>`).join('')}</tr></tbody></table></div>
+                <button class="btn btn-success btn-sm" style="margin-top:8px;" onclick="xlWrite('ميزان_المراجعة', [{name:'الميزان', rows: Array.from(document.querySelectorAll('#accTrialTable tr')).map(tr => Array.from(tr.children).map(td => td.innerText)), widths:[40,14,14,14,14,14,14]}])"><i class="fas fa-file-excel"></i> تصدير</button>`;
+        }
+        function accIncomeData(fms, tms) {
+            const b = accBalances(fms, tms);
+            const leafRows = root => accLeafCodes(b).filter(c => accRoot(c) === root && b[c]).map(c => ({ c, v: root === '4' ? b[c].cr - b[c].dr : b[c].dr - b[c].cr })).filter(x => Math.abs(x.v) > 0.004);
+            const rev = leafRows('4'), exp = leafRows('5');
+            const tr = rev.reduce((s, x) => s + x.v, 0), te = exp.reduce((s, x) => s + x.v, 0);
+            return { rev, exp, tr, te, net: tr - te };
+        }
+        function accRenderIncome() {
+            const from = accVal('accIncFrom', accMeta.cutoff), to = accVal('accIncTo', accTodayStr());
+            const d = accIncomeData(new Date(from + 'T00:00:00').getTime(), accEndMs(to));
+            const line = (c, v) => `<tr><td style="padding-right:24px;"><a href="javascript:void(0)" onclick="accOpenLedger('${c.replace(/'/g, "\\'")}')">${escapeHtml(accLabel(c))}</a></td><td>${accF(v)}</td></tr>`;
+            const cogs = d.exp.filter(x => x.c === '5101').reduce((s, x) => s + x.v, 0);
+            return accDateInputs('accInc', from, to, true) + `<div class="table-container"><table><tbody>
+                <tr style="background:#f3f1ff;font-weight:800;"><td>الإيرادات</td><td></td></tr>${d.rev.map(x => line(x.c, x.v)).join('')}
+                <tr style="font-weight:800;"><td>صافي الإيرادات</td><td>${accF(d.tr)}</td></tr>
+                <tr style="background:#f3f1ff;font-weight:800;"><td>التكاليف والمصروفات</td><td></td></tr>${d.exp.map(x => line(x.c, x.v)).join('')}
+                <tr style="font-weight:800;"><td>إجمالي التكاليف والمصروفات</td><td>${accF(d.te)}</td></tr>
+                <tr style="font-weight:800;background:rgba(46,204,113,0.06);"><td>مجمل الربح (صافي الإيرادات − تكلفة البضاعة المباعة)</td><td>${accF(d.tr - cogs)}</td></tr>
+                <tr style="font-weight:900;font-size:16px;background:${d.net >= 0 ? 'rgba(46,204,113,0.12)' : 'rgba(231,76,60,0.1)'};"><td>صافي الربح</td><td>${accF(d.net)}</td></tr></tbody></table></div>`;
+        }
+        function accRenderBalanceSheet() {
+            const to = accVal('accBsTo', accTodayStr()), tms = accEndMs(to);
+            const b = accBalances(-Infinity, tms);
+            const ni = accIncomeData(-Infinity, tms).net;
+            const sec = (root, extra) => {
+                const rows = []; let total = 0;
+                accChildren(root, b).forEach(c => { const s = accSum(b, c); if (Math.abs(s.bal) < 0.005) return; total += s.bal; rows.push(`<tr><td style="padding-right:24px;"><a href="javascript:void(0)" onclick="accTab='tree';accTreeOpen['${root}']=true;accTreeOpen['${c}']=true;renderAccounting()">${escapeHtml(accLabel(c))}</a></td><td>${accF(s.bal)}</td></tr>`); });
+                if (extra) { total += extra.v; rows.push(`<tr><td style="padding-right:24px;">${extra.label}</td><td>${accF(extra.v)}</td></tr>`); }
+                return { rows: rows.join(''), total };
+            };
+            const A = sec('1'), L = sec('2'), Q = sec('3', { label: 'صافي ربح الفترة (من قائمة الدخل)', v: ni });
+            const ok = Math.abs(A.total - L.total - Q.total) < 0.01;
+            return accDateInputs('accBs', null, to, false) + `<div style="padding:10px;border-radius:10px;margin-bottom:10px;background:${ok ? 'rgba(46,204,113,0.1)' : 'rgba(231,76,60,0.1)'};font-weight:700;">${ok ? '✅ الأصول = الخصوم + حقوق الملكية' : '❌ فيه فرق ' + accF(A.total - L.total - Q.total)}</div>
+                <div class="table-container"><table><tbody>
+                <tr style="background:#f3f1ff;font-weight:800;"><td>الأصول</td><td></td></tr>${A.rows}<tr style="font-weight:800;"><td>إجمالي الأصول</td><td>${accF(A.total)}</td></tr>
+                <tr style="background:#f3f1ff;font-weight:800;"><td>الخصوم</td><td></td></tr>${L.rows}<tr style="font-weight:800;"><td>إجمالي الخصوم</td><td>${accF(L.total)}</td></tr>
+                <tr style="background:#f3f1ff;font-weight:800;"><td>حقوق الملكية</td><td></td></tr>${Q.rows}<tr style="font-weight:800;"><td>إجمالي حقوق الملكية</td><td>${accF(Q.total)}</td></tr>
+                <tr style="font-weight:900;"><td>الخصوم + حقوق الملكية</td><td>${accF(L.total + Q.total)}</td></tr></tbody></table></div>`;
+        }
+        function accRenderJournal() {
+            const from = accVal('accJrFrom', accTodayStr()), to = accVal('accJrTo', accTodayStr());
+            const kind = accVal('accJrKind', '');
+            const fms = new Date(from + 'T00:00:00').getTime(), tms = accEndMs(to);
+            const list = accBuildJournal().entries.filter(e => e.ms >= fms && e.ms <= tms && (!kind || e.kind === kind));
+            const shown = list.slice(0, 500);
+            return `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:10px;">
+                <div><label class="form-label" style="font-size:12px;">من</label><input type="date" class="form-control" id="accJrFrom" value="${from}"></div>
+                <div><label class="form-label" style="font-size:12px;">إلى</label><input type="date" class="form-control" id="accJrTo" value="${to}"></div>
+                <div><label class="form-label" style="font-size:12px;">النوع</label><select class="form-control" id="accJrKind"><option value="">الكل</option>${Object.keys(ACC_SRC_LABEL).map(k => `<option value="${k}" ${k === kind ? 'selected' : ''}>${ACC_SRC_LABEL[k]}</option>`).join('')}</select></div>
+                <button class="btn btn-primary btn-sm" onclick="renderAccounting()"><i class="fas fa-search"></i> عرض</button></div>
+                <div class="table-container" style="max-height:600px;overflow-y:auto;"><table><thead><tr><th>قيد</th><th>التاريخ</th><th>المستند</th><th>الحساب</th><th>مدين</th><th>دائن</th></tr></thead><tbody>${shown.map(e => e.lines.map((l, i) => `<tr style="${i === 0 ? 'border-top:2px solid var(--border);' : ''}">${i === 0 ? `<td rowspan="${e.lines.length}"><a href="javascript:void(0)" onclick="accShowEntry(${e.no})">${e.no}</a></td><td rowspan="${e.lines.length}" style="font-size:12px;white-space:nowrap;">${new Date(e.date).toLocaleString('ar-EG')}</td><td rowspan="${e.lines.length}" style="font-size:12px;">${escapeHtml(ACC_SRC_LABEL[e.kind] || '')} ${escapeHtml(e.ref || '')}<br>${escapeHtml(e.memo || '')}</td>` : ''}<td style="${l.cr ? 'padding-right:28px;' : ''}">${escapeHtml(accLabel(l.acc))}</td><td>${l.dr ? accF(l.dr) : ''}</td><td>${l.cr ? accF(l.cr) : ''}</td></tr>`).join('')).join('') || '<tr><td colspan="6">مفيش قيود في الفترة دي</td></tr>'}</tbody></table></div>
+                ${list.length > 500 ? `<div style="font-size:12px;color:var(--text-light);">ظاهر أول 500 قيد من ${list.length} — صغّر الفترة</div>` : `<div style="font-size:12px;color:var(--text-light);">${list.length} قيد</div>`}`;
+        }
+        // ---- المطابقات: رصيد الحساب في الدفاتر مقابل الرقم اللي السيستم بيعرضه في شاشته ----
+        function accReconData() {
+            const b = accBalances(-Infinity, Infinity), bal = c => accSum(b, c).bal;
+            const rows = [];
+            const r = (group, label, gl, sys, hint, acc) => rows.push({ group, label, gl: accR(gl), sys: sys == null ? null : accR(sys), diff: sys == null ? null : accR(gl - sys), hint, acc });
+            r('الخزنة', 'الخزنة (نقدي)', bal('1101'), getTreasuryBalance('cash'), 'لازم يتطابقوا بالقرش. لو فيه فرق: رصيد أول المدة للخزنة مش مظبوط.', '1101');
+            r('الخزنة', 'البنك والتحويلات', bal('1102'), getTreasuryBalance('bank'), '', '1102');
+            const supCodes = new Set(suppliers.map(s => s.code)); Object.keys(b).forEach(k => { if (k.startsWith('2101:')) supCodes.add(k.slice(5)); });
+            supCodes.forEach(c => { const gl = bal('2101:' + c), sys = suppliers.some(s => s.code === c) ? getSupplierBalance(c) : 0; if (Math.abs(gl) < 0.005 && Math.abs(sys) < 0.005) return; r('الموردين', accName('2101:' + c), gl, sys, 'فرق هنا = مستند شراء أو سند صرف أو تسوية اتسجلت بطريقة مختلفة. افتح الأستاذ.', '2101:' + c); });
+            const repCodes = new Set(salesmen.filter(s => s.repType === 'delivery').map(s => s.code)); Object.keys(b).forEach(k => { if (k.startsWith('1103:')) repCodes.add(k.slice(5)); });
+            repCodes.forEach(c => {
+                const unsettled = (typeof unsettledFor === 'function' ? unsettledFor(c) : []).reduce((t, x) => t + (Number(x.amount) || 0), 0);
+                const sys = unsettled + (typeof repShortage === 'function' ? repShortage(c) : 0), gl = bal('1103:' + c);
+                if (Math.abs(gl) < 0.005 && Math.abs(sys) < 0.005) return;
+                r('عهد المناديب', accName('1103:' + c), gl, sys, 'السيستم = فلوس طلبات لسه ماتسلمتش + رصيد العجز.', '1103:' + c);
+            });
+            // المخزون: الدفاتر مقابل (الموجود × متوسط التكلفة) + بضاعة محجوزة لطلبات لسه ماتسلمتش + مرتجعات مع المناديب لسه ماوصلتش
+            const costOf = code => Number((inventory[code] || {}).cost) || Number((products.find(p => p.code === code) || {}).cost) || 0;
+            let onHand = 0; Object.keys(inventory).forEach(k => { onHand += (Number(inventory[k].qty) || 0) * costOf(k); });
+            let reserved = 0; customerOrders.forEach(o => { if (['delivered', 'merged', 'cancelled', 'rejected'].includes(o.status)) return; const v = reservedStockLedger[o.id]; if (v) Object.keys(v).forEach(k => { reserved += (Number(v[k]) || 0) * costOf(k); }); });
+            let retPending = 0; (typeof repReturnOrders !== 'undefined' ? repReturnOrders : []).forEach(o => { if (o.repReturnPending && !o.repReturnReceived) (o.repReturns || []).forEach(x => { retPending += (Number(x.deductQty != null ? x.deductQty : x.qty) || 0) * costOf(x.productCode); }); });
+            r('المخزون', 'المخزون بالتكلفة', bal('1104'), onHand + reserved + retPending, `السيستم = الموجود ${accF(onHand)} + محجوز لطلبات ${accF(reserved)} + مرتجعات مع المناديب ${accF(retPending)}. فرق صغير طبيعي من تغيّر متوسط التكلفة؛ فرق كبير = حركة مخزون من غير مستند أو رصيد أول مدة مش مظبوط.`, '1104');
+            r('حسابات وسيطة (لازم تبقى صفر)', 'مصروفات تحت السداد', bal('2102'), 0, 'لو مش صفر: مصروف اتسجل من غير ما يطلع من الخزنة أو العكس، أو تاريخ المصروف غير تاريخ الصرف.', '2102');
+            r('حسابات وسيطة (لازم تبقى صفر)', 'تحويلات داخلية', bal('2103'), 0, 'لو مش صفر: تحويل بين الخزنة والبنك ليه طرف واحد بس.', '2103');
+            r('حسابات وسيطة (لازم تبقى صفر)', 'حركات خزنة غير مصنفة', bal('3302'), 0, 'حركات خزنة نوع طرفها مش معروف — افتح الأستاذ وشوفها.', '3302');
+            const custs = Object.keys(b).filter(k => k.startsWith('1105:')).map(k => ({ k, v: bal(k) })).filter(x => Math.abs(x.v) >= 0.01);
+            const custSys = c => { const cc = customers.find(x => x.code === c); return cc ? getCustomerBalance(c) : 0; };
+            custs.forEach(x => r('العملاء (الشغل كاش، فالمفروض صفر إلا الآجل)', accName(x.k), x.v, custSys(x.k.slice(5)), 'موجب = فاتورة اتعملت وفلوسها مادخلتش الخزنة ولا عهدة مندوب. سالب = فلوس دخلت من غير فاتورة.', x.k));
+            return rows;
+        }
+        function accRenderRecon() {
+            const rows = accReconData();
+            const cms = accCutoffMs();
+            const ps = profitSummary(cms, Date.now() + 86400000), ni = accIncomeData(cms, Date.now() + 86400000).net;
+            let g = '';
+            const html = rows.map(x => {
+                const head = x.group !== g ? `<tr style="background:#f3f1ff;font-weight:800;"><td colspan="5">${escapeHtml(x.group)}</td></tr>` : ''; g = x.group;
+                const bad = x.diff != null && Math.abs(x.diff) >= 0.01;
+                return head + `<tr style="${bad ? 'background:rgba(231,76,60,0.06);' : ''}"><td><a href="javascript:void(0)" onclick="accOpenLedger('${x.acc.replace(/'/g, "\\'")}')">${escapeHtml(x.label)}</a></td><td>${accF(x.gl)}</td><td>${x.sys == null ? '-' : accF(x.sys)}</td><td style="font-weight:800;color:${bad ? 'var(--danger)' : 'var(--accent)'};">${x.diff == null ? '-' : bad ? accF(x.diff) : '✓'}</td><td style="font-size:12px;color:var(--text-light);">${bad ? escapeHtml(x.hint || '') : ''}</td></tr>`;
+            }).join('');
+            const nbad = rows.filter(x => x.diff != null && Math.abs(x.diff) >= 0.01).length;
+            return `<div style="padding:10px;border-radius:10px;margin-bottom:10px;background:${nbad ? 'rgba(243,156,18,0.12)' : 'rgba(46,204,113,0.1)'};font-weight:700;">${nbad ? '⚠️ فيه ' + nbad + ' بند مش متطابق — اضغط على اسم الحساب يفتحلك الأستاذ بكل حركة' : '✅ كل الأرصدة متطابقة مع شاشات السيستم'}</div>
+                <div class="table-container"><table><thead><tr><th>البند</th><th>في الدفاتر</th><th>في شاشة السيستم</th><th>الفرق</th><th>ملاحظة</th></tr></thead><tbody>${html}</tbody></table></div>
+                <div style="margin-top:12px;padding:10px;border-radius:10px;background:#f8f9fa;font-size:13px;line-height:1.9;"><strong>صافي الربح من بداية الحسابات:</strong> في الدفاتر ${accF(ni)} · في شاشة الربحية ${accF(ps.netProfit)}${Math.abs(ni - ps.netProfit) >= 0.01 ? ` · <span style="color:#b9770e;">فرق ${accF(ni - ps.netProfit)}</span> (طبيعي لو فيه: عجز مرتجعات محمّل على مناديب، فروقات تسوية خزنة، أو قيود يدوية لإيرادات/مصروفات)` : ' ✓'}</div>`;
+        }
+        // ---- القيود اليدوية ----
+        function accRenderManual() {
+            const list = accJournals.slice().sort((a, b) => accMs(b.date) - accMs(a.date));
+            return `<button class="btn btn-primary btn-sm" onclick="accOpenJournalModal()"><i class="fas fa-plus"></i> قيد يدوي جديد</button>
+                <div style="font-size:12px;color:var(--text-light);margin:6px 0 10px;">للحاجات اللي مالهاش شاشة في السيستم: إيداع رأس مال، مسحوبات، شراء عربية أو جهاز، قرض، إهلاك، سلفة موظف... الشغل اليومي (بيع، شراء، خزنة، مصروفات) بيتقيد لوحده.</div>
+                <div class="table-container"><table><thead><tr><th>رقم</th><th>التاريخ</th><th>البيان</th><th>الحسابات</th><th>المبلغ</th><th>عمله</th><th></th></tr></thead><tbody>${list.map(j => {
+                    const amt = (j.lines || []).reduce((s, l) => s + (Number(l.dr) || 0), 0);
+                    return `<tr style="${j.status === 'void' ? 'opacity:.5;text-decoration:line-through;' : ''}"><td>ق${j.number || ''}</td><td style="font-size:12px;">${new Date(j.date).toLocaleDateString('ar-EG')}</td><td>${escapeHtml(j.memo || '')}${j.status === 'void' ? `<br><span style="font-size:11px;">ملغي: ${escapeHtml(j.voidReason || '')}</span>` : ''}</td><td style="font-size:12px;">${(j.lines || []).map(l => (l.dr ? 'من ' : 'إلى ') + escapeHtml(accLabel(l.acc))).join('<br>')}</td><td>${accF(amt)}</td><td style="font-size:12px;">${escapeHtml((j.createdBy && j.createdBy.name) || '')}</td><td>${j.status !== 'void' ? `<button class="btn btn-danger btn-sm" onclick="accVoidJournal('${j.id}')">إلغاء</button>` : ''}</td></tr>`;
+                }).join('') || '<tr><td colspan="7">مفيش قيود يدوية</td></tr>'}</tbody></table></div>`;
+        }
+        function accLineRow(i, l) {
+            l = l || {};
+            return `<tr class="acc-jl"><td><select class="form-control acc-jl-acc" style="min-width:240px;">${'<option value="">اختار الحساب...</option>' + accAccountOptions(l.acc || '', true)}</select></td>
+                <td><input type="number" step="0.01" min="0" class="form-control acc-jl-dr" value="${l.dr || ''}" oninput="accJournalTotals()"></td><td><input type="number" step="0.01" min="0" class="form-control acc-jl-cr" value="${l.cr || ''}" oninput="accJournalTotals()"></td>
+                <td><button class="btn btn-secondary btn-sm" onclick="this.closest('tr').remove();accJournalTotals()">✕</button></td></tr>`;
+        }
+        function accJournalLinesHtml(lines) {
+            return `<div class="table-container"><table><thead><tr><th>الحساب</th><th>مدين</th><th>دائن</th><th></th></tr></thead><tbody id="accJlBody">${(lines && lines.length ? lines : [{}, {}]).map((l, i) => accLineRow(i, l)).join('')}</tbody></table></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;"><button class="btn btn-secondary btn-sm" onclick="document.getElementById('accJlBody').insertAdjacentHTML('beforeend', accLineRow());"><i class="fas fa-plus"></i> سطر</button><div id="accJlTotals" style="font-weight:700;"></div></div>`;
+        }
+        function accReadLines() {
+            return Array.from(document.querySelectorAll('#accJlBody .acc-jl')).map(tr => ({ acc: tr.querySelector('.acc-jl-acc').value, dr: accR(tr.querySelector('.acc-jl-dr').value), cr: accR(tr.querySelector('.acc-jl-cr').value) })).filter(l => l.acc && (l.dr || l.cr));
+        }
+        function accJournalTotals() {
+            const ls = accReadLines(), dr = ls.reduce((s, l) => s + l.dr, 0), cr = ls.reduce((s, l) => s + l.cr, 0);
+            const el = document.getElementById('accJlTotals'); if (el) el.innerHTML = `مدين ${accF(dr)} · دائن ${accF(cr)} ${Math.abs(dr - cr) < 0.005 && dr > 0 ? '<span style="color:var(--accent);">✓ متوازن</span>' : `<span style="color:var(--danger);">فرق ${accF(dr - cr)}</span>`}`;
+            return { dr, cr, ls };
+        }
+        function accOpenJournalModal() {
+            accModal('accJournalModal', 'قيد يدوي جديد', `<div style="display:flex;gap:8px;flex-wrap:wrap;"><div><label class="form-label">التاريخ</label><input type="date" class="form-control" id="accJDate" value="${accTodayStr()}"></div>
+                <div style="flex:1;min-width:240px;"><label class="form-label">البيان <span style="color:var(--danger);">*</span></label><input type="text" class="form-control" id="accJMemo" placeholder="مثال: إيداع رأس مال من الشريك"></div></div>
+                <div style="font-size:12px;color:var(--text-light);margin:6px 0;">مثال: شراء عربية كاش بـ 200,000 → <strong>من</strong> السيارات (مدين 200,000) <strong>إلى</strong> الخزنة (دائن 200,000). ⚠️ لو القيد فيه الخزنة، المبلغ مش هيتسجل في شاشة الخزنة — استخدم سند صرف/قبض من شاشة الخزنة للفلوس، والقيد اليدوي للباقي.</div>
+                ${accJournalLinesHtml()}`, `<button class="btn btn-secondary" onclick="closeModal('accJournalModal')">إلغاء</button><button class="btn btn-success" id="accJSaveBtn" onclick="accSaveJournal()"><i class="fas fa-save"></i> حفظ القيد</button>`);
+            accJournalTotals();
+        }
+        function accSaveJournal() {
+            if (!requireCloudReady() || !currentUser || currentUser.role !== 'admin') return;
+            const date = document.getElementById('accJDate').value, memo = document.getElementById('accJMemo').value.trim();
+            const t = accJournalTotals();
+            if (!date) { showToast('اختار التاريخ', 'error'); return; }
+            if (!memo) { showToast('اكتب بيان القيد', 'error'); return; }
+            if (t.ls.length < 2) { showToast('القيد لازم يكون فيه حسابين على الأقل', 'error'); return; }
+            if (t.ls.some(l => l.dr && l.cr)) { showToast('السطر الواحد يا مدين يا دائن، مش الاتنين', 'error'); return; }
+            if (Math.abs(t.dr - t.cr) >= 0.005) { showToast('القيد مش متوازن: المدين لازم يساوي الدائن', 'error'); return; }
+            if (accCutoffMs() != null && new Date(date + 'T12:00:00').getTime() < accCutoffMs()) { showToast('التاريخ قبل بداية الحسابات (' + accMeta.cutoff + ')', 'error'); return; }
+            const usesCash = t.ls.some(l => l.acc === '1101' || l.acc === '1102');
+            if (usesCash && !confirm('القيد ده فيه الخزنة/البنك، ومش هيظهر في شاشة الخزنة، فالمطابقة هتطلع فرق. لو الفلوس فعلاً خرجت أو دخلت، الأحسن تسجلها سند من شاشة الخزنة.\n\nتكمل برضه؟')) return;
+            const btn = document.getElementById('accJSaveBtn'); btn.disabled = true;
+            const me = pdUser(), id = 'JE-' + Date.now(), cref = db.collection('meta').doc('accounting');
+            db.runTransaction(tx => tx.get(cref).then(s => {
+                const n = (Number((s.data() || {}).journalSeq) || 0) + 1;
+                tx.set(cref, { journalSeq: n }, { merge: true });
+                tx.set(db.collection('journalEntries').doc(id), { id, number: n, date: new Date(date + 'T12:00:00').toISOString(), memo, lines: t.ls, status: 'posted', createdBy: me, createdAt: Date.now() });
+                return n;
+            })).then(n => { logAction('قيد يدوي', `ق${n}: ${memo} — ${accF(t.dr)}`); showToast('اتسجل القيد ق' + n); closeModal('accJournalModal'); })
+              .catch(e => { console.error(e); showToast(e.message || 'تعذر الحفظ', 'error'); }).then(() => { btn.disabled = false; });
+        }
+        function accVoidJournal(id) {
+            if (!requireCloudReady() || !currentUser || currentUser.role !== 'admin') return;
+            const j = accJournals.find(x => x.id === id); if (!j) return;
+            const reason = prompt('سبب إلغاء القيد ق' + (j.number || '') + '؟ (القيد مش هيتمسح، هيفضل ظاهر وعليه "ملغي")');
+            if (!reason || !reason.trim()) return;
+            db.collection('journalEntries').doc(id).set({ status: 'void', voidReason: reason.trim(), voidBy: pdUser(), voidAt: Date.now() }, { merge: true })
+                .then(() => { logAction('إلغاء قيد يدوي', `ق${j.number}: ${reason}`); showToast('اتلغى القيد'); }).catch(e => showToast(e.message || 'تعذر', 'error'));
+        }
+        // ---- حساب جديد في الشجرة ----
+        function accOpenAccountModal() {
+            const parents = accAll().filter(a => !a.dyn).map(a => `<option value="${a.code}">${escapeHtml(a.code + ' ' + a.name)}</option>`).join('');
+            accModal('accAccountModal', 'إضافة حساب', `<div class="form-group"><label class="form-label">تحت حساب</label><select class="form-control" id="accNewParent">${parents}</select></div>
+                <div class="form-group"><label class="form-label">اسم الحساب</label><input type="text" class="form-control" id="accNewName" placeholder="مثال: عربية نقل ربع"></div>`,
+                `<button class="btn btn-secondary" onclick="closeModal('accAccountModal')">إلغاء</button><button class="btn btn-success" onclick="accSaveAccount()">حفظ</button>`);
+        }
+        function accSaveAccount() {
+            if (!requireCloudReady() || !currentUser || currentUser.role !== 'admin') return;
+            const parent = document.getElementById('accNewParent').value, name = document.getElementById('accNewName').value.trim();
+            if (!name) { showToast('اكتب اسم الحساب', 'error'); return; }
+            let code = null; for (let n = 1; n < 100; n++) { const c = parent + String(n).padStart(2, '0'); if (!accFind(c)) { code = c; break; } }
+            if (!code) { showToast('مفيش أكواد فاضية تحت الحساب ده', 'error'); return; }
+            const ref = db.collection('meta').doc('accounting');
+            db.runTransaction(tx => tx.get(ref).then(snap => {
+                const cur = ((snap.exists && snap.data().customAccounts) || []);
+                if (cur.some(a => a.code === code)) throw new Error('الكود ده اتاخد من جهاز تاني، جرّب تاني');
+                tx.set(ref, { customAccounts: cur.concat([{ code, name, parent, createdBy: pdUser().name, createdAt: Date.now() }]) }, { merge: true });
+            })).then(() => { logAction('إضافة حساب', code + ' ' + name); showToast('اتضاف الحساب ' + code); closeModal('accAccountModal'); accTreeOpen[parent] = true; }).catch(e => showToast(e.message || 'تعذر', 'error'));
+        }
+        // ---- البداية: تاريخ القطع + أرصدة أول المدة ----
+        function accSuggestOpening(cutoffStr) {
+            const cms = new Date(cutoffStr + 'T00:00:00').getTime();
+            const before = d => accMs(d) < cms;
+            const L = [];
+            const cash = treasury.filter(t => before(t.date) && treasuryAccountOf(t) !== 'bank').reduce((s, t) => s + (t.type === 'in' ? 1 : -1) * (Number(t.amount) || 0), 0);
+            const bank = treasury.filter(t => before(t.date) && treasuryAccountOf(t) === 'bank').reduce((s, t) => s + (t.type === 'in' ? 1 : -1) * (Number(t.amount) || 0), 0);
+            L.push({ acc: '1101', v: cash, note: 'رصيد الخزنة النقدي قبل التاريخ ده (من حركات الخزنة)' });
+            L.push({ acc: '1102', v: bank, note: 'رصيد البنك قبل التاريخ ده' });
+            // المخزون: القيمة الحالية − قيمة حركات المخزون من التاريخ ده (تقريبي) — الأدق تكتب قيمة الجرد الفعلي
+            const costOf = code => Number((inventory[code] || {}).cost) || Number((products.find(p => p.code === code) || {}).cost) || 0;
+            let onHand = 0; Object.keys(inventory).forEach(k => { onHand += (Number(inventory[k].qty) || 0) * costOf(k); });
+            let reservedNow = 0; customerOrders.forEach(o => { if (['delivered', 'merged', 'cancelled', 'rejected'].includes(o.status)) return; const v = reservedStockLedger[o.id]; if (v) Object.keys(v).forEach(k => { reservedNow += (Number(v[k]) || 0) * costOf(k); }); });
+            let retPendingNow = 0; (typeof repReturnOrders !== 'undefined' ? repReturnOrders : []).forEach(o => { if (o.repReturnPending && !o.repReturnReceived) (o.repReturns || []).forEach(x => { retPendingNow += (Number(x.deductQty != null ? x.deductQty : x.qty) || 0) * costOf(x.productCode); }); });
+            L.push({ acc: '1104', v: onHand + reservedNow + retPendingNow, note: 'قيمة المخزون الحالية بالتكلفة (شاملة المحجوز لطلبات والمرتجعات اللي مع المناديب). لو التاريخ مش النهارده أو يوم جرد، اكتب قيمة الجرد الفعلي يوم البداية' });
+            // الموردين: نفس حساب شاشة المورد بس لحد التاريخ ده
+            suppliers.forEach(s => {
+                let anchor = null; supplierAdjustments.forEach(x => { if (x && x.supplierCode === s.code && x.newBalance != null && before(x.date) && (!anchor || accMs(x.date) > accMs(anchor.date))) anchor = x; });
+                const after = anchor ? accMs(anchor.date) : -Infinity, ok = d => accMs(d) > after && before(d);
+                let b = anchor ? Number(anchor.newBalance) : 0;
+                purchaseInvoices.forEach(p => { if (p.supplierCode === s.code && p.paymentMethod === 'آجل' && ok(p.date)) b += Number(p.grandTotal) || 0; });
+                treasury.forEach(t => { if (t.type === 'out' && t.partyType === 'supplier' && t.party === s.code && t.isDebtRelated !== false && ok(t.date)) b -= Number(t.amount) || 0; });
+                purchaseReturns.forEach(r => { if (r.supplierCode === s.code && r.affectsBalance && ok(r.date)) b -= Number(r.grandTotal) || 0; });
+                if (Math.abs(b) >= 0.01) L.push({ acc: '2101:' + s.code, v: -b, note: 'مديونية المورد يوم البداية' });
+            });
+            // عهد المناديب: فلوس طلبات قبل التاريخ ولسه ماتسلمتش وقتها + العجز وقتها
+            const repCodes = new Set(salesmen.filter(s => s.repType === 'delivery').map(s => s.code));
+            repCodes.forEach(c => {
+                const collSrc = {}; deliveryCollections.concat(accSetupExtra.cutoff === cutoffStr ? accSetupExtra.collections : []).forEach(r => { if (r && r.id) collSrc[r.id] = r; });
+                const coll = Object.values(collSrc).filter(r => r.repUsername === c && before(r.date) && Number(r.amount) > 0 && (!r.settledAt || r.settledAt >= cms)).reduce((t, r) => t + (Number(r.amount) || 0), 0);
+                const later = Array.from((typeof repSettlementsAll !== 'undefined' ? repSettlementsAll : new Map()).values()).filter(s => s.repCode === c && !s.legacy && accMs(s.date) >= cms).reduce((t, s) => t + (Number(s.ordersAmount) || 0) - (Number(s.received) || 0), 0);
+                const rrs = (typeof repReturnOrders !== 'undefined' ? repReturnOrders : []).filter(o => o.repReturnRepCode === c && o.repReturnReceived && o.repReturnReceived.shortageApplied && accMs(o.repReturnReceived.at) >= cms).reduce((t, o) => t + (Number(o.repReturnReceived.shortageValue) || 0), 0);
+                const short = (typeof repShortage === 'function' ? repShortage(c) : 0) - later - rrs;
+                const v = coll + short;
+                if (Math.abs(v) >= 0.01) L.push({ acc: '1103:' + c, v, note: `فلوس طلبات معاه ${accF(coll)} + عجز ${accF(short)}` });
+            });
+            // عملاء آجل (لو فيه)
+            customers.forEach(c => {
+                let b = 0;
+                invoices.forEach(i => { if (i.customerCode === c.code && i.paymentMethod === 'آجل' && before(i.date)) b += Number(i.grandTotal) || 0; });
+                treasury.forEach(t => { if (t.type === 'in' && t.partyType === 'customer' && t.party === c.code && t.isDebtRelated !== false && before(t.date)) b -= Number(t.amount) || 0; });
+                salesReturns.forEach(r => { if (r.customerCode === c.code && r.affectsBalance && before(r.date)) b -= Number(r.grandTotal) || 0; });
+                if (Math.abs(b) >= 0.01) L.push({ acc: '1105:' + c.code, v: b, note: 'رصيد آجل على العميل' });
+            });
+            return L;
+        }
+        let accSetupExtra = { cutoff: null, collections: [] };
+        function renderAccSetup(box) {
+            const cutoff = accVal('accSetupCutoff', (accMeta && accMeta.cutoff) || accTodayStr());
+            if (db && accSetupExtra.cutoff !== cutoff && !accSetupExtra.loading) {
+                // عهد اتسجلت قبل التاريخ واتسوّت بعده (مش لازم تكون في آخر 2000 حركة على الجهاز)
+                accSetupExtra.loading = true;
+                const cms0 = new Date(cutoff + 'T00:00:00').getTime();
+                db.collection('deliveryCollectionRecords').where('settledAt', '>=', cms0).get().then(snap => {
+                    accSetupExtra = { cutoff, collections: snap.docs.map(d => Object.assign({ id: d.id }, d.data())) };
+                    renderAccSetup(box);
+                }).catch(e => { console.error(e); accSetupExtra = { cutoff, collections: [] }; renderAccSetup(box); });
+                box.innerHTML = '<p>جاري حساب الأرصدة...</p>'; return;
+            }
+            const sug = accSuggestOpening(cutoff);
+            const existing = accMeta && accMeta.opening && accMeta.opening.lines;
+            const lines = existing ? existing.map(l => ({ acc: l.acc, dr: l.dr, cr: l.cr })) : sug.filter(x => Math.abs(x.v) >= 0.01).map(x => ({ acc: x.acc, dr: x.v > 0 ? accR(x.v) : 0, cr: x.v < 0 ? accR(-x.v) : 0 }));
+            box.innerHTML = `<div style="background:#fff8e6;border-radius:12px;padding:14px;line-height:1.9;font-size:14px;margin-bottom:12px;">
+                <strong>خطوة واحدة قبل ما الحسابات تشتغل:</strong> اختار <strong>تاريخ البداية</strong> وراجع <strong>أرصدة أول المدة</strong> (فلوس الخزنة، قيمة المخزون، مديونية الموردين، عهد المناديب...). السيستم كاتبلك أرقامه كاقتراح — عدّل أي رقم مش مظبوط، وضيف الأصول اللي مش في السيستم (عربيات، أجهزة، قروض...).<br>
+                <strong>نصيحة:</strong> أحسن تاريخ بداية = يوم جرد فعلي للمخزن، وتكتب قيمة الجرد بالظبط. <strong>رأس المال</strong> بيتحسب لوحده = الأصول − الخصوم.<br>
+                <span style="color:var(--text-light);">ده مش بيغيّر أي بيانات في السيستم — بيسجل نقطة بداية للدفاتر بس، وتقدر تعدّله بعدين.</span></div>
+                <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-bottom:10px;"><div><label class="form-label">تاريخ البداية</label><input type="date" class="form-control" id="accSetupCutoff" value="${cutoff}"></div>
+                ${existing ? '' : `<button class="btn btn-secondary btn-sm" onclick="renderAccSetup(document.getElementById('accBody'))"><i class="fas fa-sync"></i> احسب الاقتراح للتاريخ ده</button>`}</div>
+                <div style="font-size:12.5px;line-height:1.8;margin-bottom:6px;color:var(--text-light);">${sug.map(x => `${escapeHtml(accLabel(x.acc))}: ${escapeHtml(x.note)}`).slice(0, 4).join('<br>')}</div>
+                ${accJournalLinesHtml(lines)}
+                <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="btn btn-success" id="accOpenSaveBtn" onclick="accSaveOpening()"><i class="fas fa-check"></i> اعتماد أرصدة أول المدة وتشغيل الحسابات</button>
+                ${existing ? `<button class="btn btn-secondary" onclick="accTab='tree';accEditingOpening=false;renderAccounting()">رجوع</button>` : ''}
+                <span style="font-size:12px;color:var(--text-light);">الفرق بين المدين والدائن هيتسجل في رأس المال (3101) لوحده.</span></div>`;
+            accJournalTotals();
+        }
+        let accEditingOpening = false;
+        function accRenderOpeningView() {
+            const op = accMeta.opening || { lines: [] };
+            return `<div style="margin-bottom:8px;">تاريخ البداية: <strong>${accMeta.cutoff}</strong> · اعتمدها ${escapeHtml((op.by && op.by.name) || '')} ${op.at ? new Date(op.at).toLocaleString('ar-EG') : ''}</div>
+                <div class="table-container"><table><thead><tr><th>الحساب</th><th>مدين</th><th>دائن</th></tr></thead><tbody>${op.lines.map(l => `<tr><td>${escapeHtml(accLabel(l.acc))}</td><td>${l.dr ? accF(l.dr) : ''}</td><td>${l.cr ? accF(l.cr) : ''}</td></tr>`).join('')}</tbody></table></div>
+                <button class="btn btn-warning btn-sm" style="margin-top:8px;" onclick="accEditOpening()"><i class="fas fa-edit"></i> تعديل أرصدة أول المدة / تاريخ البداية</button>`;
+        }
+        function accEditOpening() {
+            if (!confirm('تعديل أرصدة أول المدة هيغيّر كل الأرصدة في الدفاتر (مش بيلمس أي بيانات في السيستم). تكمل؟')) return;
+            const box = document.getElementById('accBody'); document.getElementById('accTabs').style.display = 'none'; renderAccSetup(box);
+        }
+        function accSaveOpening() {
+            if (!requireCloudReady() || !currentUser || currentUser.role !== 'admin') return;
+            const cutoff = document.getElementById('accSetupCutoff').value;
+            if (!cutoff) { showToast('اختار تاريخ البداية', 'error'); return; }
+            const t = accJournalTotals();
+            if (t.ls.some(l => l.dr && l.cr)) { showToast('السطر الواحد يا مدين يا دائن، مش الاتنين', 'error'); return; }
+            const lines = t.ls.filter(l => l.acc !== '3101').slice();
+            const capitalUser = t.ls.filter(l => l.acc === '3101').reduce((s, l) => s + l.cr - l.dr, 0);
+            const dr = lines.reduce((s, l) => s + l.dr, 0), cr = lines.reduce((s, l) => s + l.cr, 0);
+            const cap = accR(dr - cr);
+            if (Math.abs(capitalUser) >= 0.005 && Math.abs(capitalUser - cap) >= 0.005 && !confirm(`رأس المال اللي كاتبه (${accF(capitalUser)}) مختلف عن الفرق (${accF(cap)}). هيتسجل ${accF(cap)} عشان القيد يتوازن. تكمل؟`)) return;
+            if (Math.abs(cap) >= 0.005) lines.push({ acc: '3101', dr: cap < 0 ? -cap : 0, cr: cap > 0 ? cap : 0 });
+            if (!confirm(`اعتماد البداية يوم ${cutoff}\nإجمالي الأصول المسجلة ${accF(dr)} · الخصوم ${accF(cr)} · رأس المال ${accF(cap)}\nتكمل؟`)) return;
+            const btn = document.getElementById('accOpenSaveBtn'); if (btn) btn.disabled = true;
+            const prev = accMeta && accMeta.opening ? { cutoff: accMeta.cutoff, opening: accMeta.opening, replacedAt: Date.now() } : null;
+            const upd = { cutoff, opening: { lines, by: pdUser(), at: Date.now() } };
+            if (prev) upd.openingHistory = ((accMeta.openingHistory) || []).concat([prev]).slice(-20);
+            db.collection('meta').doc('accounting').set(upd, { merge: true })
+                .then(() => { logAction('أرصدة أول المدة', `بداية ${cutoff} — رأس المال ${accF(cap)}`); showToast('اتعتمدت أرصدة أول المدة ✓'); accTab = 'recon'; accCache = null; accExtra.loadedAt = 0; })
+                .catch(e => { console.error(e); showToast(e.message || 'تعذر الحفظ', 'error'); if (btn) btn.disabled = false; });
+        }
+
+
         // ==================== SIDEBAR & NAVIGATION ====================
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
@@ -6567,7 +7302,7 @@
                 'reports': 'التقارير والتجميع', 'daily-sales': 'التقرير اليومي للمبيعات', 'backup': 'النسخ الاحتياطي',
                 'sales-returns': 'مرتجعات البيع', 'purchase-returns': 'مرتجعات الشراء',
                 'collections': 'متابعة التحصيلات', 'sales-tracking': 'لوحة متابعة المبيعات', 'sales-supervisor': 'داشبورد مشرف المبيعات', 'purchase-approvals': 'المراجعة والاعتماد', 'rep-custody': 'عهدة المناديب', 'smart-analytics': 'التحليلات الذكية',
-                'users': 'المستخدمون والصلاحيات', 'audit-log': 'سجل العمليات'
+                'users': 'المستخدمون والصلاحيات', 'audit-log': 'سجل العمليات', 'accounting': 'الشجرة المحاسبية والقيود'
             };
             document.getElementById('pageTitle').textContent = titles[sectionName] || sectionName;
             if (sectionName === 'reports') { renderSalesSummary(); renderAdvancedReports(); renderDailyShipmentReport(); }
@@ -6589,6 +7324,7 @@
             if (sectionName === 'smart-analytics') { renderSmartAnalytics(); }
             if (sectionName === 'users') { renderUsers(); }
             if (sectionName === 'audit-log') { renderAuditLog(); }
+            if (sectionName === 'accounting') { renderAccounting(); }
             document.getElementById('sidebar').classList.remove('open');
         }
 
@@ -11558,7 +12294,7 @@
                 `<div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:#f8f9fa;font-size:13px;line-height:1.9;">
                     <strong>تصحيحات مخزون (مش داخلة في الربح):</strong> زيادة ${f(ps.corrIn || 0)} ج.م · خصم ${f(ps.corrOut || 0)} ج.م
                     ${ps.unreviewed ? `<br><span style="color:#b9770e;">⚠️ فيه ${ps.unreviewed} تعديل مخزون قديم لسه متصنفش (الزيادة اتحسبت تصحيح والعجز اتحسب خسارة مؤقتًا).</span>` : ''}
-                    ${canApprovePurchases() ? `<br><button class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="openAdjImpactReview()"><i class="fas fa-tags"></i> مراجعة وتصنيف تعديلات المخزون</button>` : ''}
+                    ${currentUser && currentUser.role === 'admin' ? `<br><button class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="openAdjImpactReview()"><i class="fas fa-tags"></i> مراجعة وتصنيف تعديلات المخزون</button>` : ''}
                 </div>` +
                 `<div style="font-size:12px;color:var(--text-light);margin-top:8px;">التكلفة = متوسط تكلفة الصنف وقت البيع. فروق الجرد متقيّمة بمتوسط التكلفة وقت الجرد. "تصحيح غلط" (زي تصليح كمية متسجلة غلط أو رصيد أول مدة) مش بيتحسب ربح ولا خسارة. عجز مناديب التسليم مش خسارة، لأنه فلوس لسه مطلوبة منهم.</div>`;
             try { renderProfitAudit(); } catch (e) { console.error(e); }
@@ -11566,7 +12302,7 @@
         // ---- مراجعة وتصنيف تعديلات المخزون (تصحيح غلط ولا فرق حقيقي) ----
         let adjReviewRows = [];
         function openAdjImpactReview() {
-            if (!canApprovePurchases()) { showToast('التصنيف للمحاسب أو المدير بس', 'error'); return; }
+            if (!currentUser || currentUser.role !== 'admin') { showToast('التصنيف للمدير بس', 'error'); return; }
             if (!requireCloudReady()) return;
             let m = document.getElementById('adjImpactReviewModal');
             if (!m) {
@@ -11608,7 +12344,7 @@
         }
         function setAllAdjRev(v) { document.querySelectorAll('#adjRevBody .appr-impact').forEach(el => { el.value = v; }); }
         function saveAdjImpactReview() {
-            if (!canApprovePurchases() || !requireCloudReady()) return;
+            if (!currentUser || currentUser.role !== 'admin' || !requireCloudReady()) return;
             const me = pdUser();
             const changes = [];
             adjRevVisible().forEach(x => {
@@ -12412,8 +13148,50 @@
             });
         }
 
-        function deleteAnyInvoice(id, type) {
+        // (2026-10-09) الفلوس بترجع من نفس المكان اللي دخلت فيه: التحويل البنكي/البطاقة من البنك، والباقي من الدرج
+        function payAccountOf(paymentMethod) { return (paymentMethod === 'تحويل بنكي' || paymentMethod === 'بطاقة') ? 'bank' : 'cash'; }
+        // فاتورة طلب أبليكشن اتسلّم: الفلوس اتحصلت يا في المخزن (حركة خزنة) يا مع مندوب التسليم (عهدة)
+        function reverseAppOrderMoney(inv) {
+            const paidAtStore = appOrderPaidAtStore(inv);
+            if (paidAtStore) {
+                addTreasuryEntry('out', Number(paidAtStore.amount) || 0, paidAtStore.party, 'customer', 'حذف فاتورة بيع #' + inv.number + ' (طلب أبليكشن اتدفع في المخزن)', 'استرجاع', false, treasuryAccountOf(paidAtStore), { reversesDocDate: inv.date || null });
+                return 'رجع ' + (Number(paidAtStore.amount) || 0).toFixed(2) + ' ج.م من الخزنة';
+            }
+            const rec = deliveryCollections.find(r => r.id === 'DLV-ORD-' + inv.sourceOrderId);
+            if (!rec) return 'تنبيه: مش لاقي تسجيل لفلوس الطلب ده (لا في الخزنة ولا عهدة مندوب) — راجع الخزنة';
+            if (!(Number(rec.amount) > 0)) return '';
+            const amt = Number(rec.amount) || 0, repName = rec.repFullName || rec.repUsername || 'المندوب';
+            try { accExtra.loadedAt = 0; accCache = null; } catch (e) {}
+            if (rec.settlementId === 'legacy') return 'تنبيه: فلوس الطلب ده اتقفلت زمان كعهدة قديمة من غير ما تدخل الخزنة — مارجعش أي مبلغ تلقائي، راجع الخزنة بنفسك';
+            if (!rec.settledAt) {
+                // لسه مع المندوب: بتتشال من عهدته (المبلغ الأصلي بيتحفظ في السجل، مش بيتمسح)
+                rec.originalAmount = amt; rec.amount = 0; rec.cancelledAt = Date.now(); rec.cancelledReason = 'حذف الفاتورة #' + inv.number;
+                if (db) db.collection('deliveryCollectionRecords').doc(rec.id).set({ originalAmount: amt, amount: 0, cancelledAt: rec.cancelledAt, cancelledReason: rec.cancelledReason, cancelledBy: pdUser() }, { merge: true }).catch(e => console.error('custody cancel failed', e));
+                return 'اتشال ' + amt.toFixed(2) + ' ج.م من عهدة ' + repName;
+            }
+            // المندوب سلّمها للخزنة خلاص: بترجع من الخزنة
+            addTreasuryEntry('out', amt, inv.customerCode || 'عميل', 'customer', 'حذف فاتورة بيع #' + inv.number + ' (طلب أبليكشن فلوسه اتسلمت من ' + repName + ')', 'استرجاع', false, 'cash', { reversesDocDate: inv.date || null });
+            return 'رجع ' + amt.toFixed(2) + ' ج.م من الخزنة (المندوب كان سلّمها)';
+        }
+
+        function appOrderPaidAtStore(inv) {
+            const tag = '(فاتورة #' + inv.number + ')';
+            return treasury.find(t => t.type === 'in' && t.partyType === 'customer' && String(t.notes || '').includes('طلب أبليكشن') && String(t.notes || '').includes(tag));
+        }
+        function deleteAnyInvoice(id, type, opts) {
             if (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin') { showToast('حذف الفواتير للمدير بس', 'error'); return; }
+            // (2026-10-09) فاتورة طلب أبليكشن: لازم نعرف فلوسه فين قبل الحذف. سجل العهدة ممكن مايكونش متحمّل على الجهاز (قديم)، فبنجيبه من السحابة الأول
+            if (type === 'sale' && !(opts && opts.custodyChecked)) {
+                const inv0 = invoices.find(i => i.id === id);
+                if (inv0 && inv0.sourceOrderId && !appOrderPaidAtStore(inv0) && !deliveryCollections.find(r => r.id === 'DLV-ORD-' + inv0.sourceOrderId)) {
+                    if (!db) { showToast('لازم يكون فيه إنترنت عشان نعرف فلوس الطلب ده فين قبل الحذف', 'error'); return; }
+                    db.collection('deliveryCollectionRecords').doc('DLV-ORD-' + inv0.sourceOrderId).get().then(function(snap) {
+                        if (snap.exists && !deliveryCollections.find(r => r.id === snap.id)) deliveryCollections.push(Object.assign({ id: snap.id }, snap.data()));
+                        deleteAnyInvoice(id, type, { custodyChecked: true, custodyMissing: !snap.exists });
+                    }).catch(function(e) { console.error(e); showToast('مقدرتش أتأكد من فلوس الطلب ده — جرّب تاني', 'error'); });
+                    return;
+                }
+            }
             if (type === 'purchase') {
                 const invCheck = purchaseInvoices.find(i => i.id === id);
                 if (invCheck && (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin')) {
@@ -12421,7 +13199,12 @@
                     return;
                 }
             }
-            if (!confirm('هل أنت متأكد من حذف هذه الفاتورة؟')) return;
+            const invPre = type === 'sale' ? invoices.find(i => i.id === id) : null;
+            const appNote = invPre && invPre.sourceOrderId ? ((opts && opts.custodyMissing)
+                ? '\n\n⚠️ دي فاتورة طلب أبليكشن ومش لاقي أي تسجيل لفلوسه (لا في الخزنة ولا عهدة مندوب) — هتتحذف من غير ما يرجع أي مبلغ. راجع الخزنة بنفسك.'
+                : '\n\nدي فاتورة طلب أبليكشن اتسلّم: الفلوس اللي اتحصلت هترجع (من الخزنة لو اتدفعت في المخزن أو المندوب سلّمها، أو تتشال من عهدة المندوب لو لسه معاه).') : '';
+            if (!confirm('هل أنت متأكد من حذف هذه الفاتورة؟' + appNote)) return;
+            let moneyMsg = '';
             if (type === 'sale') {
                 const inv = invoices.find(i => i.id === id);
                 if (inv) {
@@ -12433,11 +13216,13 @@
                             // من الصح للمخزون.
                             const deductQty = item.stockDeductQty != null ? item.stockDeductQty : item.qty;
                             inventory[item.productCode].qty += deductQty;
-                            addStockMovement(item.productCode, item.productName, 'in', deductQty, inventory[item.productCode].qty, 'حذف فاتورة', 'استرجاع مخزون من حذف فاتورة بيع #' + inv.number);
+                            addStockMovement(item.productCode, item.productName, 'in', deductQty, inventory[item.productCode].qty, 'حذف فاتورة', 'استرجاع مخزون من حذف فاتورة بيع #' + inv.number, { reversesDocDate: inv.date || null });
                         }
                     });
                     if (inv.paymentMethod === 'نقدي' || inv.paymentMethod === 'بطاقة' || inv.paymentMethod === 'تحويل بنكي') {
-                        addTreasuryEntry('out', inv.grandTotal, inv.customerCode || 'عميل', 'customer', 'حذف فاتورة بيع #' + inv.number, 'استرجاع', false);
+                        addTreasuryEntry('out', inv.grandTotal, inv.customerCode || 'عميل', 'customer', 'حذف فاتورة بيع #' + inv.number, 'استرجاع', false, payAccountOf(inv.paymentMethod), { reversesDocDate: inv.date || null });
+                    } else if (inv.sourceOrderId) {
+                        try { moneyMsg = reverseAppOrderMoney(inv); } catch (e) { console.error('app order money reverse failed', e); }
                     }
                     saveInventory();
                 }
@@ -12450,11 +13235,11 @@
                     inv.items.forEach(item => {
                         if (inventory[item.productCode]) {
                             inventory[item.productCode].qty -= item.qty;
-                            addStockMovement(item.productCode, item.productName, 'out', -item.qty, inventory[item.productCode].qty, 'حذف فاتورة', 'خصم مخزون من حذف فاتورة شراء #' + inv.number);
+                            addStockMovement(item.productCode, item.productName, 'out', -item.qty, inventory[item.productCode].qty, 'حذف فاتورة', 'خصم مخزون من حذف فاتورة شراء #' + inv.number, { reversesDocDate: inv.date || null });
                         }
                     });
                     if (inv.paymentMethod === 'نقدي' || inv.paymentMethod === 'تحويل بنكي') {
-                        addTreasuryEntry('in', inv.grandTotal, inv.supplierCode || 'مورد', 'supplier', 'حذف فاتورة شراء #' + inv.number, 'استرجاع', false);
+                        addTreasuryEntry('in', inv.grandTotal, inv.supplierCode || 'مورد', 'supplier', 'حذف فاتورة شراء #' + inv.number, 'استرجاع', false, payAccountOf(inv.paymentMethod), { reversesDocDate: inv.date || null });
                     }
                     saveInventory();
                 }
@@ -12463,7 +13248,7 @@
                 if (db) db.collection('purchaseInvoiceRecords').doc(String(id)).delete().catch(function(e) { console.error('purchase invoice delete sync failed:', e); });
             }
             renderInvoices(); renderRecentInvoices(); updateDashboardStats(); renderTopProducts(); renderPaymentSummary(); updateSalesChart(); renderInventory(); renderMovements(); renderLowStock(); renderTreasury();
-            showToast('تم حذف الفاتورة');
+            showToast('تم حذف الفاتورة' + (moneyMsg ? ' — ' + moneyMsg : ''), 'success', moneyMsg ? 6000 : undefined);
         }
 
         // ==================== EDIT INVOICE (بدون بوظان المخزون) ====================
@@ -12532,23 +13317,24 @@
                     if (inventory[item.productCode]) {
                         const deductQty = item.stockDeductQty != null ? item.stockDeductQty : item.qty;
                         inventory[item.productCode].qty += deductQty;
-                        addStockMovement(item.productCode, item.productName, 'in', deductQty, inventory[item.productCode].qty, 'تعديل فاتورة', 'استرجاع مخزون قبل تعديل فاتورة بيع #' + inv.number);
+                        addStockMovement(item.productCode, item.productName, 'in', deductQty, inventory[item.productCode].qty, 'تعديل فاتورة', 'استرجاع مخزون قبل تعديل فاتورة بيع #' + inv.number, { reversesDocDate: inv.date || null });
                     }
                 });
                 if (inv.paymentMethod === 'نقدي' || inv.paymentMethod === 'بطاقة' || inv.paymentMethod === 'تحويل بنكي') {
-                    addTreasuryEntry('out', inv.grandTotal, inv.customerCode || 'عميل', 'customer', 'عكس المبلغ القديم قبل تعديل فاتورة بيع #' + inv.number, 'تعديل', false);
+                    addTreasuryEntry('out', inv.grandTotal, inv.customerCode || 'عميل', 'customer', 'عكس المبلغ القديم قبل تعديل فاتورة بيع #' + inv.number, 'تعديل', false, payAccountOf(inv.paymentMethod), { reversesDocDate: inv.date || null });
                 }
                 // خصم الكميات الجديدة (بوحدة الكرتونة الأساسية)
                 editInvoiceItems.forEach(item => {
                     if (inventory[item.productCode]) {
                         const deductQty = item.stockDeductQty != null ? item.stockDeductQty : item.qty;
                         inventory[item.productCode].qty -= deductQty;
-                        addStockMovement(item.productCode, item.productName, 'out', -deductQty, inventory[item.productCode].qty, 'تعديل فاتورة', 'خصم مخزون بعد تعديل فاتورة بيع #' + inv.number);
+                        addStockMovement(item.productCode, item.productName, 'out', -deductQty, inventory[item.productCode].qty, 'تعديل فاتورة', 'خصم مخزون بعد تعديل فاتورة بيع #' + inv.number, { reversesDocDate: inv.date || null });
                     }
                 });
                 const newGrandTotal = editInvoiceItems.reduce((s, i) => s + i.total, 0);
                 if (inv.paymentMethod === 'نقدي' || inv.paymentMethod === 'بطاقة' || inv.paymentMethod === 'تحويل بنكي') {
-                    addTreasuryEntry('in', newGrandTotal, inv.customerCode || 'عميل', 'customer', 'المبلغ الجديد بعد تعديل فاتورة بيع #' + inv.number, 'تعديل', false);
+                    // (2026-10-09) المبلغ اللي دخل الخزنة = بعد خصم النقاط (نفس رقم الفاتورة)، مش قبله
+                    addTreasuryEntry('in', Math.max(0, newGrandTotal - (Number(inv.discount) || 0)), inv.customerCode || 'عميل', 'customer', 'المبلغ الجديد بعد تعديل فاتورة بيع #' + inv.number, 'تعديل', false, payAccountOf(inv.paymentMethod), { reversesDocDate: inv.date || null });
                 }
                 inv.items = editInvoiceItems;
                 // لو الفاتورة كان عليها خصم نقاط، الخصم بيفضل زي ما هو بعد التعديل
@@ -12564,21 +13350,21 @@
                 inv.items.forEach(item => {
                     if (inventory[item.productCode]) {
                         inventory[item.productCode].qty -= item.qty;
-                        addStockMovement(item.productCode, item.productName, 'out', -item.qty, inventory[item.productCode].qty, 'تعديل فاتورة', 'عكس مخزون قبل تعديل فاتورة شراء #' + inv.number);
+                        addStockMovement(item.productCode, item.productName, 'out', -item.qty, inventory[item.productCode].qty, 'تعديل فاتورة', 'عكس مخزون قبل تعديل فاتورة شراء #' + inv.number, { reversesDocDate: inv.date || null });
                     }
                 });
                 if (inv.paymentMethod === 'نقدي' || inv.paymentMethod === 'تحويل بنكي') {
-                    addTreasuryEntry('in', inv.grandTotal, inv.supplierCode || 'مورد', 'supplier', 'عكس المبلغ القديم قبل تعديل فاتورة شراء #' + inv.number, 'تعديل', false);
+                    addTreasuryEntry('in', inv.grandTotal, inv.supplierCode || 'مورد', 'supplier', 'عكس المبلغ القديم قبل تعديل فاتورة شراء #' + inv.number, 'تعديل', false, payAccountOf(inv.paymentMethod), { reversesDocDate: inv.date || null });
                 }
                 editInvoiceItems.forEach(item => {
                     if (inventory[item.productCode]) {
                         inventory[item.productCode].qty += item.qty;
-                        addStockMovement(item.productCode, item.productName, 'in', item.qty, inventory[item.productCode].qty, 'تعديل فاتورة', 'إضافة مخزون بعد تعديل فاتورة شراء #' + inv.number);
+                        addStockMovement(item.productCode, item.productName, 'in', item.qty, inventory[item.productCode].qty, 'تعديل فاتورة', 'إضافة مخزون بعد تعديل فاتورة شراء #' + inv.number, { reversesDocDate: inv.date || null });
                     }
                 });
                 const newGrandTotal = editInvoiceItems.reduce((s, i) => s + i.total, 0);
                 if (inv.paymentMethod === 'نقدي' || inv.paymentMethod === 'تحويل بنكي') {
-                    addTreasuryEntry('out', newGrandTotal, inv.supplierCode || 'مورد', 'supplier', 'المبلغ الجديد بعد تعديل فاتورة شراء #' + inv.number, 'تعديل', false);
+                    addTreasuryEntry('out', newGrandTotal, inv.supplierCode || 'مورد', 'supplier', 'المبلغ الجديد بعد تعديل فاتورة شراء #' + inv.number, 'تعديل', false, payAccountOf(inv.paymentMethod), { reversesDocDate: inv.date || null });
                 }
                 inv.items = editInvoiceItems;
                 inv.grandTotal = newGrandTotal;
@@ -13168,11 +13954,11 @@
                         // المفروض عند حذف مرتجع بيع كان مسجل بوحدة فرعية (قطاعي)، ويطلع رقم غلط في المخزون.
                         const deductQty = item.stockDeductQty != null ? item.stockDeductQty : item.qty;
                         inventory[item.productCode].qty -= deductQty;
-                        addStockMovement(item.productCode, item.productName, 'out', -deductQty, inventory[item.productCode].qty, 'حذف مرتجع بيع', 'خصم مخزون من حذف مرتجع بيع #' + ret.number);
+                        addStockMovement(item.productCode, item.productName, 'out', -deductQty, inventory[item.productCode].qty, 'حذف مرتجع بيع', 'خصم مخزون من حذف مرتجع بيع #' + ret.number, { reversesDocDate: ret.date || null });
                     }
                 });
                 if (!ret.affectsBalance) {
-                    addTreasuryEntry('in', ret.grandTotal, ret.customerCode || 'عميل', 'customer', 'حذف مرتجع بيع #' + ret.number, 'إلغاء مرتجع', false);
+                    addTreasuryEntry('in', ret.grandTotal, ret.customerCode || 'عميل', 'customer', 'حذف مرتجع بيع #' + ret.number, 'إلغاء مرتجع', false, undefined, { reversesDocDate: ret.date || null });
                 }
                 saveInventory();
             }
@@ -13311,10 +14097,10 @@
                 ret.items.forEach(item => {
                     if (!inventory[item.productCode]) inventory[item.productCode] = { code: item.productCode, qty: 0, cost: item.cost, minStock: 0 };
                     inventory[item.productCode].qty += item.qty;
-                    addStockMovement(item.productCode, item.productName, 'in', item.qty, inventory[item.productCode].qty, 'حذف مرتجع شراء', 'استرجاع مخزون من حذف مرتجع شراء #' + ret.number);
+                    addStockMovement(item.productCode, item.productName, 'in', item.qty, inventory[item.productCode].qty, 'حذف مرتجع شراء', 'استرجاع مخزون من حذف مرتجع شراء #' + ret.number, { reversesDocDate: ret.date || null });
                 });
                 if (!ret.affectsBalance) {
-                    addTreasuryEntry('out', ret.grandTotal, ret.supplierCode || 'مورد', 'supplier', 'حذف مرتجع شراء #' + ret.number, 'إلغاء مرتجع', false);
+                    addTreasuryEntry('out', ret.grandTotal, ret.supplierCode || 'مورد', 'supplier', 'حذف مرتجع شراء #' + ret.number, 'إلغاء مرتجع', false, undefined, { reversesDocDate: ret.date || null });
                 }
                 saveInventory();
             }
