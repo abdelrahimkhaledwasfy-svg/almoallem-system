@@ -2246,6 +2246,7 @@
                 <div class="form-group"><label class="form-label">المخزون الحالي</label><input type="number" class="form-control" id="adjustCurrentStock" readonly style="background:#f8f9fa;"></div>
                 <div class="form-group"><label class="form-label">نوع الحركة</label><select class="form-control" id="adjustType"><option value="in">إضافة (+)</option><option value="out">خصم (-)</option><option value="set">تعيين قيمة محددة</option></select></div>
                 <div class="form-group"><label class="form-label">الكمية / القيمة الجديدة</label><input type="number" class="form-control" id="adjustQty" placeholder="0"></div>
+                <div class="form-group"><label class="form-label">نوع الفرق <span style="color:var(--danger);">*</span></label><select class="form-control" id="adjustImpact"><option value="">اختار...</option><option value="correction">تصحيح غلط في التسجيل / رصيد أول مدة — مش ربح ولا خسارة</option><option value="real">فرق جرد حقيقي (بضاعة زيادة أو ناقصة فعلاً) — بيأثر على الربح</option><option value="damage">تالف / هالك / منتهي الصلاحية — خسارة</option></select><div style="font-size:12px;color:var(--text-light);margin-top:4px;">لو الكمية كانت متسجلة غلط وإنت بتصلحها، اختار "تصحيح غلط". "فرق جرد حقيقي" بس لو البضاعة فعلاً زادت أو نقصت.</div></div>
                 <div class="form-group"><label class="form-label">السبب <span style="color:var(--danger);">*</span></label><input type="text" class="form-control" id="adjustReason" placeholder="سبب التعديل (إجباري)..."></div>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('stockAdjustmentModal')">إلغاء</button><button class="btn btn-purple" onclick="saveStockAdjustment()"><i class="fas fa-paper-plane"></i> إرسال للاعتماد</button></div>
@@ -3968,11 +3969,23 @@
         function startStockMovementRecordsListener() {
             if (!db || stockMovementRecordsListenerStarted) return;
             stockMovementRecordsListenerStarted = true;
+            try { startStockAdjustListener(); } catch (e) { console.error(e); }
             db.collection('stockMovementRecords').orderBy('date', 'desc').limit(2000).onSnapshot(function(snap) {
                 stockMovements = snap.docs.map(function(d) { return d.data(); });
                 localStorage.setItem('stockMovements', JSON.stringify(stockMovements));
                 try { renderMovements(); } catch (e) { console.error('refresh after stock movement update failed:', e); }
             }, function(err) { console.error('Stock movement records listener error:', err); });
+        }
+
+        let stockAdjustListenerStarted = false;
+        function startStockAdjustListener() {
+            if (!db || stockAdjustListenerStarted) return;
+            stockAdjustListenerStarted = true;
+            db.collection('stockMovementRecords').where('type', '==', 'adjustment').onSnapshot(function(snap) {
+                stockAdjustMovements = snap.docs.map(function(d) { return d.data(); });
+                try { if (document.getElementById('profit-section') && document.getElementById('profit-section').classList.contains('active')) renderProfitData(); } catch (e) {}
+                try { updateDashboardStats(); } catch (e) {}
+            }, function(err) { console.error('stock adjust listener error:', err); stockAdjustListenerStarted = false; });
         }
 
         function startAuditLogRecordsListener() {
@@ -6202,9 +6215,10 @@
         // عداد بسيط بيتزود مع كل استدعاء عشان نضمن إن كل حركة مخزون تاخد رقم فريد تمامًا حتى لو
         // اتسجلت أكتر من حركة في نفس الجزء من الألف من الثانية (بيحصل كتير جوه حلقة items.forEach)
         let _stockMovementSeq = 0;
-        function addStockMovement(productCode, productName, type, qty, balanceAfter, reference, notes) {
+        function addStockMovement(productCode, productName, type, qty, balanceAfter, reference, notes, extra) {
             _stockMovementSeq++;
             const movement = { unitCost: Number((inventory[productCode] || {}).cost) || Number((products.find(p => p.code === productCode) || {}).cost) || 0, id: Date.now() + '-' + _stockMovementSeq + '-' + Math.random().toString(36).slice(2, 6), date: new Date().toISOString(), productCode, productName, type, qty, balanceAfter, reference, notes: notes || '' };
+            if (extra && typeof extra === 'object') Object.assign(movement, extra);
             stockMovements.unshift(movement);
             saveStockMovements();
             if (db) db.collection('stockMovementRecords').doc(String(movement.id)).set(movement).catch(function(e) { console.error('stock movement sync failed:', e); });
@@ -6395,23 +6409,43 @@
             try { invoices.forEach(i => { if (i.type === 'sale') normalizeDocProfit(i); }); salesReturns.forEach(normalizeDocProfit); } catch (e) { console.error('normalizeAllProfit', e); }
         }
         function isStockCountMovement(m) { return m.type === 'adjustment' || m.reference === 'تعديل يدوي' || m.reference === 'جرد Excel'; }
+        // (2026-10-09) مش كل تعديل مخزون ربح أو خسارة:
+        //   'real'       = فرق جرد حقيقي / تالف → بيدخل في الربح (زيادة = مكسب، عجز = خسارة)
+        //   'correction' = تصحيح غلط تسجيل أو رصيد أول مدة → مش ربح ولا خسارة (بيتعرض للعلم بس)
+        // التعديلات القديمة اللي اتعملت قبل التصنيف: الزيادة بتتعامل كتصحيح، والعجز كخسارة، لحد ما المدير يراجعها ويصنّفها.
+        function adjImpact(m) {
+            if (m.profitImpact === 'real' || m.profitImpact === 'correction') return m.profitImpact;
+            return (Number(m.qty) || 0) > 0 ? 'correction' : 'real';
+        }
+        function adjIsUnreviewed(m) { return !(m.profitImpact === 'real' || m.profitImpact === 'correction'); }
+        const ADJ_IMPACT_LABEL = { real: 'فرق جرد حقيقي (بيأثر على الربح)', damage: 'تالف / هالك / منتهي (خسارة)', correction: 'تصحيح غلط تسجيل / رصيد أول مدة (مش ربح ولا خسارة)' };
+        // كل تعديلات المخزون بتتقرا لوحدها من السحابة (مش من آخر 2000 حركة بس) عشان حساب الربح لأي فترة يبقى كامل
+        let stockAdjustMovements = null;
+        function allStockCountMovements() {
+            const map = {};
+            (stockAdjustMovements || []).forEach(m => { if (m && m.id != null) map[String(m.id)] = m; });
+            stockMovements.forEach(m => { if (m && isStockCountMovement(m) && m.id != null && !map[String(m.id)]) map[String(m.id)] = m; });
+            return Object.values(map).filter(isStockCountMovement);
+        }
         // ملخص الربح لأي فترة: نفس المعادلة في الواجهة الرئيسية وشاشة الربحية والتقارير
         function profitSummary(fromMs, toMs) {
             normalizeAllProfit();
             const inR = d => { const t = new Date(d).getTime(); return t >= fromMs && t <= toMs; };
             const sales = invoices.filter(i => i.type === 'sale' && inR(i.date));
             const rets = salesReturns.filter(r => inR(r.date));
-            let gross = 0, net = 0, cogs = 0, retVal = 0, retCost = 0, loss = 0, gain = 0;
+            let gross = 0, net = 0, cogs = 0, retVal = 0, retCost = 0, loss = 0, gain = 0, corrIn = 0, corrOut = 0, unreviewed = 0;
             sales.forEach(i => { gross += i._grossTotal || 0; net += Number(i.grandTotal) || 0; cogs += Number(i.totalCost) || 0; });
             rets.forEach(r => { retVal += Number(r.grandTotal) || 0; retCost += Number(r.totalCost) || 0; });
-            stockMovements.filter(m => isStockCountMovement(m) && inR(m.date)).forEach(m => {
+            allStockCountMovements().filter(m => inR(m.date)).forEach(m => {
                 const q = Number(m.qty) || 0;
                 const uc = m.unitCost != null ? Number(m.unitCost) : (Number((inventory[m.productCode] || {}).cost) || 0);
+                if (adjIsUnreviewed(m) && q !== 0) unreviewed++;
+                if (adjImpact(m) === 'correction') { if (q < 0) corrOut += Math.abs(q) * uc; else corrIn += q * uc; return; }
                 if (q < 0) loss += Math.abs(q) * uc; else gain += q * uc;
             });
             const exp = expenses.filter(e => inR(e.date)).reduce((s, e) => s + (Number(e.amount) || 0), 0);
             const netSales = net - retVal, netCogs = cogs - retCost, grossProfit = netSales - netCogs;
-            return { count: sales.length, gross, discount: gross - net, net, retVal, netSales, cogs: netCogs, grossProfit, loss, gain, exp, netProfit: grossProfit - loss + gain - exp };
+            return { count: sales.length, gross, discount: gross - net, net, retVal, netSales, cogs: netCogs, grossProfit, loss, gain, corrIn, corrOut, unreviewed, exp, netProfit: grossProfit - loss + gain - exp };
         }
 
         function loadAllData() {
@@ -7890,7 +7924,7 @@
             select.innerHTML = '<option value="">اختر الصنف...</option>' + products.map(p => `<option value="${p.code}">${p.name} (${p.code})</option>`).join('');
             document.getElementById('adjustCurrentStock').value = '';
             document.getElementById('adjustQty').value = '';
-            document.getElementById('adjustReason').value = '';
+            document.getElementById('adjustReason').value = ''; if (document.getElementById('adjustImpact')) document.getElementById('adjustImpact').value = '';
             enhanceSelectWithSearch(select, { placeholder: 'ابحث بالاسم أو الكود...' });
             openModal('stockAdjustmentModal');
         }
@@ -7912,6 +7946,9 @@
             if (!code) { showToast('الرجاء اختيار الصنف', 'error'); return; }
             if (isNaN(qty) || qty < 0) { showToast('الرجاء إدخال كمية صحيحة', 'error'); return; }
             if (!reason) { showToast('اكتب سبب تعديل المخزون (مثلاً: جرد، تالف، هدية)', 'error'); return; }
+            const impactEl = document.getElementById('adjustImpact');
+            const impactKind = impactEl ? impactEl.value : '';
+            if (!impactKind) { showToast('اختار نوع الفرق: تصحيح غلط ولا فرق جرد حقيقي ولا تالف', 'error'); return; }
 
             const product = products.find(p => p.code === code);
             if (!inventory[code]) inventory[code] = { code, qty: 0, cost: product ? (product.cost || 0) : 0, minStock: 0 };
@@ -7928,7 +7965,7 @@
 
             submitApprovalRequest('stock_adjust', {
                 productCode: code, productName: product ? product.name : code, adjType: type, qty: qty,
-                qtyAtRequest: currentQty, requestedNewQty: newQty, delta: newQty - currentQty, reason: reason,
+                qtyAtRequest: currentQty, requestedNewQty: newQty, delta: newQty - currentQty, reason: reason, impactKind: impactKind,
                 grandTotal: Math.abs(newQty - currentQty) * (inventory[code].cost || 0)
             }, function() { closeModal('stockAdjustmentModal'); });
         }
@@ -8627,22 +8664,27 @@
             if (!phone || phone.length < 8) { showToast('ادخل رقم هاتف صحيح', 'error'); return; }
             if (!db) { showToast('لا يوجد اتصال بالإنترنت حاليًا', 'error'); return; }
             try {
-                const doc = await db.collection('appCustomers').doc(phone).get();
-                if (!doc.exists) { document.getElementById('pwResetNotFound').style.display = 'block'; return; }
+                // بندوّر بكل أشكال الرقم (عربي/إنجليزي، من غير صفر، +2) زي الأبليكشن بالظبط
+                const lat = String(phone).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[^0-9]/g, '');
+                let c = lat.indexOf('20') === 0 && lat.length === 12 ? lat.slice(2) : lat; if (c.length === 10 && c[0] === '1') c = '0' + c;
+                const ids = [c, phone, c.replace(/[0-9]/g, d => '٠١٢٣٤٥٦٧٨٩'.charAt(+d)), c.length === 11 ? c.slice(1) : '', c.length === 11 ? '+2' + c : ''].filter((x, i, a) => x && a.indexOf(x) === i);
+                let doc = null, foundId = null;
+                for (const id of ids) { const d = await db.collection('appCustomers').doc(id).get(); if (d.exists) { doc = d; foundId = id; break; } }
+                if (!doc) { document.getElementById('pwResetNotFound').style.display = 'block'; return; }
                 const data = doc.data();
                 const name = (data.profile && (data.profile.customerName || data.profile.shopName)) || phone;
                 document.getElementById('pwResetCustomerName').textContent = 'العميل: ' + name;
                 document.getElementById('pwResetCustomerInfo').style.display = 'block';
                 document.getElementById('pwResetFields').style.display = 'block';
                 document.getElementById('pwResetSaveBtn').style.display = 'inline-block';
-                pwResetFoundPhone = phone;
+                pwResetFoundPhone = foundId;
             } catch (err) {
                 console.error(err);
                 showToast('تعذر البحث، حاول تاني', 'error');
             }
         }
         async function saveAppPasswordReset() {
-            const newPw = document.getElementById('pwResetNewPassword').value.trim();
+            const newPw = document.getElementById('pwResetNewPassword').value.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).trim();
             if (!pwResetFoundPhone) { showToast('دوس بحث الأول وتأكد من العميل', 'error'); return; }
             if (!newPw || newPw.length < 4) { showToast('الرقم السري لازم يكون 4 أرقام على الأقل', 'error'); return; }
             try {
@@ -10397,6 +10439,13 @@
 
 
         // ==================== طلبات اعتماد عامة: مرتجع شراء + تعديل مخزون ====================
+        function defaultImpactFor(delta) { return (Number(delta) || 0) > 0 ? 'correction' : 'real'; }
+        function adjImpactSelect(id, val, compact) {
+            const opts = [['correction', compact ? 'تصحيح غلط (مش ربح)' : ADJ_IMPACT_LABEL.correction], ['real', compact ? 'فرق جرد حقيقي' : ADJ_IMPACT_LABEL.real], ['damage', compact ? 'تالف / هالك' : ADJ_IMPACT_LABEL.damage]];
+            return `<select class="form-control appr-impact" id="${id}" style="${compact ? 'min-width:150px;font-size:12.5px;padding:4px 6px;' : ''}">${opts.map(o => `<option value="${o[0]}" ${o[0] === val ? 'selected' : ''}>${o[1]}</option>`).join('')}</select>`;
+        }
+        function setAllApprImpact(v) { document.querySelectorAll('#approvalReviewBody .appr-impact').forEach(el => { el.value = v; }); }
+        function impactToProfit(kind) { return kind === 'correction' ? 'correction' : 'real'; }
         const APPROVAL_KIND_LABEL = { purchase: 'فاتورة شراء', purchase_return: 'مرتجع شراء', stock_adjust: 'تعديل مخزون', stock_count: 'جرد مخزون (Excel)' };
         const draftKind = d => d.kind || 'purchase';
         function submitApprovalRequest(kind, data, onDone) {
@@ -10427,9 +10476,10 @@
             let html = '';
             if (draftKind(d) === 'stock_count') {
                 html = `<div style="font-size:14px;line-height:2;"><strong>${escapeHtml(d.reason || 'جرد')}</strong><br>${who}</div>
-                    <div class="table-container" style="max-height:340px;overflow-y:auto;margin-top:8px;"><table><thead><tr><th>الصنف</th><th>وقت التصدير</th><th>الفعلية</th><th>الفرق</th><th>دلوقتي</th><th>بعد الاعتماد</th><th>السبب</th></tr></thead><tbody>${(d.items || []).map(it => {
+                    <div class="table-container" style="max-height:340px;overflow-y:auto;margin-top:8px;"><table><thead><tr><th>الصنف</th><th>وقت التصدير</th><th>الفعلية</th><th>الفرق</th><th>دلوقتي</th><th>بعد الاعتماد</th><th>السبب</th><th>نوع الفرق</th></tr></thead><tbody>${(d.items || []).map((it, idx) => {
                         const now = inventory[it.productCode] ? (Number(inventory[it.productCode].qty) || 0) : 0, after = now + Number(it.delta || 0);
-                        return `<tr><td>${escapeHtml(it.productName)}</td><td>${it.qtyAtExport}</td><td>${it.counted}</td><td style="font-weight:700;color:${it.delta >= 0 ? 'var(--accent)' : 'var(--danger)'};">${it.delta > 0 ? '+' : ''}${it.delta}</td><td>${now}</td><td style="${after < 0 ? 'color:var(--danger);font-weight:700;' : ''}">${after}</td><td style="font-size:12px;">${escapeHtml(it.reason || '')}</td></tr>`; }).join('')}</tbody></table></div>
+                        return `<tr><td>${escapeHtml(it.productName)}</td><td>${it.qtyAtExport}</td><td>${it.counted}</td><td style="font-weight:700;color:${it.delta >= 0 ? 'var(--accent)' : 'var(--danger)'};">${it.delta > 0 ? '+' : ''}${it.delta}</td><td>${now}</td><td style="${after < 0 ? 'color:var(--danger);font-weight:700;' : ''}">${after}</td><td style="font-size:12px;">${escapeHtml(it.reason || '')}</td><td>${adjImpactSelect('apprImpact_' + idx, it.impactKind || defaultImpactFor(it.delta), true)}</td></tr>`; }).join('')}</tbody></table></div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center;"><span style="font-size:13px;">خلّي كل الفروق:</span><button type="button" class="btn btn-secondary btn-sm" onclick="setAllApprImpact('correction')">تصحيح غلط</button><button type="button" class="btn btn-secondary btn-sm" onclick="setAllApprImpact('real')">فرق جرد حقيقي</button></div>
                     <div style="font-size:12px;color:var(--text-light);margin-top:8px;">الفرق بيتطبق على الكمية الحالية. قيمة الفروق تقريبًا ${Number(d.grandTotal || 0).toFixed(2)} ج.م</div>`;
             } else if (draftKind(d) === 'stock_adjust') {
                 const nowQty = inventory[d.productCode] ? (Number(inventory[d.productCode].qty) || 0) : 0;
@@ -10437,6 +10487,7 @@
                 const typeLabel = d.adjType === 'in' ? 'إضافة' : d.adjType === 'out' ? 'خصم' : 'جرد (تحديد الكمية)';
                 html = `<div style="font-size:14px;line-height:2;"><strong>الصنف:</strong> ${escapeHtml(d.productName)} (${escapeHtml(d.productCode)}) · <strong>النوع:</strong> ${typeLabel}<br>
                     <strong>السبب:</strong> ${escapeHtml(d.reason || '-')}<br>${who}</div>
+                    <div class="form-group" style="margin-top:10px;"><label class="form-label"><strong>نوع الفرق</strong> (بيحدد هل يدخل في الربح ولا لأ)</label>${adjImpactSelect('apprImpact_single', d.impactKind || defaultImpactFor(d.delta))}</div>
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:10px;">
                     <div style="background:#f8f9fa;border-radius:10px;padding:10px;"><div style="font-size:12px;color:var(--text-light);">الكمية وقت الطلب</div><div style="font-size:20px;font-weight:800;">${d.qtyAtRequest}</div></div>
                     <div style="background:#f8f9fa;border-radius:10px;padding:10px;"><div style="font-size:12px;color:var(--text-light);">الفرق المطلوب</div><div style="font-size:20px;font-weight:800;color:${d.delta >= 0 ? 'var(--accent)' : 'var(--danger)'};">${d.delta > 0 ? '+' : ''}${d.delta}</div></div>
@@ -10476,6 +10527,10 @@
                 const short = (d.items || []).find(it => (inventory[it.productCode] ? Number(inventory[it.productCode].qty) || 0 : 0) < it.qty);
                 if (short) { showToast(`${short.productName}: الموجود في المخزن أقل من كمية المرتجع`, 'error'); return; }
             }
+            const impactSingle = (document.getElementById('apprImpact_single') || {}).value || (d.impactKind || defaultImpactFor(d.delta));
+            const impactPerItem = (d.items || []).map((it, idx) => (document.getElementById('apprImpact_' + idx) || {}).value || it.impactKind || defaultImpactFor(it.delta));
+            if (kind === 'stock_adjust' && impactSingle === 'damage' && Number(d.delta) > 0) { showToast('"تالف" مينفعش مع زيادة في المخزون — اختار نوع تاني', 'error'); return; }
+            if (kind === 'stock_count') { const bad = (d.items || []).find((it, idx) => impactPerItem[idx] === 'damage' && Number(it.delta) > 0); if (bad) { showToast(bad.productName + ': "تالف" مينفعش مع زيادة — اختار نوع تاني', 'error'); return; } }
             if (!confirm('تأكيد الاعتماد؟ التغيير هيتطبق دلوقتي على المخزون' + (kind === 'purchase_return' ? ' وحساب المورد/الخزنة' : '') + '.')) return;
             const btn = document.getElementById('approvalApproveBtn'); btn.disabled = true;
             const me = pdUser();
@@ -10491,10 +10546,11 @@
                 });
             }).then(function() {
                 if (kind === 'stock_count') {
-                    (d.items || []).forEach(it => {
+                    (d.items || []).forEach((it, idx) => {
                         const inv = inventory[it.productCode] || (inventory[it.productCode] = { code: it.productCode, qty: 0, cost: it.cost || 0, minStock: 0 });
                         inv.qty = (Number(inv.qty) || 0) + Number(it.delta || 0);
-                        addStockMovement(it.productCode, it.productName, 'adjustment', Number(it.delta || 0), inv.qty, 'جرد Excel', `${it.reason || 'جرد'} (طلبه ${(d.createdBy && d.createdBy.name) || '-'} واعتمده ${me.name})`);
+                        const ik = impactPerItem[idx];
+                        addStockMovement(it.productCode, it.productName, 'adjustment', Number(it.delta || 0), inv.qty, 'جرد Excel', `${it.reason || 'جرد'} (طلبه ${(d.createdBy && d.createdBy.name) || '-'} واعتمده ${me.name})`, { profitImpact: impactToProfit(ik), impactKind: ik, impactBy: me.name });
                     });
                     saveInventory();
                     logAction('اعتماد جرد مخزون', `${(d.items || []).length} صنف — طلبه ${(d.createdBy && d.createdBy.name) || '-'} واعتمده ${me.name}`);
@@ -10502,7 +10558,7 @@
                     const inv = inventory[d.productCode] || (inventory[d.productCode] = { code: d.productCode, qty: 0, cost: 0, minStock: 0 });
                     inv.qty = (Number(inv.qty) || 0) + Number(d.delta || 0);
                     saveInventory();
-                    addStockMovement(d.productCode, d.productName, 'adjustment', Number(d.delta || 0), inv.qty, 'تعديل يدوي', `${d.reason} (طلبه ${(d.createdBy && d.createdBy.name) || '-'} واعتمده ${me.name})`);
+                    addStockMovement(d.productCode, d.productName, 'adjustment', Number(d.delta || 0), inv.qty, 'تعديل يدوي', `${d.reason} (طلبه ${(d.createdBy && d.createdBy.name) || '-'} واعتمده ${me.name})`, { profitImpact: impactToProfit(impactSingle), impactKind: impactSingle, impactBy: me.name });
                     logAction('اعتماد تعديل مخزون', `${d.productName}: ${d.delta > 0 ? '+' : ''}${d.delta} — السبب: ${d.reason} — طلبه ${(d.createdBy && d.createdBy.name) || '-'} واعتمده ${me.name}`);
                 } else {
                     d.items.forEach(item => {
@@ -11495,12 +11551,93 @@
                 line('= صافي المبيعات', ps.netSales, { bold: true }) +
                 line('− تكلفة البضاعة المباعة (بعد المرتجعات)', -ps.cogs, { color: 'var(--danger)' }) +
                 line('= مجمل الربح', ps.grossProfit, { bold: true, bg: 'rgba(46,204,113,0.06)' }) +
-                line('− خسائر الجرد والتالف', -ps.loss, { color: 'var(--danger)' }) +
-                line('+ زيادات الجرد', ps.gain, { color: 'var(--accent)' }) +
+                line('− عجز جرد حقيقي وتالف', -ps.loss, { color: 'var(--danger)' }) +
+                line('+ زيادات جرد حقيقية', ps.gain, { color: 'var(--accent)' }) +
                 line('− المصروفات', -ps.exp, { color: 'var(--danger)' }) +
                 line('= صافي الربح', ps.netProfit, { bold: true, bg: ps.netProfit >= 0 ? 'rgba(46,204,113,0.12)' : 'rgba(231,76,60,0.1)', color: ps.netProfit >= 0 ? 'var(--accent)' : 'var(--danger)' }) +
-                `<div style="font-size:12px;color:var(--text-light);margin-top:8px;">التكلفة = متوسط تكلفة الصنف وقت البيع. خسائر وزيادات الجرد متقيّمة بمتوسط التكلفة وقت الجرد. عجز مناديب التسليم مش خسارة، لأنه فلوس لسه مطلوبة منهم.</div>`;
+                `<div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:#f8f9fa;font-size:13px;line-height:1.9;">
+                    <strong>تصحيحات مخزون (مش داخلة في الربح):</strong> زيادة ${f(ps.corrIn || 0)} ج.م · خصم ${f(ps.corrOut || 0)} ج.م
+                    ${ps.unreviewed ? `<br><span style="color:#b9770e;">⚠️ فيه ${ps.unreviewed} تعديل مخزون قديم لسه متصنفش (الزيادة اتحسبت تصحيح والعجز اتحسب خسارة مؤقتًا).</span>` : ''}
+                    ${canApprovePurchases() ? `<br><button class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="openAdjImpactReview()"><i class="fas fa-tags"></i> مراجعة وتصنيف تعديلات المخزون</button>` : ''}
+                </div>` +
+                `<div style="font-size:12px;color:var(--text-light);margin-top:8px;">التكلفة = متوسط تكلفة الصنف وقت البيع. فروق الجرد متقيّمة بمتوسط التكلفة وقت الجرد. "تصحيح غلط" (زي تصليح كمية متسجلة غلط أو رصيد أول مدة) مش بيتحسب ربح ولا خسارة. عجز مناديب التسليم مش خسارة، لأنه فلوس لسه مطلوبة منهم.</div>`;
             try { renderProfitAudit(); } catch (e) { console.error(e); }
+        }
+        // ---- مراجعة وتصنيف تعديلات المخزون (تصحيح غلط ولا فرق حقيقي) ----
+        let adjReviewRows = [];
+        function openAdjImpactReview() {
+            if (!canApprovePurchases()) { showToast('التصنيف للمحاسب أو المدير بس', 'error'); return; }
+            if (!requireCloudReady()) return;
+            let m = document.getElementById('adjImpactReviewModal');
+            if (!m) {
+                m = document.createElement('div'); m.className = 'modal-overlay'; m.id = 'adjImpactReviewModal';
+                m.innerHTML = `<div class="modal" style="max-width:1000px;width:96%;"><div class="modal-header"><h3 class="modal-title"><i class="fas fa-tags"></i> تصنيف تعديلات المخزون</h3><button class="modal-close" onclick="closeModal('adjImpactReviewModal')">&times;</button></div>
+                    <div class="modal-body"><div style="font-size:13px;line-height:1.9;background:#fff8e6;border-radius:10px;padding:10px 12px;margin-bottom:10px;">
+                    <strong>تصحيح غلط</strong> = الكمية كانت متسجلة غلط وإحنا بنصلحها، أو رصيد أول مدة → <u>مش ربح ولا خسارة</u>.<br>
+                    <strong>فرق جرد حقيقي</strong> = البضاعة فعلاً زادت أو نقصت (سرقة، غلط تسليم...) → بيدخل في الربح.<br>
+                    <strong>تالف / هالك</strong> = خسارة.</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center;">
+                        <select class="form-control" id="adjRevFilter" style="max-width:220px;" onchange="renderAdjImpactReview()"><option value="unreviewed">اللي لسه متصنفش</option><option value="all">الكل</option><option value="in">الزيادات بس</option><option value="out">العجز بس</option></select>
+                        <span style="font-size:13px;">خلّي الظاهرين كلهم:</span>
+                        <button class="btn btn-secondary btn-sm" onclick="setAllAdjRev('correction')">تصحيح غلط</button>
+                        <button class="btn btn-secondary btn-sm" onclick="setAllAdjRev('real')">فرق جرد حقيقي</button>
+                    </div>
+                    <div id="adjRevBody"><p>جاري التحميل...</p></div></div>
+                    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('adjImpactReviewModal')">إلغاء</button><button class="btn btn-success" id="adjRevSaveBtn" onclick="saveAdjImpactReview()"><i class="fas fa-save"></i> حفظ التصنيف</button></div></div>`;
+                document.body.appendChild(m);
+            }
+            openModal('adjImpactReviewModal');
+            document.getElementById('adjRevBody').innerHTML = '<p>جاري التحميل...</p>';
+            db.collection('stockMovementRecords').where('type', '==', 'adjustment').get().then(function(snap) {
+                adjReviewRows = snap.docs.map(d => d.data()).filter(x => (Number(x.qty) || 0) !== 0).sort((a, b) => new Date(b.date) - new Date(a.date));
+                renderAdjImpactReview();
+            }).catch(function(e) { console.error(e); document.getElementById('adjRevBody').innerHTML = '<p style="color:var(--danger);">تعذر التحميل: ' + escapeHtml(e.message || '') + '</p>'; });
+        }
+        function adjRevVisible() {
+            const f = (document.getElementById('adjRevFilter') || {}).value || 'unreviewed';
+            return adjReviewRows.filter(x => f === 'all' ? true : f === 'unreviewed' ? adjIsUnreviewed(x) : f === 'in' ? Number(x.qty) > 0 : Number(x.qty) < 0);
+        }
+        function renderAdjImpactReview() {
+            const list = adjRevVisible();
+            const uc = x => x.unitCost != null ? Number(x.unitCost) : (Number((inventory[x.productCode] || {}).cost) || 0);
+            if (!list.length) { document.getElementById('adjRevBody').innerHTML = '<p style="color:var(--text-light);">مفيش تعديلات هنا ✅</p>'; return; }
+            document.getElementById('adjRevBody').innerHTML = `<div class="table-container" style="max-height:420px;overflow-y:auto;"><table><thead><tr><th>التاريخ</th><th>الصنف</th><th>الفرق</th><th>القيمة</th><th>المرجع / السبب</th><th>التصنيف</th></tr></thead><tbody>${list.map(x => {
+                const q = Number(x.qty) || 0, cur = x.impactKind || adjImpact(x);
+                return `<tr><td style="font-size:12px;white-space:nowrap;">${new Date(x.date).toLocaleDateString('ar-EG')}</td><td>${escapeHtml(x.productName || x.productCode)}</td><td style="font-weight:700;color:${q >= 0 ? 'var(--accent)' : 'var(--danger)'};">${q > 0 ? '+' : ''}${q}</td><td>${(Math.abs(q) * uc(x)).toFixed(2)}</td><td style="font-size:12px;">${escapeHtml(x.reference || '')}<br>${escapeHtml(x.notes || '')}</td><td>${adjImpactSelect('adjRev_' + String(x.id).replace(/[^a-zA-Z0-9_-]/g, '_'), cur, true)}${adjIsUnreviewed(x) ? '<div style="font-size:11px;color:#b9770e;">لسه متصنفش</div>' : ''}</td></tr>`; }).join('')}</tbody></table></div>
+                <div style="font-size:12px;color:var(--text-light);margin-top:6px;">ظاهر ${list.length} تعديل. التصنيف بيغيّر حساب الربح بس، مش بيغيّر كميات المخزون.</div>`;
+        }
+        function setAllAdjRev(v) { document.querySelectorAll('#adjRevBody .appr-impact').forEach(el => { el.value = v; }); }
+        function saveAdjImpactReview() {
+            if (!canApprovePurchases() || !requireCloudReady()) return;
+            const me = pdUser();
+            const changes = [];
+            adjRevVisible().forEach(x => {
+                const el = document.getElementById('adjRev_' + String(x.id).replace(/[^a-zA-Z0-9_-]/g, '_'));
+                if (!el) return;
+                const kind = el.value;
+                if (kind === 'damage' && Number(x.qty) > 0) return;
+                if (x.impactKind === kind && !adjIsUnreviewed(x)) return;
+                changes.push({ x, kind });
+            });
+            const bad = adjRevVisible().find(x => { const el = document.getElementById('adjRev_' + String(x.id).replace(/[^a-zA-Z0-9_-]/g, '_')); return el && el.value === 'damage' && Number(x.qty) > 0; });
+            if (bad) { showToast((bad.productName || '') + ': "تالف" مينفعش مع زيادة — اختار نوع تاني', 'error'); return; }
+            if (!changes.length) { showToast('مفيش تغيير يتحفظ', 'info'); return; }
+            if (!confirm(`هيتحفظ تصنيف ${changes.length} تعديل. ده بيغيّر حساب الربح بس ومش بيلمس كميات المخزون. تكمل؟`)) return;
+            const btn = document.getElementById('adjRevSaveBtn'); btn.disabled = true;
+            const now = Date.now();
+            const chunks = []; for (let i = 0; i < changes.length; i += 400) chunks.push(changes.slice(i, i + 400));
+            chunks.reduce((p, ch) => p.then(() => { const b = db.batch(); ch.forEach(c => b.set(db.collection('stockMovementRecords').doc(String(c.x.id)), { profitImpact: impactToProfit(c.kind), impactKind: c.kind, impactBy: me.name, impactAt: now }, { merge: true })); return b.commit(); }), Promise.resolve())
+                .then(function() {
+                    changes.forEach(c => { c.x.profitImpact = impactToProfit(c.kind); c.x.impactKind = c.kind; c.x.impactBy = me.name; c.x.impactAt = now;
+                        const lm = stockMovements.find(m => String(m.id) === String(c.x.id)); if (lm) Object.assign(lm, { profitImpact: c.x.profitImpact, impactKind: c.kind, impactBy: me.name, impactAt: now });
+                        const am = (stockAdjustMovements || []).find(m => String(m.id) === String(c.x.id)); if (am) Object.assign(am, { profitImpact: c.x.profitImpact, impactKind: c.kind, impactBy: me.name, impactAt: now }); });
+                    try { localStorage.setItem('stockMovements', JSON.stringify(stockMovements)); } catch (e) {}
+                    logAction('تصنيف تعديلات المخزون', `${changes.length} تعديل — ${me.name}`);
+                    showToast('اتحفظ تصنيف ' + changes.length + ' تعديل');
+                    renderAdjImpactReview();
+                    try { renderProfitData(); } catch (e) {} try { updateDashboardStats(); } catch (e) {}
+                }).catch(function(e) { console.error(e); showToast('تعذر الحفظ: ' + (e.message || ''), 'error'); })
+                .then(function() { btn.disabled = false; });
         }
         function renderProfitAudit() {
             const el = document.getElementById('profitAudit');
