@@ -11285,7 +11285,8 @@
                 const sig = d.signature || countSignature(d.items);
                 db.collection('purchaseDrafts').where('status', '==', 'approved').get().then(function(snap) {
                     const twin = snap.docs.map(x => Object.assign({ id: x.id }, x.data())).find(x => x.id !== id && draftKind(x) === 'stock_count' && (x.signature || countSignature(x.items)) === sig);
-                    if (twin) { showToast('الجرد ده نفسه اتعتمد قبل كده (' + new Date(twin.approvedAt || twin.submittedAt).toLocaleString('ar-EG') + ') — ارفضه، لو اتعتمد تاني الفروق هتتطبق مرتين', 'error', 10000); return; }
+                    // (2026-10-10) الجرد بقى بيكتب الكمية نفسها (مش فرق)، فإعادة اعتماده آمنة — بننبه بس
+                    if (twin && !confirm('الجرد ده نفسه اتعتمد قبل كده (' + new Date(twin.approvedAt || twin.submittedAt).toLocaleString('ar-EG') + ').\nالجرد دلوقتي بيكتب الكمية اللي اتعدّت نفسها، فاعتماده تاني مش هيكرر أي فرق.\n\nتكمل؟')) return;
                     approveGenericDraft._dupChecked = id; approveGenericDraft();
                 }).catch(function(e) { console.error(e); showToast('مقدرتش أتأكد إن الجرد ده مااتعتمدش قبل كده — جرّب تاني', 'error'); });
                 return;
@@ -11335,7 +11336,7 @@
                         logAction('اعتماد جرد مخزون', `${(d.items || []).length} صنف (اتغير منهم ${changed}) — طلبه ${(d.createdBy && d.createdBy.name) || '-'} واعتمده ${me.name}`);
                         closeModal('approvalReviewModal');
                         showToast('اتعتمد الجرد واتكتبت الكميات ✓ (' + changed + ' صنف اتغيروا)', 'success', 6000);
-                    }).catch(function(e) { console.error(e); showToast('الجرد اتعتمد بس الكميات ماتكتبتش: ' + (e.message || '') + ' — هتلاقيه في المراجعة والاعتماد تحت "اتعتمد ومااتطبقش"', 'error', 15000); });
+                    }).catch(function(e) { console.error(e); alert('الجرد اتعتمد بس الكميات ماتكتبتش.\nالسبب: ' + ((e && (e.code || e.message)) || e) + '\n\nصوّر الرسالة دي وابعتها.'); });
                 } else if (kind === 'stock_adjust') {
                     const inv = inventory[d.productCode] || (inventory[d.productCode] = { code: d.productCode, qty: 0, cost: 0, minStock: 0 });
                     inv.qty = (Number(inv.qty) || 0) + Number(d.delta || 0);
