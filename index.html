@@ -426,6 +426,11 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+<style>
+/* (2026-10-10) مديونية العملاء اتشالت من البرنامج */
+.nav-item[data-section="collections"], #collections-section, [data-role-card="credit"], [data-role-card="topDebts"], #customerStatementCard,
+.stat-card:has(#debtsReportCustomers), .form-group:has(#customerCreditLimit), th.cust-debt-col, td.cust-debt-col { display: none !important; }
+</style>
 </head>
 <body>
     <!-- Login Overlay -->
@@ -741,7 +746,7 @@
                         <div id="invoiceCustomerResults" class="searchable-dropdown"></div>
                     </div>
                     <div class="invoice-detail-group"><label>المندوب</label><select class="form-control" id="invoiceSalesman"><option value="">اختر المندوب...</option></select></div>
-                    <div class="invoice-detail-group"><label>طريقة الدفع</label><select class="form-control" id="paymentMethod" onchange="handlePaymentMethodChange()"><option value="نقدي">نقدي</option><option value="آجل">آجل</option><option value="تحويل بنكي">تحويل بنكي</option><option value="بطاقة">بطاقة</option></select></div>
+                    <div class="invoice-detail-group"><label>طريقة الدفع</label><select class="form-control" id="paymentMethod" onchange="handlePaymentMethodChange()"><option value="نقدي">نقدي</option><option value="تحويل بنكي">تحويل بنكي</option><option value="بطاقة">بطاقة</option></select></div>
                     <div class="invoice-detail-group"><label>ملاحظات</label><input type="text" class="form-control" id="invoiceNotes" placeholder="أي ملاحظات إضافية..."></div>
                 </div>
                 <div class="invoice-detail-group" id="customerBalanceInfo" style="display:none;margin-bottom:15px;padding:10px 15px;background:rgba(243,156,18,0.1);border-radius:8px;border-right:3px solid var(--warning);">
@@ -1789,7 +1794,7 @@
                 </div>
                 <div class="search-box"><i class="fas fa-search"></i><input type="text" id="customerSearch" placeholder="بحث في العملاء..." oninput="filterCustomers()"></div>
                 <div class="table-container">
-                    <table><thead><tr><th>الكود</th><th>اسم العميل</th><th>رقم الهاتف</th><th>العنوان</th><th>الرصيد</th><th>الحد الائتماني</th><th>الإجراءات</th></tr></thead><tbody id="customersTable"></tbody></table>
+                    <table><thead><tr><th>الكود</th><th>اسم العميل</th><th>رقم الهاتف</th><th>العنوان</th><th class="cust-debt-col">الرصيد</th><th class="cust-debt-col">الحد الائتماني</th><th>الإجراءات</th></tr></thead><tbody id="customersTable"></tbody></table>
                 </div>
             </div>
             <div class="card" id="customerStatementCard">
@@ -2777,7 +2782,7 @@
             <div class="modal-body">
                 <div class="form-group"><label class="form-label">الجهة (من)</label><select class="form-control" id="treasuryInParty"><option value="">اختر...</option></select></div>
                 <div class="form-group"><label class="form-label">المبلغ</label><input type="number" class="form-control" id="treasuryInAmount" placeholder="0.00"></div>
-                <div class="form-group"><label class="form-label">نوع القبض</label><select class="form-control" id="treasuryInType"><option value="تحصيل آجل">تحصيل من عميل (آجل)</option><option value="مبيعات نقدية">مبيعات نقدية</option><option value="إضافة رصيد">إضافة رصيد</option><option value="أخرى">أخرى</option></select></div>
+                <div class="form-group"><label class="form-label">نوع القبض</label><select class="form-control" id="treasuryInType"><option value="مبيعات نقدية">مبيعات نقدية</option><option value="إضافة رصيد">إضافة رصيد</option><option value="أخرى">أخرى</option></select></div>
                 <div class="form-group"><label class="form-label">الحساب</label><select class="form-control" id="treasuryInAccount"><option value="cash">نقدية (الخزنة)</option><option value="bank">البنك</option></select></div>
                 <div class="form-group"><label class="form-label">البيان</label><input type="text" class="form-control" id="treasuryInNotes" placeholder="بيان القبض..."></div>
             </div>
@@ -5166,7 +5171,7 @@
             const order = customerOrders.find(o => o.id === orderId);
             if (!order) return;
             const cust = customers.find(c => c.code === order.customerCode);
-            if (cust && cust.creditLimit != null) {
+            if (false && cust && cust.creditLimit != null) {
                 const currentBalance = getCustomerBalance(order.customerCode);
                 const orderTotal = order.total || (order.items || []).reduce((s, it) => s + (it.total || it.price * it.qty || 0), 0);
                 const balanceAfter = currentBalance + orderTotal;
@@ -5209,7 +5214,7 @@
                 const order = customerOrders.find(o => o.id === id);
                 if (!order) return;
                 const cust = customers.find(c => c.code === order.customerCode);
-                if (cust && cust.creditLimit != null) {
+                if (false && cust && cust.creditLimit != null) {
                     const currentBalance = getCustomerBalance(order.customerCode);
                     const orderTotal = order.total || (order.items || []).reduce((s, it) => s + (it.total || it.price * it.qty || 0), 0);
                     if (currentBalance + orderTotal > cust.creditLimit) overLimitNames.push(cust.name);
@@ -6304,7 +6309,10 @@
             treasury.reverse();
         }
 
-        function getCustomerBalance(customerCode) {
+        // (2026-10-10) فكرة "مديونية العملاء" اتشالت من البرنامج بالكامل بطلب المدير: مفيش رصيد على أي عميل في أي مكان.
+        // الحساب القديم محفوظ تحت اسم getCustomerBalanceLegacy للرجوع ليه بس، ومش مستخدم.
+        function getCustomerBalance(customerCode) { return 0; }
+        function getCustomerBalanceLegacy(customerCode) {
             let balance = 0;
             invoices.forEach(inv => {
                 if (inv.customerCode === customerCode) {
@@ -6609,6 +6617,7 @@
         function accTreasuryCounter(t) {
             const pt = t.partyType, party = String(t.party == null ? '' : t.party), ref = t.reference || '';
             if (pt === 'customer') {
+                if (t.isDebtRelated !== false && (ref === 'تحصيل' || ref === 'تحصيل آجل')) return '3301';   // تحصيل دين قديم
                 if (party === 'إضافة رصيد' || ref === 'إضافة رصيد') return customers.some(c => c.code === party) ? '1105:' + party : '3102';
                 if (party === 'أخرى' || (party === 'عميل عام' && ref === 'مبيعات نقدية')) return '3302';
                 return '1105:' + accCustKey(party);
@@ -6676,7 +6685,8 @@
             invoices.filter(i => i.type === 'sale' && inR(i.date)).forEach(i => {
                 const net = Number(i.grandTotal) || 0, gross = Number(i._grossTotal != null ? i._grossTotal : net) || 0, disc = gross - net;
                 const discAcc = (Number(i.pointsRedeemed) > 0 || /نقاط/.test(i.notes || '')) ? '4103' : '4104';
-                const c = '1105:' + accCustKey(i.customerCode);
+                // (2026-10-10) مفيش مديونية عملاء: فاتورة "آجل" قديمة بتتحسب مبيعات، والطرف التاني تسويات أرصدة سابقة بدل حساب العميل
+                const c = i.paymentMethod === 'آجل' ? '3301' : '1105:' + accCustKey(i.customerCode);
                 add(i.date, 'sale', '#' + i.number, (i.customerName || 'عميل') + (i.paymentMethod ? ' — ' + i.paymentMethod : ''), [
                     { acc: c, dr: net }, disc > 0.004 ? { acc: discAcc, dr: disc } : null, { acc: '4101', cr: gross },
                     disc < -0.004 ? { acc: '4203', cr: -disc } : null,
@@ -6684,7 +6694,7 @@
             });
             salesReturns.filter(r => inR(r.date)).forEach(r => {
                 add(r.date, 'sret', '#' + (r.number || '-'), (r.customerName || '') + ' — على فاتورة #' + (r.originalInvoiceNumber || r.invoiceNumber || '-'), [
-                    { acc: '4102', dr: Number(r.grandTotal) || 0 }, { acc: '1105:' + accCustKey(r.customerCode), cr: Number(r.grandTotal) || 0 },
+                    { acc: '4102', dr: Number(r.grandTotal) || 0 }, { acc: r.affectsBalance ? '3301' : '1105:' + accCustKey(r.customerCode), cr: Number(r.grandTotal) || 0 },
                     { acc: '1104', dr: Number(r.totalCost) || 0 }, { acc: '5101', cr: Number(r.totalCost) || 0 }], r.id);
             });
             purchaseInvoices.filter(p => inR(p.date)).forEach(p => {
@@ -8868,7 +8878,7 @@
                 (pending.length ? Object.keys(byRep).map(k => `<div style="margin-bottom:12px;"><div style="font-weight:800;margin-bottom:6px;"><i class="fas fa-user"></i> ${escapeHtml(byRep[k].name)} — <span style="color:var(--danger);">${byRep[k].list.length} طلب بـ ${byRep[k].value.toFixed(2)} ج مستني استلام</span></div>
                     <div class="table-container"><table><thead><tr><th>العميل</th><th>المرتجع</th><th>القيمة</th><th>إمتى</th><th></th></tr></thead><tbody>` +
                     byRep[k].list.map(o => `<tr><td>${escapeHtml(o.customerName || '')}<br><span style="font-size:11px;color:var(--text-light);">#${o.id.slice(-6)} ${o.repReturnKind === 'full' ? '— الطلب كله رجع' : ''}</span></td><td style="font-size:12.5px;">${itemsTxt(o)}</td><td><strong>${(Number(o.repReturnValue) || 0).toFixed(2)}</strong></td><td style="font-size:12px;">${new Date(o.repReturnAt).toLocaleString('ar-EG')}</td>
-                        <td>${canReceiveRepReturns() ? `<button class="btn btn-success btn-sm" onclick="openRepReturnReceive('${o.id}')"><i class="fas fa-dolly"></i> استلام</button>` : '<span style="font-size:11px;color:var(--text-light);">لأمين المخزن</span>'}</td></tr>`).join('') + '</tbody></table></div></div>').join('')
+                        <td>${canReceiveRepReturns() ? `<button class="btn btn-success btn-sm" onclick="openRepReturnReceive('${o.id}')"><i class="fas fa-dolly"></i> استلام</button> <button class="btn btn-secondary btn-sm" style="margin-top:4px;" title="البضاعة رجعت المخزن واتعدّت في الجرد" onclick="closeRepReturnCounted('${o.id}')"><i class="fas fa-check-double"></i> قفل (اتعدّ في الجرد)</button>` : '<span style="font-size:11px;color:var(--text-light);">لأمين المخزن</span>'}</td></tr>`).join('') + '</tbody></table></div></div>').join('')
                  : '<p style="color:var(--success);margin:0 0 10px;">✓ مفيش مرتجعات مستنية استلام</p>') +
                 `<div style="display:flex;gap:8px;align-items:center;margin:10px 0 6px;flex-wrap:wrap;"><strong>اتسلّم من يوم</strong> <input type="date" id="repReturnsFrom" class="form-control" style="width:auto;" value="${fromEl && fromEl.value ? fromEl.value : new Date(dayStart.getTime() - dayStart.getTimezoneOffset() * 60000).toISOString().slice(0, 10)}" onchange="renderRepReturnsCard()"> <button class="btn btn-info btn-sm" onclick="exportRepReturns()"><i class="fas fa-file-export"></i> Excel</button></div>` +
                 (received.length ? '<div class="table-container"><table><thead><tr><th>المندوب</th><th>العميل</th><th>المرتجع</th><th>القيمة</th><th>استلمه</th><th>عجز</th></tr></thead><tbody>' + received.map(o => `<tr><td>${escapeHtml(o.repReturnRepName || '')}</td><td>${escapeHtml(o.customerName || '')}</td><td style="font-size:12.5px;">${itemsTxt(o)}</td><td>${(Number(o.repReturnValue) || 0).toFixed(2)}</td><td style="font-size:12px;">${escapeHtml((o.repReturnReceived.by || ''))}<br>${new Date(o.repReturnReceived.at).toLocaleString('ar-EG')}</td><td style="color:var(--danger);font-weight:700;">${o.repReturnReceived.shortageValue ? o.repReturnReceived.shortageValue.toFixed(2) : '-'}</td></tr>`).join('') + '</tbody></table></div>' : '<p style="color:var(--text-light);font-size:13px;">مفيش مرتجعات اتسلمت في الفترة دي</p>');
@@ -8890,6 +8900,30 @@
             document.getElementById('rrInfo').innerHTML = `<strong>${escapeHtml(o.repReturnRepName || '')}</strong> — من ${escapeHtml(o.customerName || '')} (#${o.id.slice(-6)}) — ${new Date(o.repReturnAt).toLocaleString('ar-EG')}`;
             document.getElementById('rrItems').innerHTML = (o.repReturns || []).map((r, i) => `<tr><td>${escapeHtml(r.productName)}</td><td>${r.qty} ${escapeHtml(r.unit || '')}</td><td>${escapeHtml(r.reason || '')}</td><td><input type="number" class="form-control rr-got" data-i="${i}" min="0" max="${r.qty}" step="1" value="${r.qty}" style="width:90px;"></td></tr>`).join('');
             openModal('repReturnReceiveModal');
+        }
+        // (2026-10-10) مرتجع البضاعة بتاعته رجعت المخزن واتعدّت في الجرد قبل ما يتعمل له "استلام":
+        // بيتقفل من غير ما المخزون يزيد (عشان ماتتحسبش مرتين) ومن غير أي عجز على المندوب
+        function closeRepReturnCounted(id) {
+            if (!canReceiveRepReturns()) { showToast('لأمين المخزن أو المدير بس', 'error'); return; }
+            const o0 = repReturnOrders.find(x => x.id === id); if (!o0 || !db) return;
+            const list = (o0.repReturns || []).map(r => `• ${r.productName}: ${r.qty} ${r.unit || ''}`).join('\n');
+            if (!confirm(`قفل مرتجع ${o0.repReturnRepName || ''} — ${o0.customerName || ''}:\n${list}\n\nالبضاعة دي رجعت المخزن واتعدّت في الجرد؟\nالمرتجع هيتقفل من غير ما المخزون يزيد ومن غير عجز على المندوب.`)) return;
+            const by = (currentUser && (currentUser.fullName || currentUser.username)) || '';
+            const ref = db.collection('customerOrders').doc(id);
+            let rec = null;
+            db.runTransaction(t => t.get(ref).then(snap => {
+                if (!snap.exists) throw new Error('الطلب مش موجود');
+                const fresh = snap.data();
+                if (!fresh.repReturnPending) throw new Error('المرتجع ده اتقفل أو اتسلّم قبل كده');
+                const items = (fresh.repReturns || []).map(r => ({ productCode: r.productCode, productName: r.productName, unit: r.unit, expected: Number(r.qty) || 0, received: Number(r.qty) || 0, deductQty: 0, missingValue: 0 }));
+                rec = { at: Date.now(), by, items, shortageValue: 0, closedByCount: true, note: 'البضاعة اتعدّت في الجرد — اتقفل من غير ما المخزون يتغير' };
+                t.update(ref, { repReturnPending: false, repReturnReceived: rec });
+            })).then(() => {
+                const o = repReturnOrders.find(x => x.id === id); if (o) { o.repReturnPending = false; o.repReturnReceived = rec; }
+                logAction('قفل مرتجع مندوب (اتعدّ في الجرد)', `${o0.repReturnRepName || ''} — ${o0.customerName || ''} #${id.slice(-6)} — من غير تغيير في المخزون`);
+                showToast('اتقفل المرتجع ✓ — المخزون ماتغيرش', 'success', 5000);
+                try { renderRepReturnsCard(); } catch (e) {}
+            }).catch(e => { console.error(e); showToast(e.message || 'تعذر القفل', 'error'); });
         }
         function confirmRepReturnReceive() {
             if (!canReceiveRepReturns()) { showToast('استلام المرتجع لأمين المخزن أو المدير بس', 'error'); return; }
@@ -9193,8 +9227,8 @@
                 else if (balance < 0) { balanceClass = 'creditor'; balanceText = Math.abs(balance).toFixed(2) + ' ج.م (دائن)'; }
                 else balanceText = '0.00 ج.م';
                 return `<tr><td><span class="badge badge-warning">${c.code}</span></td><td><strong>${c.name}</strong></td><td>${c.phone || '-'}</td><td>${c.address || '-'}</td>
-                <td><span class="customer-balance ${balanceClass}">${balanceText}</span></td>
-                <td>${c.creditLimit != null ? c.creditLimit.toFixed(2) + ' ج.م' : '-'}</td>
+                <td class="cust-debt-col"><span class="customer-balance ${balanceClass}">${balanceText}</span></td>
+                <td class="cust-debt-col">${c.creditLimit != null ? c.creditLimit.toFixed(2) + ' ج.م' : '-'}</td>
                 <td><button class="btn btn-primary btn-icon btn-sm" onclick='openCustomerModal(${JSON.stringify(c).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
                 <button class="btn btn-danger btn-icon btn-sm" onclick="deleteCustomer('${c.code}')"><i class="fas fa-trash"></i></button></td></tr>`;
             }).join('');
@@ -13050,7 +13084,7 @@
             const isCashSettled = (paymentMethod === 'نقدي' || paymentMethod === 'بطاقة' || paymentMethod === 'تحويل بنكي');
             if (!isCashSettled) {
                 const cust = customers.find(c => c.code === customerCode);
-                if (cust && cust.creditLimit != null) {
+                if (false && cust && cust.creditLimit != null) {
                     const currentBalance = getCustomerBalance(customerCode);
                     const balanceAfter = currentBalance + grandTotal;
                     if (balanceAfter > cust.creditLimit) {
