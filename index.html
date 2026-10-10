@@ -3151,7 +3151,21 @@
             if (pending) setTimeout(function() { scheduleSplitSync(key); }, 0);
             return out;
         }
+        // (2026-10-10) أول نسخة مخزون توصل من السحابة في الجلسة = هي الحقيقة. قبل كده أي فرق قديم متخزن على الجهاز
+        // (بين "المخزون المحلي" و"آخر المتبعت") كان بيتعامل كإنه تعديل لسه ماتبعتش ويتضاف تاني على السحابة كزيادة/خصم،
+        // ولو التخزين على الجهاز مش بيتحدّث صح كان بيتضاف كل مرة الصفحة تفتح — وده كان بيضرب المخزون.
+        let inventoryFirstSnapshotTaken = false;
         function mergeInventoryIncoming(serverInv) {
+            if (!inventoryFirstSnapshotTaken) {
+                inventoryFirstSnapshotTaken = true;
+                try {
+                    const prev0 = lastSyncedSplit.inventory || {}, loc0 = inventory || {};
+                    const stale = Object.keys(loc0).filter(c => prev0[c] && Math.abs((Number(loc0[c].qty) || 0) - (Number(prev0[c].qty) || 0)) > 1e-9);
+                    if (stale.length) console.warn('discarded stale local inventory diffs from a previous session:', stale.length);
+                } catch (e) {}
+                lastSyncedSplit.inventory = JSON.parse(JSON.stringify(serverInv));
+                return JSON.parse(JSON.stringify(serverInv));
+            }
             const prev = lastSyncedSplit.inventory || {};
             const out = JSON.parse(JSON.stringify(serverInv));
             let pending = false;
@@ -11280,7 +11294,7 @@
                 approveGenericDraft._dupChecked = null;
                 // (2026-10-10) "المتاح" في السيستم = الموجود − المحجوز لطلبات لسه في المخزن. لو الجرد لقى الموجود أقل من المحجوز،
                 // ده معناه إن فيه طلبات محجوزلها بضاعة مش موجودة فعلاً — مش سبب نوقف الجرد كله. بنعرّفك ونكمل، والمتاح بيبقى بالسالب لحد ما تشتري.
-                const short = (d.items || []).map(it => { const avail = inventory[it.productCode] ? Number(inventory[it.productCode].qty) || 0 : 0; const held = heldInWarehouseQty(it.productCode); return { it, avail, held, after: avail + Number(it.delta || 0) }; }).filter(x => x.after < -0.0001);
+                const short = (d.items || []).map(it => { const held = heldInWarehouseQty(it.productCode); return { it, held, after: countTargetAvail(it) }; }).filter(x => x.after < -0.0001);
                 if (short.length) {
                     const lines = short.slice(0, 15).map(x => `• ${x.it.productName}: محجوز لطلبات ${+x.held.toFixed(3)} والموجود فعلاً ${+(x.held + x.after).toFixed(3)}`).join('\n');
                     if (!confirm(`الأصناف دي الموجود منها فعلاً أقل من المحجوز لطلبات لسه ماخرجتش:\n${lines}${short.length > 15 ? `\n... و${short.length - 15} صنف كمان` : ''}\n\nالجرد هيتعتمد عادي، والمتاح للبيع للأصناف دي هيبقى بالسالب (يعني الطلبات دي مش هتكفي) لحد ما تشتري أو تعدّل الطلبات.\n\nتكمل؟`)) return;
@@ -11316,8 +11330,12 @@
                 });
             }).then(function() {
                 if (kind === 'stock_count') {
-                    applyStockCountDraft(d, impactPerItem, me, id);
-                    logAction('اعتماد جرد مخزون', `${(d.items || []).length} صنف — طلبه ${(d.createdBy && d.createdBy.name) || '-'} واعتمده ${me.name}`);
+                    return applyStockCountDraft(d, impactPerItem, me, id).then(function(res) {
+                        const changed = res.filter(x => Math.abs(x.diff) > 1e-9).length;
+                        logAction('اعتماد جرد مخزون', `${(d.items || []).length} صنف (اتغير منهم ${changed}) — طلبه ${(d.createdBy && d.createdBy.name) || '-'} واعتمده ${me.name}`);
+                        closeModal('approvalReviewModal');
+                        showToast('اتعتمد الجرد واتكتبت الكميات ✓ (' + changed + ' صنف اتغيروا)', 'success', 6000);
+                    }).catch(function(e) { console.error(e); showToast('الجرد اتعتمد بس الكميات ماتكتبتش: ' + (e.message || '') + ' — هتلاقيه في المراجعة والاعتماد تحت "اتعتمد ومااتطبقش"', 'error', 15000); });
                 } else if (kind === 'stock_adjust') {
                     const inv = inventory[d.productCode] || (inventory[d.productCode] = { code: d.productCode, qty: 0, cost: 0, minStock: 0 });
                     inv.qty = (Number(inv.qty) || 0) + Number(d.delta || 0);
@@ -11649,21 +11667,49 @@
             return q;
         }
         // بيطبق فروق الجرد على المخزون. كل صنف لوحده (لو صنف فشل، الباقي يكمل)، وفي الآخر بيعلّم على الطلب إنه اتطبق
+        // (2026-10-10) الجرد بيكتب الكمية اللي اتعدّت نفسها (مش بيضيف فرق): المتاح = اللي اتعد − المحجوز لطلبات لسه في المخزن.
+        // بيتم جوه معاملة على السحابة نفسها، فلو اتطبق مرتين بالغلط، المرة التانية مابتغيّرش حاجة.
+        function countTargetAvail(it) { return Math.round(((Number(it.counted) || 0) - heldInWarehouseQty(it.productCode)) * 1000) / 1000; }
         function applyStockCountDraft(d, impactPerItem, me, id) {
-            const failed = [];
-            (d.items || []).forEach((it, idx) => {
-                try {
-                    const inv = inventory[it.productCode] || (inventory[it.productCode] = { code: it.productCode, qty: 0, cost: it.cost || 0, minStock: 0 });
-                    inv.qty = Math.round(((Number(inv.qty) || 0) + Number(it.delta || 0)) * 1000) / 1000;
-                    const ik = (impactPerItem && impactPerItem[idx]) || it.impactKind || defaultImpactFor(it.delta);
-                    addStockMovement(it.productCode, it.productName, 'adjustment', Number(it.delta || 0), inv.qty, 'جرد Excel', `${it.reason || 'جرد'} (طلبه ${(d.createdBy && d.createdBy.name) || '-'} واعتمده ${me.name})`, { profitImpact: impactToProfit(ik), impactKind: ik, impactBy: me.name, countDraftId: id });
-                } catch (e) { console.error('count item apply failed', it.productCode, e); failed.push(it.productName || it.productCode); }
+            const items = (d.items || []).filter(it => it && it.productCode && it.counted != null && !isNaN(Number(it.counted)));
+            const targets = items.map(countTargetAvail);
+            const refs = items.map(it => db.collection('inventoryRecords').doc(String(it.productCode)));
+            const chunks = []; for (let i = 0; i < items.length; i += 200) chunks.push(i);
+            const results = [];
+            return chunks.reduce((p, start) => p.then(() => db.runTransaction(t => {
+                const idx = items.slice(start, start + 200).map((_, k) => start + k);
+                return Promise.all(idx.map(i => t.get(refs[i]))).then(snaps => {
+                    const out = [];
+                    snaps.forEach((snap, k) => {
+                        const i = idx[k], it = items[i];
+                        const before = snap.exists ? (Number(snap.data().qty) || 0) : 0;
+                        const target = targets[i], diff = Math.round((target - before) * 1000) / 1000;
+                        if (Math.abs(diff) > 1e-9) {
+                            const base = snap.exists ? {} : { code: it.productCode, cost: it.cost || (inventory[it.productCode] || {}).cost || 0, minStock: 0 };
+                            t.set(refs[i], Object.assign(base, { qty: target }), { merge: true });
+                        }
+                        out.push({ i, it, before, target, diff });
+                    });
+                    return out;
+                });
+            }).then(out => { out.forEach(x => results.push(x)); })), Promise.resolve()).then(() => {
+                results.forEach(x => {
+                    const code = x.it.productCode;
+                    const inv = inventory[code] || (inventory[code] = { code, qty: 0, cost: x.it.cost || 0, minStock: 0 });
+                    inv.qty = x.target;
+                    if (lastSyncedSplit.inventory) lastSyncedSplit.inventory[code] = JSON.parse(JSON.stringify(inv));   // مايتبعتش كفرق تاني
+                    if (Math.abs(x.diff) > 1e-9) {
+                        const ik = (impactPerItem && impactPerItem[(d.items || []).indexOf(x.it)]) || x.it.impactKind || defaultImpactFor(x.diff);
+                        try { addStockMovement(code, x.it.productName, 'adjustment', x.diff, inv.qty, 'جرد Excel', `${x.it.reason || 'جرد'} — اتعد ${x.it.counted} (طلبه ${(d.createdBy && d.createdBy.name) || '-'} واعتمده ${me.name})`, { profitImpact: impactToProfit(ik), impactKind: ik, impactBy: me.name, countDraftId: id || null }); } catch (e) { console.error(e); }
+                    }
+                });
+                _origLocalStorageSetItem('inventory', JSON.stringify(inventory));
+                _origLocalStorageSetItem('_lastSyncedInventory', JSON.stringify(lastSyncedSplit.inventory || {}));
+                try { scheduleStockLevelsSync(); } catch (e) {}
+                if (db && id) db.collection('purchaseDrafts').doc(id).set({ appliedAt: Date.now(), appliedBy: me, appliedMode: 'absolute' }, { merge: true }).catch(e => console.error('mark applied failed', e));
+                try { renderInventory(); renderLowStock(); } catch (e) {}
+                return results;
             });
-            try { saveInventory(); } catch (e) { console.error(e); }
-            try { pushInventoryDiff(); } catch (e) { console.error(e); }
-            if (db && id) db.collection('purchaseDrafts').doc(id).set({ appliedAt: Date.now(), appliedBy: me }, { merge: true }).catch(e => console.error('mark applied failed', e));
-            if (failed.length) showToast('اتطبق الجرد، بس ' + failed.length + ' صنف فيهم مشكلة: ' + failed.slice(0, 5).join('، '), 'warning', 9000);
-            return failed;
         }
         // ---- جرد اتعتمد ومااتطبقش (الاعتماد اتسجل والتطبيق وقف في النص) ----
         let unappliedCounts = [];
@@ -11715,8 +11761,7 @@
                 if (!snap.exists || snap.data().status !== 'approved') throw new Error('الطلب ده مش في حالة "اتعتمد"');
                 if (snap.data().appliedAt) throw new Error('الجرد ده اتطبق خلاص');
                 t.update(ref, { appliedAt: Date.now(), appliedBy: me, appliedLate: true });
-            })).then(() => {
-                applyStockCountDraft(x, impacts, me, id);
+            })).then(() => applyStockCountDraft(x, impacts, me, id)).then(() => {
                 logAction('اعتماد جرد مخزون', `${(x.items || []).length} صنف — تطبيق متأخر لجرد كان اتعتمد ومااتطبقش — ${me.name}`);
                 closeModal('unappliedCountModal');
                 unappliedCounts = unappliedCounts.filter(u => u.id !== id); renderUnappliedCounts();
