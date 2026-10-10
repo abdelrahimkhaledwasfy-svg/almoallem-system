@@ -11253,7 +11253,18 @@
             if (isOwnPurchaseDraft(d) && pdRole() !== 'admin') { showToast('مينفعش تعتمد حاجة إنت اللي عاملها', 'error'); return; }
             const kind = draftKind(d);
             // نتأكد قبل الاعتماد إن المخزون يسمح
+            if (kind === 'stock_count' && !(approveGenericDraft._dupChecked === id)) {
+                // (2026-10-10) نفس الجرد بالظبط لو اتعتمد قبل كده (مثلاً الشيت اترفع مرتين) — الاعتماد التاني بيضاعف الفروق
+                const sig = d.signature || countSignature(d.items);
+                db.collection('purchaseDrafts').where('status', '==', 'approved').get().then(function(snap) {
+                    const twin = snap.docs.map(x => Object.assign({ id: x.id }, x.data())).find(x => x.id !== id && draftKind(x) === 'stock_count' && (x.signature || countSignature(x.items)) === sig);
+                    if (twin) { showToast('الجرد ده نفسه اتعتمد قبل كده (' + new Date(twin.approvedAt || twin.submittedAt).toLocaleString('ar-EG') + ') — ارفضه، لو اتعتمد تاني الفروق هتتطبق مرتين', 'error', 10000); return; }
+                    approveGenericDraft._dupChecked = id; approveGenericDraft();
+                }).catch(function(e) { console.error(e); showToast('مقدرتش أتأكد إن الجرد ده مااتعتمدش قبل كده — جرّب تاني', 'error'); });
+                return;
+            }
             if (kind === 'stock_count') {
+                approveGenericDraft._dupChecked = null;
                 // (2026-10-10) "المتاح" في السيستم = الموجود − المحجوز لطلبات لسه في المخزن. لو الجرد لقى الموجود أقل من المحجوز،
                 // ده معناه إن فيه طلبات محجوزلها بضاعة مش موجودة فعلاً — مش سبب نوقف الجرد كله. بنعرّفك ونكمل، والمتاح بيبقى بالسالب لحد ما تشتري.
                 const short = (d.items || []).map(it => { const avail = inventory[it.productCode] ? Number(inventory[it.productCode].qty) || 0 : 0; const held = heldInWarehouseQty(it.productCode); return { it, avail, held, after: avail + Number(it.delta || 0) }; }).filter(x => x.after < -0.0001);
@@ -11629,6 +11640,7 @@
             customerOrders.forEach(o => { if ((o.status === 'pending' || o.status === 'preparing') && reservedStockLedger[o.id]) q += Number(reservedStockLedger[o.id][code]) || 0; });
             return q;
         }
+        function countSignature(items) { return (items || []).map(it => it.productCode + ':' + it.qtyAtExport + '>' + it.counted).sort().join('|'); }
         function exportInventoryCountSheet() {
             if (!requireCloudReady()) return;
             // *** إصلاح 2026-10-06: الكمية في السيستم = المتاح + البضاعة المحجوزة لطلبات لسه جوه المخزن (جديد / قيد التجهيز). ***
@@ -11691,7 +11703,10 @@
                         const counts = list.filter(e => e.status === 'request');
                         if (counts.length) {
                             const items = counts.map(e => ({ productCode: e.product.code, productName: e.product.name, unit: e.product.unit || '', qtyAtExport: e.base, counted: e.counted, delta: e.delta, reason: e.reason, cost: (inventory[e.product.code] || {}).cost || e.product.cost || 0 }));
-                            submitApprovalRequest('stock_count', { items, reason: 'جرد بالإكسل (' + items.length + ' صنف)', grandTotal: items.reduce((s, it) => s + Math.abs(it.delta) * it.cost, 0) });
+                            // (2026-10-10) ممنوع جردين مستنيين اعتماد في نفس الوقت: لو الاتنين اتعتمدوا، الفروق بتتطبق مرتين
+                            const pendingCount = purchaseDrafts.find(x => draftKind(x) === 'stock_count' && x.status === 'pending');
+                            if (pendingCount) { showToast('فيه جرد تاني لسه مستني اعتماد في "المراجعة والاعتماد" — اعتمده أو ارفضه الأول، عشان الفروق ماتتطبقش مرتين', 'error', 9000); return; }
+                            submitApprovalRequest('stock_count', { items, signature: countSignature(items), reason: 'جرد بالإكسل (' + items.length + ' صنف)', grandTotal: items.reduce((s, it) => s + Math.abs(it.delta) * it.cost, 0) });
                         } else if (mins.length) showToast(`اتعدل حد الطلب لـ ${mins.length} صنف`);
                     }
                 });
