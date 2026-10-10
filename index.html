@@ -11254,11 +11254,20 @@
             const kind = draftKind(d);
             // نتأكد قبل الاعتماد إن المخزون يسمح
             if (kind === 'stock_count') {
-                const neg = (d.items || []).find(it => (inventory[it.productCode] ? Number(inventory[it.productCode].qty) || 0 : 0) + Number(it.delta || 0) < 0);
-                if (neg) { showToast(`${neg.productName}: الخصم أكبر من المخزون الحالي. ارفض الطلب يتعمل تاني`, 'error'); return; }
+                // (2026-10-10) "المتاح" في السيستم = الموجود − المحجوز لطلبات لسه في المخزن. لو الجرد لقى الموجود أقل من المحجوز،
+                // ده معناه إن فيه طلبات محجوزلها بضاعة مش موجودة فعلاً — مش سبب نوقف الجرد كله. بنعرّفك ونكمل، والمتاح بيبقى بالسالب لحد ما تشتري.
+                const short = (d.items || []).map(it => { const avail = inventory[it.productCode] ? Number(inventory[it.productCode].qty) || 0 : 0; const held = heldInWarehouseQty(it.productCode); return { it, avail, held, after: avail + Number(it.delta || 0) }; }).filter(x => x.after < -0.0001);
+                if (short.length) {
+                    const lines = short.slice(0, 15).map(x => `• ${x.it.productName}: محجوز لطلبات ${+x.held.toFixed(3)} والموجود فعلاً ${+(x.held + x.after).toFixed(3)}`).join('\n');
+                    if (!confirm(`الأصناف دي الموجود منها فعلاً أقل من المحجوز لطلبات لسه ماخرجتش:\n${lines}${short.length > 15 ? `\n... و${short.length - 15} صنف كمان` : ''}\n\nالجرد هيتعتمد عادي، والمتاح للبيع للأصناف دي هيبقى بالسالب (يعني الطلبات دي مش هتكفي) لحد ما تشتري أو تعدّل الطلبات.\n\nتكمل؟`)) return;
+                }
             } else if (kind === 'stock_adjust') {
                 const nowQty = inventory[d.productCode] ? (Number(inventory[d.productCode].qty) || 0) : 0;
-                if (nowQty + Number(d.delta || 0) < 0) { showToast('الخصم أكبر من المخزون الحالي. رجّع الطلب يتعمل تاني', 'error'); return; }
+                if (nowQty + Number(d.delta || 0) < -0.0001) {
+                    const held = heldInWarehouseQty(d.productCode);
+                    if (nowQty + held + Number(d.delta || 0) < -0.0001) { showToast('الخصم أكبر من الموجود في المخزن (حتى مع المحجوز). رجّع الطلب يتعمل تاني', 'error'); return; }
+                    if (!confirm(`${d.productName}: محجوز لطلبات ${+held.toFixed(3)}، وبعد التعديل الموجود هيبقى أقل من المحجوز، فالمتاح للبيع هيبقى بالسالب لحد ما تشتري أو تعدّل الطلبات. تكمل؟`)) return;
+                }
             } else {
                 const short = (d.items || []).find(it => (inventory[it.productCode] ? Number(inventory[it.productCode].qty) || 0 : 0) < it.qty);
                 if (short) { showToast(`${short.productName}: الموجود في المخزن أقل من كمية المرتجع`, 'error'); return; }
