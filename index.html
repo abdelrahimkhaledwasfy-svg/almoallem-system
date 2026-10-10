@@ -962,6 +962,7 @@
 
         <section id="purchase-approvals-section" class="section">
             <div class="card">
+                <div id="unappliedCountsBox" style="display:none;background:rgba(231,76,60,0.08);border-radius:12px;padding:12px;margin-bottom:12px;"></div>
                 <div class="card-header"><div class="card-title"><i class="fas fa-clipboard-check"></i> بانتظار المراجعة والاعتماد</div><span id="purchaseApprovalsSummary" style="font-size:13px;color:var(--text-light);"></span></div>
                 <p style="font-size:13px;color:var(--text-light);margin:0 0 12px;">فواتير الشراء ومرتجعات الشراء وتعديلات المخزون مش بيبقى ليها أي أثر غير لما تتعتمد هنا. ومحدش يقدر يعتمد حاجة هو اللي عاملها، إلا المدير.</p>
                 <div class="table-container"><table><thead><tr><th>النوع</th><th>من إمتى</th><th>المورد / الصنف</th><th>التفاصيل</th><th>عملها</th><th>الأصناف</th><th>القيمة</th><th>الحالة</th><th></th></tr></thead><tbody id="purchaseApprovalsTable"></tbody></table></div>
@@ -3227,7 +3228,17 @@
         let applyingRemoteUpdate = false;
         let cloudListenerStarted = false;
         let lastKnownServerUpdatedAt = 0; // آخر updatedAt عارفينه من السحابة، بنستخدمه عشان نمنع أي جهاز قديم من مسح تحديثات أحدث
-        const _origLocalStorageSetItem = localStorage.setItem.bind(localStorage);
+        const _rawLocalStorageSetItem = localStorage.setItem.bind(localStorage);
+        // (2026-10-10) التخزين على الجهاز مجرد نسخة احتياطية سريعة. لو امتلى (QuotaExceeded) كان بيرمي خطأ يوقف
+        // العملية كلها في النص (زي اعتماد جرد اتسجل "اتعتمد" ومااتطبقش). دلوقتي الخطأ بيتسجل وبس والعملية تكمل.
+        let _lsQuotaWarned = false;
+        function _origLocalStorageSetItem(key, value) {
+            try { _rawLocalStorageSetItem(key, value); }
+            catch (e) {
+                console.warn('localStorage write skipped for', key, e && e.name);
+                if (!_lsQuotaWarned) { _lsQuotaWarned = true; try { setTimeout(function() { showToast('مساحة التخزين على الجهاز ده امتلت — الشغل كمّل عادي والبيانات محفوظة على السحابة', 'warning', 6000); }, 0); } catch (e2) {} }
+            }
+        }
         // لو عندنا تعديل محلي (زي تنفيذ طلب أبليكشن) لسه ما اترفعش للسحابة، بنأجل أي تحديث وارد من جهاز
         // تاني لحد ما رفعنا تعديلنا إحنا الأول، عشان تحديث الجهاز التاني ميمسحش تعديلنا اللي لسه معلق
         let pendingLocalSync = false;
@@ -3313,6 +3324,7 @@
 
         // نعترض localStorage.setItem عشان أي حفظ محلي (من أي دالة في النظام) يطلق مزامنة سحابية تلقائيًا
         function hookLocalStorageForCloudSync() {
+            // ملاحظة: _origLocalStorageSetItem نفسها آمنة من امتلاء التخزين
             localStorage.setItem = function(key, value) {
                 _origLocalStorageSetItem(key, value);
                 if (applyingRemoteUpdate) return;
@@ -7324,6 +7336,7 @@
             if (sectionName === 'smart-analytics') { renderSmartAnalytics(); }
             if (sectionName === 'users') { renderUsers(); }
             if (sectionName === 'audit-log') { renderAuditLog(); }
+            if (sectionName === 'purchase-approvals') { try { checkUnappliedCounts(); } catch (e) { console.error(e); } }
             if (sectionName === 'accounting') { renderAccounting(); }
             document.getElementById('sidebar').classList.remove('open');
         }
@@ -11283,6 +11296,7 @@
                 const short = (d.items || []).find(it => (inventory[it.productCode] ? Number(inventory[it.productCode].qty) || 0 : 0) < it.qty);
                 if (short) { showToast(`${short.productName}: الموجود في المخزن أقل من كمية المرتجع`, 'error'); return; }
             }
+            approveGenericDraft._kind = kind;
             const impactSingle = (document.getElementById('apprImpact_single') || {}).value || (d.impactKind || defaultImpactFor(d.delta));
             const impactPerItem = (d.items || []).map((it, idx) => (document.getElementById('apprImpact_' + idx) || {}).value || it.impactKind || defaultImpactFor(it.delta));
             if (kind === 'stock_adjust' && impactSingle === 'damage' && Number(d.delta) > 0) { showToast('"تالف" مينفعش مع زيادة في المخزون — اختار نوع تاني', 'error'); return; }
@@ -11302,13 +11316,7 @@
                 });
             }).then(function() {
                 if (kind === 'stock_count') {
-                    (d.items || []).forEach((it, idx) => {
-                        const inv = inventory[it.productCode] || (inventory[it.productCode] = { code: it.productCode, qty: 0, cost: it.cost || 0, minStock: 0 });
-                        inv.qty = (Number(inv.qty) || 0) + Number(it.delta || 0);
-                        const ik = impactPerItem[idx];
-                        addStockMovement(it.productCode, it.productName, 'adjustment', Number(it.delta || 0), inv.qty, 'جرد Excel', `${it.reason || 'جرد'} (طلبه ${(d.createdBy && d.createdBy.name) || '-'} واعتمده ${me.name})`, { profitImpact: impactToProfit(ik), impactKind: ik, impactBy: me.name });
-                    });
-                    saveInventory();
+                    applyStockCountDraft(d, impactPerItem, me, id);
                     logAction('اعتماد جرد مخزون', `${(d.items || []).length} صنف — طلبه ${(d.createdBy && d.createdBy.name) || '-'} واعتمده ${me.name}`);
                 } else if (kind === 'stock_adjust') {
                     const inv = inventory[d.productCode] || (inventory[d.productCode] = { code: d.productCode, qty: 0, cost: 0, minStock: 0 });
@@ -11639,6 +11647,82 @@
             let q = 0;
             customerOrders.forEach(o => { if ((o.status === 'pending' || o.status === 'preparing') && reservedStockLedger[o.id]) q += Number(reservedStockLedger[o.id][code]) || 0; });
             return q;
+        }
+        // بيطبق فروق الجرد على المخزون. كل صنف لوحده (لو صنف فشل، الباقي يكمل)، وفي الآخر بيعلّم على الطلب إنه اتطبق
+        function applyStockCountDraft(d, impactPerItem, me, id) {
+            const failed = [];
+            (d.items || []).forEach((it, idx) => {
+                try {
+                    const inv = inventory[it.productCode] || (inventory[it.productCode] = { code: it.productCode, qty: 0, cost: it.cost || 0, minStock: 0 });
+                    inv.qty = Math.round(((Number(inv.qty) || 0) + Number(it.delta || 0)) * 1000) / 1000;
+                    const ik = (impactPerItem && impactPerItem[idx]) || it.impactKind || defaultImpactFor(it.delta);
+                    addStockMovement(it.productCode, it.productName, 'adjustment', Number(it.delta || 0), inv.qty, 'جرد Excel', `${it.reason || 'جرد'} (طلبه ${(d.createdBy && d.createdBy.name) || '-'} واعتمده ${me.name})`, { profitImpact: impactToProfit(ik), impactKind: ik, impactBy: me.name, countDraftId: id });
+                } catch (e) { console.error('count item apply failed', it.productCode, e); failed.push(it.productName || it.productCode); }
+            });
+            try { saveInventory(); } catch (e) { console.error(e); }
+            try { pushInventoryDiff(); } catch (e) { console.error(e); }
+            if (db && id) db.collection('purchaseDrafts').doc(id).set({ appliedAt: Date.now(), appliedBy: me }, { merge: true }).catch(e => console.error('mark applied failed', e));
+            if (failed.length) showToast('اتطبق الجرد، بس ' + failed.length + ' صنف فيهم مشكلة: ' + failed.slice(0, 5).join('، '), 'warning', 9000);
+            return failed;
+        }
+        // ---- جرد اتعتمد ومااتطبقش (الاعتماد اتسجل والتطبيق وقف في النص) ----
+        let unappliedCounts = [];
+        function checkUnappliedCounts() {
+            if (!db || !currentUser || !canApprovePurchases()) return;
+            const since = Date.now() - 14 * 86400000;
+            db.collection('purchaseDrafts').where('status', '==', 'approved').get().then(function(snap) {
+                const cands = snap.docs.map(x => Object.assign({ id: x.id }, x.data())).filter(x => draftKind(x) === 'stock_count' && !x.appliedAt && (x.approvedAt || 0) >= since);
+                return Promise.all(cands.map(function(x) {
+                    const from = new Date((x.approvedAt || 0) - 5000).toISOString(), to = new Date((x.approvedAt || 0) + 15 * 60000).toISOString();
+                    return db.collection('stockMovementRecords').where('date', '>=', from).where('date', '<=', to).get().then(function(ms) {
+                        const hit = ms.docs.some(m => { const v = m.data(); return v.reference === 'جرد Excel' && (v.countDraftId ? v.countDraftId === x.id : true); });
+                        return hit ? null : x;
+                    });
+                }));
+            }).then(function(list) { unappliedCounts = (list || []).filter(Boolean); renderUnappliedCounts(); })
+              .catch(function(e) { console.error('unapplied counts check failed', e); });
+        }
+        function renderUnappliedCounts() {
+            const box = document.getElementById('unappliedCountsBox'); if (!box) return;
+            if (!unappliedCounts.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+            box.style.display = '';
+            box.innerHTML = `<div style="font-weight:800;color:var(--danger);margin-bottom:6px;"><i class="fas fa-exclamation-triangle"></i> جرد اتعتمد ومااتطبقش على المخزون</div>
+                <div style="font-size:13px;margin-bottom:8px;">الاعتماد اتسجل بس تطبيق الكميات وقف في النص (مش ظاهر ليه أي حركة مخزون). دوس "طبّق دلوقتي" عشان الكميات تتظبط — مرة واحدة بس.</div>` +
+                unappliedCounts.map(x => `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--border);"><span><strong>${(x.items || []).length} صنف</strong> — اتعتمد ${new Date(x.approvedAt).toLocaleString('ar-EG')} — ${escapeHtml((x.approvedBy && x.approvedBy.name) || '')}</span><button class="btn btn-danger btn-sm" onclick="openUnappliedCount('${x.id}')"><i class="fas fa-play"></i> طبّق دلوقتي</button></div>`).join('');
+        }
+        function openUnappliedCount(id) {
+            const x = unappliedCounts.find(u => u.id === id); if (!x) return;
+            const rows = (x.items || []).map((it, idx) => `<tr><td>${escapeHtml(it.productName)}</td><td>${it.qtyAtExport}</td><td>${it.counted}</td><td style="font-weight:700;color:${it.delta >= 0 ? 'var(--accent)' : 'var(--danger)'};">${it.delta > 0 ? '+' : ''}${it.delta}</td><td>${adjImpactSelect('ucImpact_' + idx, it.impactKind || defaultImpactFor(it.delta), true)}</td></tr>`).join('');
+            let m = document.getElementById('unappliedCountModal');
+            if (!m) { m = document.createElement('div'); m.className = 'modal-overlay'; m.id = 'unappliedCountModal'; document.body.appendChild(m); }
+            m.innerHTML = `<div class="modal" style="max-width:900px;width:96%;"><div class="modal-header"><h3 class="modal-title">تطبيق جرد اتعتمد ومااتطبقش</h3><button class="modal-close" onclick="closeModal('unappliedCountModal')">&times;</button></div>
+                <div class="modal-body"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center;"><span style="font-size:13px;">خلّي كل الفروق:</span><button class="btn btn-secondary btn-sm" onclick="document.querySelectorAll('#unappliedCountModal .appr-impact').forEach(e=>e.value='correction')">تصحيح غلط</button><button class="btn btn-secondary btn-sm" onclick="document.querySelectorAll('#unappliedCountModal .appr-impact').forEach(e=>e.value='real')">فرق جرد حقيقي</button></div>
+                <div class="table-container" style="max-height:380px;overflow-y:auto;"><table><thead><tr><th>الصنف</th><th>وقت التصدير</th><th>الفعلية</th><th>الفرق</th><th>نوع الفرق</th></tr></thead><tbody>${rows}</tbody></table></div></div>
+                <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('unappliedCountModal')">إلغاء</button><button class="btn btn-success" id="ucApplyBtn" onclick="applyUnappliedCount('${id}')"><i class="fas fa-check"></i> طبّق على المخزون</button></div></div>`;
+            openModal('unappliedCountModal');
+        }
+        function applyUnappliedCount(id) {
+            const x = unappliedCounts.find(u => u.id === id); if (!x || !db) return;
+            if (!canApprovePurchases()) { showToast('للمحاسب أو المدير بس', 'error'); return; }
+            const impacts = (x.items || []).map((it, idx) => (document.getElementById('ucImpact_' + idx) || {}).value || defaultImpactFor(it.delta));
+            const bad = (x.items || []).find((it, idx) => impacts[idx] === 'damage' && Number(it.delta) > 0);
+            if (bad) { showToast(bad.productName + ': "تالف" مينفعش مع زيادة — اختار نوع تاني', 'error'); return; }
+            if (!confirm(`هيتطبق ${(x.items || []).length} صنف على المخزون دلوقتي. ده بيحصل مرة واحدة بس. تكمل؟`)) return;
+            const btn = document.getElementById('ucApplyBtn'); btn.disabled = true;
+            const me = pdUser(), ref = db.collection('purchaseDrafts').doc(id);
+            // قفل: مستند الطلب نفسه بياخد علامة "اتطبق" جوه معاملة، فمستحيل يتطبق مرتين حتى من جهازين
+            db.runTransaction(t => t.get(ref).then(snap => {
+                if (!snap.exists || snap.data().status !== 'approved') throw new Error('الطلب ده مش في حالة "اتعتمد"');
+                if (snap.data().appliedAt) throw new Error('الجرد ده اتطبق خلاص');
+                t.update(ref, { appliedAt: Date.now(), appliedBy: me, appliedLate: true });
+            })).then(() => {
+                applyStockCountDraft(x, impacts, me, id);
+                logAction('اعتماد جرد مخزون', `${(x.items || []).length} صنف — تطبيق متأخر لجرد كان اتعتمد ومااتطبقش — ${me.name}`);
+                closeModal('unappliedCountModal');
+                unappliedCounts = unappliedCounts.filter(u => u.id !== id); renderUnappliedCounts();
+                try { renderInventory(); renderLowStock(); } catch (e) {}
+                showToast('اتطبق الجرد على المخزون ✓', 'success', 6000);
+            }).catch(e => { console.error(e); showToast(e.message || 'تعذر التطبيق', 'error', 8000); btn.disabled = false; });
         }
         function countSignature(items) { return (items || []).map(it => it.productCode + ':' + it.qtyAtExport + '>' + it.counted).sort().join('|'); }
         function exportInventoryCountSheet() {
