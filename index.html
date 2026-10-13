@@ -511,6 +511,10 @@
                 <h2 class="page-title" id="pageTitle" style="display:flex;align-items:center;gap:10px;"><span style="color:var(--brand-red);">المعلم</span> <span style="font-size:14px;color:var(--brand-gold);font-weight:500;">| نظام إدارة الفواتير</span></h2>
             </div>
             <div class="user-info">
+                <div style="position:relative;">
+                    <button id="staffBellBtn" class="btn btn-secondary btn-sm" onclick="toggleStaffBell(event)" title="التنبيهات" style="display:none;position:relative;"><i class="fas fa-bell"></i><span id="staffBellCount" style="display:none;position:absolute;top:-7px;left:-7px;background:var(--danger,#e74c3c);color:#fff;border-radius:10px;font-size:10px;font-weight:800;padding:1px 5px;min-width:16px;"></span></button>
+                    <div id="staffBellPanel" style="display:none;position:absolute;top:110%;left:0;z-index:3000;width:360px;max-width:90vw;max-height:70vh;overflow-y:auto;background:var(--card-bg,#fff);border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.18);text-align:right;"></div>
+                </div>
                 <div id="cloudSyncBadge" title="حالة المزامنة السحابية" style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:6px 12px;border-radius:20px;background:#f1f1f1;color:#888;">
                     <i class="fas fa-circle-notch fa-spin" id="cloudSyncIcon" style="font-size:9px;"></i>
                     <span id="cloudSyncText">جاري الاتصال...</span>
@@ -1728,23 +1732,62 @@
                 <div class="table-container"><table><thead><tr><th>حي البيع</th><th>منطقة التسليم</th></tr></thead><tbody id="neighborhoodZoneAssignTable"></tbody></table></div>
             </div>
 
-            <!-- الإشعارات -->
+            <!-- الإشعارات (2026-10-13: اتهيكلت من جديد) -->
             <div class="card" id="appMgmtTab-notifications" style="display:none;">
-                <div class="card-header"><div class="card-title"><i class="fas fa-bell"></i> إرسال إشعار للعملاء</div></div>
-                <div style="padding:0 20px 20px;max-width:450px;">
-                    <div class="form-group" style="position:relative;">
-                        <label class="form-label">المستلم</label>
-                        <input type="text" class="form-control" id="notificationTargetSearch" placeholder="اكتب اسم العميل للبحث... أو اتركه فارغ لإرسال لكل العملاء" autocomplete="off" oninput="filterNotificationTargets()" onfocus="filterNotificationTargets()" onblur="setTimeout(hideNotificationTargetResults, 150)">
-                        <input type="hidden" id="notificationTarget" value="all">
+                <div class="card-header"><div class="card-title"><i class="fas fa-paper-plane"></i> إرسال إشعار</div></div>
+                <div style="padding:0 20px 20px;max-width:620px;">
+                    <div class="form-group">
+                        <label class="form-label">مين هيستلم؟</label>
+                        <select class="form-control" id="notifAudience" onchange="notifAudienceChanged()">
+                            <option value="all">كل العملاء اللي عندهم الأبليكشن</option>
+                            <option value="customer">عميل واحد</option>
+                            <option value="neighborhood">عملاء حي معيّن</option>
+                            <option value="zone">عملاء منطقة بيع</option>
+                            <option value="repCustomers">عملاء مندوب معيّن</option>
+                            <option value="inactive">عملاء ما طلبوش من فترة</option>
+                            <option value="reps">كل المناديب</option>
+                            <option value="rep">مندوب واحد</option>
+                        </select>
+                    </div>
+                    <div class="form-group notif-aud" data-aud="customer" style="position:relative;display:none;">
+                        <label class="form-label">العميل</label>
+                        <input type="text" class="form-control" id="notificationTargetSearch" placeholder="اكتب اسم العميل أو الكود أو التليفون..." autocomplete="off" oninput="filterNotificationTargets()" onfocus="filterNotificationTargets()" onblur="setTimeout(hideNotificationTargetResults, 150)">
+                        <input type="hidden" id="notificationTarget" value="">
                         <div id="notificationTargetResults" style="display:none;position:absolute;z-index:50;background:#fff;border:1px solid var(--border);max-height:240px;overflow-y:auto;width:100%;box-shadow:0 4px 12px rgba(0,0,0,0.12);border-radius:6px;margin-top:2px;"></div>
                     </div>
+                    <div class="form-group notif-aud" data-aud="neighborhood" style="display:none;"><label class="form-label">الحي</label><select class="form-control" id="notifNeighborhood" onchange="notifUpdateCount()"></select></div>
+                    <div class="form-group notif-aud" data-aud="zone" style="display:none;"><label class="form-label">منطقة البيع</label><select class="form-control" id="notifZone" onchange="notifUpdateCount()"></select></div>
+                    <div class="form-group notif-aud" data-aud="repCustomers rep" style="display:none;"><label class="form-label">المندوب</label><select class="form-control" id="notifRep" onchange="notifUpdateCount()"></select></div>
+                    <div class="form-group notif-aud" data-aud="inactive" style="display:none;"><label class="form-label">ما طلبوش من كام يوم أو أكتر؟</label><input type="number" class="form-control" id="notifInactiveDays" value="14" min="1" oninput="notifUpdateCount()"></div>
+                    <div id="notifAudienceCount" style="font-size:13px;color:var(--text-light);margin:-6px 0 12px;"></div>
                     <div class="form-group"><label class="form-label">عنوان الإشعار</label><input type="text" class="form-control" id="notificationTitle" placeholder="مثال: وصل عرض جديد!"></div>
                     <div class="form-group"><label class="form-label">نص الرسالة</label><textarea class="form-control" id="notificationMessage" rows="3" placeholder="تفاصيل الإشعار..."></textarea></div>
-                    <button class="btn btn-success" onclick="sendAppNotification()"><i class="fas fa-paper-plane"></i> إرسال الإشعار</button>
+                    <details style="margin-bottom:14px;"><summary style="cursor:pointer;font-weight:700;font-size:13px;">إضافات (اختياري): صورة أو منتج</summary>
+                        <div class="form-group" style="margin-top:10px;"><label class="form-label">رابط صورة</label><input type="text" class="form-control" id="notifImage" placeholder="https://..."></div>
+                        <div class="form-group"><label class="form-label">يفتح على منتج (كود أو اسم)</label><input type="text" class="form-control" id="notifProduct" list="notifProductList" placeholder="اكتب اسم المنتج..."><datalist id="notifProductList"></datalist></div>
+                    </details>
+                    <button class="btn btn-success" id="notifSendBtn" onclick="sendAppNotification()"><i class="fas fa-paper-plane"></i> إرسال الإشعار</button>
+                    <div id="notifSendProgress" style="margin-top:10px;font-size:13px;"></div>
                 </div>
-                <div class="card-header" style="border-top:1px solid var(--border);"><div class="card-title"><i class="fas fa-history"></i> سجل الإشعارات المرسلة</div></div>
+
+                <div class="card-header admin-only" style="border-top:1px solid var(--border);"><div class="card-title"><i class="fas fa-sliders-h"></i> إعدادات الإشعارات التلقائية</div><button class="btn btn-primary btn-sm" onclick="saveNotifSettings()"><i class="fas fa-save"></i> حفظ الإعدادات</button></div>
+                <div class="admin-only" style="padding:0 20px 20px;">
+                    <div style="font-size:12.5px;color:var(--text-light);margin-bottom:10px;">تقدر تكتب في النص: <code>{رقم}</code> رقم الطلب، <code>{المبلغ}</code> إجمالي الطلب، <code>{السبب}</code> سبب الرفض/عدم التسليم، <code>{العميل}</code> اسم المحل.</div>
+                    <h4 style="margin:6px 0;">رسائل العميل عن طلبه</h4>
+                    <div class="table-container"><table><thead><tr><th style="width:70px;">شغّال</th><th>الحالة</th><th>العنوان</th><th>النص</th></tr></thead><tbody id="notifEventsTable"></tbody></table></div>
+                    <h4 style="margin:14px 0 6px;">رسائل المناديب</h4>
+                    <div id="notifRepToggles" style="display:flex;flex-wrap:wrap;gap:8px 18px;"></div>
+                    <h4 style="margin:14px 0 6px;">تنبيهات الموظفين (الجرس في السيستم)</h4>
+                    <div id="notifStaffToggles" style="display:flex;flex-wrap:wrap;gap:8px 18px;"></div>
+                    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;">
+                        <div class="form-group" style="max-width:200px;"><label class="form-label">الطلب يعتبر متأخر بعد (ساعة)</label><input type="number" class="form-control" id="notifLateHours" min="1"></div>
+                        <div class="form-group" style="max-width:220px;"><label class="form-label">حركة الخزنة الكبيرة من (ج.م)</label><input type="number" class="form-control" id="notifBigTreasury" min="0"></div>
+                    </div>
+                </div>
+
+                <div class="card-header" style="border-top:1px solid var(--border);"><div class="card-title"><i class="fas fa-history"></i> سجل الإشعارات اللي اتبعتت يدوي</div></div>
                 <div class="table-container">
-                    <table><thead><tr><th>العنوان</th><th>الرسالة</th><th>المستلم</th><th>وقت الإرسال</th></tr></thead><tbody id="appNotificationsTable"></tbody></table>
+                    <table><thead><tr><th>العنوان</th><th>الرسالة</th><th>المستلم</th><th>وصل لـ</th><th>بواسطة</th><th>وقت الإرسال</th></tr></thead><tbody id="appNotificationsTable"></tbody></table>
                 </div>
             </div>
         </section>
@@ -3059,7 +3102,10 @@
             const toDelete = Object.keys(prevMap).filter(function(id) { return !currentMap[id]; });
             if (toDelete.length > 5) {
                 const label = { products: 'صنف', customers: 'عميل', suppliers: 'مورد' }[key] || 'سجل';
-                if (!confirm('تنبيه أمان: السيستم هيمسح ' + toDelete.length + ' ' + label + ' من السحابة نهائيًا.\nلو انت اللي مسحتهم بنفسك دوس OK.\nلو مش انت، دوس Cancel وهيرجعوا تاني.')) {
+                const okDel = confirm('تنبيه أمان: السيستم هيمسح ' + toDelete.length + ' ' + label + ' من السحابة نهائيًا.\nلو انت اللي مسحتهم بنفسك دوس OK.\nلو مش انت، دوس Cancel وهيرجعوا تاني.');
+                // (2026-10-13) بيتسجل في سجل العمليات ويظهر للمدير في الجرس — سواء اتمسحوا أو رجعوا
+                try { logAction('تنبيه أمان', 'محاولة مسح ' + toDelete.length + ' ' + label + ' (' + key + ') مرة واحدة — ' + (okDel ? 'اتأكد المسح' : 'اتلغى ورجعوا')); } catch (e) {}
+                if (!okDel) {
                     toDelete.forEach(function(id) { current.push(prevMap[id]); currentMap[id] = prevMap[id]; });
                     setListByKey(key, current);
                     _origLocalStorageSetItem(key, JSON.stringify(current));
@@ -3197,11 +3243,14 @@
 
         // بيرسل إشعار فوري لعميل واحد بعينه (targetPhone) أو لكل العملاء المشتركين (targetPhone = 'all')
         // ده بيتنفذ من متصفح الأدمن مباشرة وقت الحدث (تجهيز/رفض طلب، أو إرسال يدوي)، من غير أي سيرفر وسيط.
-        function sendPushNotification(targetPhone, title, message) {
+        // extra (اختياري): صورة / منتج / رقم طلب — بيتبعتوا مع الطلب، والـWorker بياخد منهم اللي يعرفه
+        function sendPushNotification(targetPhone, title, message, extra) {
+            const payload = { targetPhone: targetPhone, title: title, message: message };
+            if (extra && typeof extra === 'object') { if (extra.image) payload.image = extra.image; payload.data = { kind: extra.kind || '', orderId: extra.orderId || '', productCode: extra.productCode || '' }; }
             return fetch(NOTIFICATION_PROXY_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ targetPhone: targetPhone, title: title, message: message })
+                body: JSON.stringify(payload)
             }).then(function(res) { return res.json(); })
               .then(function(data) {
                   if (data.errors) { console.error('OneSignal send error:', data.errors); return false; }
@@ -3316,6 +3365,8 @@
                     startInventoryRecordsListener();
                     try { startSalesZonesListener(); } catch (e) { console.error(e); }
                     try { startRepReturnsListenerSys(); } catch (e) { console.error(e); }
+                    try { startNotifSettingsListener(); } catch (e) { console.error(e); }
+                    setTimeout(function() { try { renderStaffBell(); } catch (e) {} }, 5000);
                     setTimeout(function() { try { startLoyaltyListener(); } catch (e) { console.error(e); } }, 4000);
                     try { activateMoneySplit(); } catch (e) { console.error(e); }
                     try { probeCounters(); } catch (e) { console.error(e); }
@@ -4529,6 +4580,7 @@
 
         function updatePendingOrdersBadge() {
             updateOrdersTodayStats();
+            try { if (typeof renderStaffBell === 'function') renderStaffBell(); } catch (e) {}
             const badge = document.getElementById('pendingOrdersBadge');
             const count = customerOrders.filter(o => o.status === 'pending').length;
             if (badge) {
@@ -5156,7 +5208,7 @@
                 order.status = 'delivered';
                 localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
                 if (!opts.silent) showToast('تم تسجيل تسليم الطلب وإصدار الفاتورة بنجاح');
-                if (order.customerCode) sendPushNotification(order.customerCode, 'تم تسليم طلبك ✅', 'شكرًا لتعاملك معنا - طلبك #' + order.id.slice(-6) + ' وصلك بنجاح');
+                notifyOrderEvent(order, 'delivered');
                 updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderInventory(); renderMovements(); renderLowStock(); renderCustomers();
                 return true;
             }).catch(function(err) {
@@ -5230,6 +5282,7 @@
             var reason = prompt('سبب رفض الطلب (اختياري، هيظهر للعميل في الأبليكشن):', '');
             if (reason === null) return; // المستخدم دوس إلغاء
             if (!confirm('تأكيد رفض هذا الطلب؟')) return;
+            var ordBefore = customerOrders.find(function(o){ return o.id === orderId; });
             var updateData = { status: 'rejected', rejectedAt: Date.now(), rejectedBy: DEVICE_ID };
             if (reason && reason.trim()) updateData.rejectionReason = reason.trim();
             db.collection('customerOrders').doc(orderId).update(updateData)
@@ -5238,7 +5291,7 @@
                     if (ord) { ord.status = 'rejected'; if (updateData.rejectionReason) ord.rejectionReason = updateData.rejectionReason; }
                     localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
                     showToast('تم رفض الطلب');
-                    if (ord && ord.customerCode) sendPushNotification(ord.customerCode, 'تم رفض طلبك', updateData.rejectionReason ? ('السبب: ' + updateData.rejectionReason) : 'للاستفسار كلم المعلم');
+                    if (ord || ordBefore) notifyOrderEvent(Object.assign({}, ordBefore || {}, ord || {}), 'rejected', updateData.rejectionReason ? { 'السبب': 'السبب: ' + updateData.rejectionReason } : null);
                 })
                 .catch(err => { console.error(err); showToast('تعذر رفض الطلب', 'error'); });
         }
@@ -5402,7 +5455,7 @@
                     renderCustomerOrders();
                     updatePendingOrdersBadge();
                     showToast('بدأ تجهيز الطلب');
-                    if (order.customerCode) sendPushNotification(order.customerCode, 'جاري تجهيز طلبك ⏳', 'طلبك #' + order.id.slice(-6) + ' دلوقتي قيد التجهيز');
+                    notifyOrderEvent(order, 'preparing');
                 })
                 .catch(err => { console.error(err); showToast('تعذر تحديث حالة الطلب', 'error'); });
         }
@@ -5441,7 +5494,7 @@
                         .then(function() {
                             order.status = 'preparing';
                             successCount++;
-                            if (order.customerCode) sendPushNotification(order.customerCode, 'جاري تجهيز طلبك ⏳', 'طلبك #' + order.id.slice(-6) + ' دلوقتي قيد التجهيز');
+                            notifyOrderEvent(order, 'preparing');
                         })
                         .catch(function(e) { console.error('batch issue failed for order ' + order.id, e); failCount++; });
                 });
@@ -5634,7 +5687,7 @@
                     renderCustomerOrders();
                     updatePendingOrdersBadge();
                     if (!opts.silent) showToast('الطلب خرج للتسليم');
-                    if (order.customerCode) sendPushNotification(order.customerCode, 'طلبك خرج للتسليم 🚚', 'طلبك #' + order.id.slice(-6) + ' في الطريق إليك');
+                    notifyOrderEvent(order, 'ready');
                     return true;
                 })
                 .catch(function(err) { console.error(err); if (!opts.silent) showToast('تعذر تحديث حالة الطلب', 'error'); return false; });
@@ -5648,6 +5701,7 @@
             var reason = prompt('سبب فشل التسليم/الإرجاع (اختياري):', '');
             if (reason === null) return;
             if (!confirm('تأكيد تحويل هذا الطلب لحالة "مرتجع"؟ هيرجع المخزون المحجوز متاح تاني.')) return;
+            var ordBefore = customerOrders.find(function(o) { return o.id === orderId; });
             var updateData = { status: 'returned', returnedAt: Date.now(), returnedBy: DEVICE_ID };
             if (reason && reason.trim()) updateData.returnReason = reason.trim();
             db.collection('customerOrders').doc(orderId).update(updateData)
@@ -5658,7 +5712,7 @@
                     renderCustomerOrders();
                     updatePendingOrdersBadge();
                     showToast('تم تسجيل الطلب كمرتجع، ورجع المخزون المحجوز متاح تاني');
-                    if (ord && ord.customerCode) sendPushNotification(ord.customerCode, 'لم يتم تسليم طلبك', updateData.returnReason ? ('السبب: ' + updateData.returnReason) : 'للاستفسار كلم المعلم');
+                    if (ord || ordBefore) notifyOrderEvent(Object.assign({}, ordBefore || {}, ord || {}), 'returned', updateData.returnReason ? { 'السبب': 'السبب: ' + updateData.returnReason } : null);
                 })
                 .catch(err => { console.error(err); showToast('تعذر تحديث حالة الطلب', 'error'); });
         }
@@ -8441,71 +8495,396 @@
             }).join('');
         }
 
-        // ==================== الإشعارات ====================
-        function renderNotificationsTab() {
-            document.getElementById('notificationTarget').value = 'all';
-            document.getElementById('notificationTargetSearch').value = 'كل العملاء';
-            hideNotificationTargetResults();
-            renderNotificationsLog();
+        // ==================== الإشعارات (2026-10-13: اتهيكلت من جديد) ====================
+        // 1) العميل: إشعار على الموبايل (OneSignal) + نسخة في "جرس" جوه الأبليكشن (appMeta/inbox_<رقم التليفون>)
+        //    الأبليكشن متسجل بـ"رقم التليفون" — فأي إشعار لعميل لازم يتبعت على رقمه مش على كوده في السيستم.
+        // 2) المناديب: الأبليكشن بيسجل الموبايل باسم rep_<كود المندوب>، وليهم جرس برضه (appMeta/inbox_rep_<كود>)
+        // 3) الموظفين: جرس في السيستم نفسه، كل واحد حسب صلاحيته (مبيتخزنش حاجة جديدة، بيتحسب من البيانات الموجودة)
+        // الإعدادات: meta/notifSettings — السجل اليدوي: meta/notifLog (برّه المستند المشترك عشان مايكبرش)
+        const NOTIF_EVENTS = {
+            preparing: { label: 'الطلب قيد التجهيز', title: 'جاري تجهيز طلبك ⏳', body: 'طلبك #{رقم} دلوقتي قيد التجهيز' },
+            ready: { label: 'الطلب خرج للتسليم', title: 'طلبك خرج للتسليم 🚚', body: 'طلبك #{رقم} في الطريق إليك' },
+            delivered: { label: 'الطلب اتسلم', title: 'تم تسليم طلبك ✅', body: 'شكرًا لتعاملك معنا - طلبك #{رقم} وصلك بنجاح' },
+            rejected: { label: 'الطلب اترفض', title: 'تم رفض طلبك', body: 'طلبك #{رقم} — {السبب}' },
+            returned: { label: 'الطلب ماتسلمش', title: 'لم يتم تسليم طلبك', body: 'طلبك #{رقم} — {السبب}' },
+            edited: { label: 'الطلب اتعدل', title: 'طلبك اتعدل ✏️', body: 'طلبك #{رقم} اتعدل{التغيير} — الإجمالي دلوقتي {المبلغ} ج.م' }
+        };
+        const NOTIF_REP_EVENTS = {
+            ready: 'مناديب التسليم: طلب جاهز للتوصيل',
+            rejected: 'مندوب البيع: طلبه اترفض',
+            returned: 'مندوب البيع: طلبه ماتسلمش',
+            edited: 'مندوب البيع: طلبه اتعدل'
+        };
+        const NOTIF_STAFF = {
+            newOrder: { label: 'طلب جديد', roles: ['admin', 'warehouse_keeper'], icon: 'fa-shopping-basket', section: 'customer-orders' },
+            late: { label: 'طلب متأخر', roles: ['admin', 'warehouse_keeper'], icon: 'fa-clock', section: 'customer-orders' },
+            approval: { label: 'طلب اعتماد (شراء / جرد)', roles: ['admin', 'accountant'], icon: 'fa-clipboard-check', section: 'purchase-approvals' },
+            repReturn: { label: 'مرتجع مندوب مستني استلام', roles: ['admin', 'warehouse_keeper'], icon: 'fa-undo', section: 'inventory' },
+            stock: { label: 'أصناف خلصت أو قربت تخلص', roles: ['admin', 'warehouse_keeper'], icon: 'fa-box-open', section: 'inventory' },
+            treasury: { label: 'حركة خزنة كبيرة', roles: ['admin', 'accountant'], icon: 'fa-coins', section: 'treasury' },
+            security: { label: 'تنبيه أمان (محاولة مسح جماعي)', roles: ['admin'], icon: 'fa-shield-alt', section: 'audit-log' }
+        };
+        let notifSettingsRaw = (function() { try { return JSON.parse(localStorage.getItem('notifSettings') || '{}') || {}; } catch (e) { return {}; } })();
+        let notifSettingsListenerStarted = false;
+        function nsGet() {
+            const r = notifSettingsRaw || {}, out = { events: {}, rep: {}, staff: {}, lateHours: Number(r.lateHours) > 0 ? Number(r.lateHours) : 3, bigTreasury: Number(r.bigTreasury) >= 0 && r.bigTreasury !== undefined && r.bigTreasury !== '' ? Number(r.bigTreasury) : 20000 };
+            Object.keys(NOTIF_EVENTS).forEach(k => { const e = (r.events || {})[k] || {}; out.events[k] = { on: e.on !== false, title: e.title || NOTIF_EVENTS[k].title, body: e.body || NOTIF_EVENTS[k].body }; });
+            Object.keys(NOTIF_REP_EVENTS).forEach(k => { out.rep[k] = (r.rep || {})[k] !== false; });
+            Object.keys(NOTIF_STAFF).forEach(k => { out.staff[k] = (r.staff || {})[k] !== false; });
+            return out;
+        }
+        function startNotifSettingsListener() {
+            if (!db || notifSettingsListenerStarted) return;
+            notifSettingsListenerStarted = true;
+            db.collection('meta').doc('notifSettings').onSnapshot(function(snap) {
+                notifSettingsRaw = (snap.exists && snap.data()) || {};
+                try { _origLocalStorageSetItem('notifSettings', JSON.stringify(notifSettingsRaw)); } catch (e) {}
+                try { renderStaffBell(); } catch (e) {}
+            }, function(e) { console.error('notif settings listener', e); });
+        }
+        function nsFill(tpl, vars) { return String(tpl || '').replace(/\{([^{}]+)\}/g, (m, k) => vars[k] != null ? String(vars[k]) : ''); }
+        function notifLast10(v) { return String(v || '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[^0-9]/g, '').slice(-10); }
+        function notifInboxKey(phone) { const l = notifLast10(phone); return l.length === 10 ? 'inbox_0' + l : (l ? 'inbox_' + l : ''); }
+        function notifPhoneVariants(v) {
+            const raw = String(v || '').trim(), l = notifLast10(raw), out = [raw];
+            if (l.length === 10) out.push('0' + l, l, '20' + l, '+20' + l);
+            return out.filter((x, i, a) => x && a.indexOf(x) === i);
+        }
+        // بيرجع "رقم التسجيل" الحقيقي اللي الأبليكشن مسجل بيه (ممكن العميل يكون مسجل بشكل مختلف للرقم)
+        const notifIdCache = {};
+        function resolveAppIds(phone) {
+            const l = notifLast10(phone);
+            if (!l) return Promise.resolve([]);
+            if (notifIdCache[l] && Date.now() - notifIdCache[l].at < 6 * 3600000) return Promise.resolve(notifIdCache[l].ids);
+            if (Array.isArray(appRegistrations) && appRegistrations.length) {
+                const ids = appRegistrations.filter(r => notifLast10(r.phone) === l).map(r => r.phone);
+                if (ids.length) { notifIdCache[l] = { at: Date.now(), ids }; return Promise.resolve(ids); }
+            }
+            if (!db) return Promise.resolve([]);
+            const vs = notifPhoneVariants(phone);
+            return Promise.all(vs.map(v => db.collection('appCustomers').doc(v).get().then(s => s.exists ? v : null).catch(() => null)))
+                .then(r => { const ids = r.filter(Boolean); notifIdCache[l] = { at: Date.now(), ids }; return ids; });
+        }
+        // بيكتب الإشعار في جرس العميل/المندوب جوه الأبليكشن (آخر 40 إشعار بس)
+        function notifInboxWrite(key, item) {
+            if (!db || !key) return Promise.resolve();
+            const ref = db.collection('appMeta').doc(key);
+            return db.runTransaction(t => t.get(ref).then(snap => {
+                const items = ((snap.exists && snap.data().items) || []).filter(x => x && x.id !== item.id);
+                items.unshift(item);
+                t.set(ref, { items: items.slice(0, 40), updatedAt: Date.now() });
+            })).catch(e => console.error('inbox write failed:', key, e));
+        }
+        function notifItem(title, body, extra) {
+            return Object.assign({ id: 'n' + Date.now() + Math.random().toString(36).slice(2, 7), title, body, at: Date.now() }, extra || {});
+        }
+        // إشعار لعميل واحد: يوصل الموبايل + الجرس
+        function notifyCustomerPhone(phone, title, body, extra, knownId) {
+            const item = notifItem(title, body, extra);
+            return (knownId ? Promise.resolve([knownId]) : resolveAppIds(phone)).then(ids => {
+                if (!ids.length) return 0;
+                notifInboxWrite(notifInboxKey(phone || ids[0]), item);
+                return Promise.all(ids.map(id => sendPushNotification(id, title, body, extra))).then(r => r.some(Boolean) ? 1 : 0);
+            });
+        }
+        function notifyRep(code, title, body, extra) {
+            if (!code) return Promise.resolve(false);
+            notifInboxWrite('inbox_rep_' + code, notifItem(title, body, extra));
+            return sendPushNotification('rep_' + code, title, body, extra);
+        }
+        function orderPhoneInfo(order) {
+            // طلب العميل من الأبليكشن: customerCode = رقم تسجيله بالظبط. طلب المندوب: customerCode = كود العميل في السيستم
+            if (order.source !== 'rep' && order.customerCode && notifLast10(order.customerCode).length === 10) return { phone: order.customerCode, knownId: order.customerCode };
+            const c = customers.find(x => x.code === order.customerCode);
+            return { phone: order.phone || (c && c.phone) || '', knownId: null };
+        }
+        function notifyOrderEvent(order, ev, vars) {
+            try {
+                if (!order) return;
+                const s = nsGet();
+                const v = Object.assign({ 'رقم': String(order.id || '').slice(-6), 'المبلغ': (Number(order.total) || 0).toLocaleString('en-US', { maximumFractionDigits: 2 }), 'العميل': order.shopName || order.customerName || '', 'السبب': 'للاستفسار كلم المعلم', 'التغيير': '' }, vars || {});
+                const e = s.events[ev];
+                if (e && e.on) {
+                    const pi = orderPhoneInfo(order);
+                    if (pi.phone) notifyCustomerPhone(pi.phone, nsFill(e.title, v), nsFill(e.body, v), { kind: 'order', orderId: order.id }, pi.knownId);
+                }
+                if (order.repCode && ev !== 'ready' && s.rep[ev]) {
+                    const t = { rejected: 'طلب اترفض ❌', returned: 'طلب ماتسلمش ↩️', edited: 'طلب اتعدل ✏️' }[ev];
+                    if (t) notifyRep(order.repCode, t, `طلب ${v['العميل']} #${v['رقم']}` + (ev === 'edited' ? ` — الإجمالي ${v['المبلغ']} ج.م` : ` — ${v['السبب']}`), { kind: 'order', orderId: order.id });
+                }
+                if (ev === 'ready' && s.rep.ready) queueDeliveryReadyNotice(order);
+            } catch (err) { console.error('notifyOrderEvent', err); }
+        }
+        // مناديب التسليم: لو طلبات كتير خرجت مرة واحدة بيوصلهم إشعار واحد مجمّع (مش 20 إشعار)
+        let deliveryReadyQueue = [], deliveryReadyTimer = null;
+        function queueDeliveryReadyNotice(order) {
+            deliveryReadyQueue.push(order);
+            clearTimeout(deliveryReadyTimer);
+            deliveryReadyTimer = setTimeout(function() {
+                const list = deliveryReadyQueue.splice(0);
+                if (!list.length) return;
+                const reps = salesmen.filter(x => x.repType === 'delivery' && (!x.status || x.status === 'نشط'));
+                const title = list.length === 1 ? 'طلب جاهز للتوصيل 🚚' : `${list.length} طلبات جاهزة للتوصيل 🚚`;
+                const body = list.length === 1 ? `${list[0].shopName || list[0].customerName || 'عميل'} — #${String(list[0].id).slice(-6)}` : list.slice(0, 4).map(o => o.shopName || o.customerName || 'عميل').join('، ') + (list.length > 4 ? '...' : '');
+                reps.forEach(r => notifyRep(r.code, title, body, { kind: 'delivery' }));
+            }, 8000);
         }
 
+        // ---------- الإرسال اليدوي ----------
+        function notifAudienceChanged() {
+            const a = document.getElementById('notifAudience').value;
+            document.querySelectorAll('#appMgmtTab-notifications .notif-aud').forEach(el => { el.style.display = el.dataset.aud.split(' ').includes(a) ? '' : 'none'; });
+            notifUpdateCount();
+        }
+        function renderNotificationsTab() {
+            const nbs = Array.from(new Set(customers.map(c => String(c.neighborhood || '').trim()).filter(Boolean).concat((appRegistrations || []).map(r => String(r.neighborhood || '').trim()).filter(Boolean)))).sort((a, b) => a.localeCompare(b, 'ar'));
+            const nbSel = document.getElementById('notifNeighborhood');
+            if (nbSel) nbSel.innerHTML = nbs.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+            const zSel = document.getElementById('notifZone');
+            if (zSel) zSel.innerHTML = (salesZonesData.zones || []).map(z => `<option value="${escapeHtml(z.id)}">${escapeHtml(z.name || z.id)}</option>`).join('') || '<option value="">مفيش مناطق بيع متسجلة</option>';
+            const rSel = document.getElementById('notifRep');
+            if (rSel) rSel.innerHTML = salesmen.filter(x => !x.status || x.status === 'نشط').map(x => `<option value="${escapeHtml(x.code)}">${escapeHtml(x.name)}${x.repType === 'delivery' ? ' (تسليم)' : ''}</option>`).join('');
+            const pl = document.getElementById('notifProductList');
+            if (pl) pl.innerHTML = products.filter(p => p.showInApp !== false).slice(0, 600).map(p => `<option value="${escapeHtml(p.name)} | ${escapeHtml(p.code)}"></option>`).join('');
+            hideNotificationTargetResults();
+            notifAudienceChanged();
+            renderNotifSettingsForm();
+            renderNotificationsLog();
+        }
         function hideNotificationTargetResults() {
             const box = document.getElementById('notificationTargetResults');
             if (box) box.style.display = 'none';
         }
-
         function selectNotificationTarget(code, name) {
             document.getElementById('notificationTarget').value = code;
             document.getElementById('notificationTargetSearch').value = name;
             hideNotificationTargetResults();
+            notifUpdateCount();
         }
-
         function filterNotificationTargets() {
             const q = document.getElementById('notificationTargetSearch').value.trim().toLowerCase();
             const box = document.getElementById('notificationTargetResults');
-            let matches;
-            if (!q || 'كل العملاء'.includes(q)) {
-                matches = customers.slice(0, 50);
-            } else {
-                matches = customers.filter(c => (c.name || '').toLowerCase().includes(q) || (c.code || '').toLowerCase().includes(q) || (c.phone || '').includes(q)).slice(0, 50);
-            }
-            let html = `<div style="padding:8px 12px;cursor:pointer;font-weight:600;color:var(--primary,#2563eb);border-bottom:1px solid var(--border);" onmousedown="selectNotificationTarget('all','كل العملاء')">📢 كل العملاء</div>`;
-            if (matches.length === 0) {
-                html += `<div style="padding:10px 12px;color:#888;">لا يوجد عملاء مطابقين</div>`;
-            } else {
-                html += matches.map(c => `<div style="padding:8px 12px;cursor:pointer;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background=''" onmousedown="selectNotificationTarget('${c.code}', '${(c.name || '').replace(/'/g, "\\'")}')">${c.name}${c.phone ? ' <span style=\"color:#999;font-size:12px;\">(' + c.phone + ')</span>' : ''}</div>`).join('');
-                if (customers.filter(c => (c.name || '').toLowerCase().includes(q) || (c.code || '').toLowerCase().includes(q) || (c.phone || '').includes(q)).length > 50) {
-                    html += `<div style="padding:6px 12px;color:#999;font-size:12px;">في نتايج أكتر، ضيّق البحث أكتر...</div>`;
-                }
-            }
+            const all = !q ? customers : customers.filter(c => (c.name || '').toLowerCase().includes(q) || (c.shopName || '').toLowerCase().includes(q) || (c.code || '').toLowerCase().includes(q) || (c.phone || '').includes(q));
+            const matches = all.slice(0, 50);
+            let html = matches.length ? matches.map(c => `<div style="padding:8px 12px;cursor:pointer;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background=''" onmousedown="selectNotificationTarget('${escapeHtml(String(c.code)).replace(/'/g, "\\'")}', '${escapeHtml(String(c.name || c.code)).replace(/'/g, "\\'")}')">${escapeHtml(c.name || '')} <span style="color:#999;font-size:12px;">(${escapeHtml(c.code)}${c.phone ? ' - ' + escapeHtml(c.phone) : ''})</span></div>`).join('')
+                : `<div style="padding:10px 12px;color:#888;">لا يوجد عملاء مطابقين</div>`;
+            if (all.length > 50) html += `<div style="padding:6px 12px;color:#999;font-size:12px;">في نتايج أكتر، ضيّق البحث أكتر...</div>`;
             box.innerHTML = html;
             box.style.display = 'block';
         }
-
+        // قايمة المستلمين حسب الاختيار: [{ phone, name }] للعملاء أو [{ rep, name }] للمناديب
+        function notifRecipients() {
+            const a = document.getElementById('notifAudience').value;
+            const byPhone = new Map();
+            const addCust = (phone, name) => { const l = notifLast10(phone); if (l.length === 10 && !byPhone.has(l)) byPhone.set(l, { phone, name }); };
+            if (a === 'customer') {
+                const code = document.getElementById('notificationTarget').value;
+                const c = customers.find(x => x.code === code);
+                if (c) addCust(c.phone || c.code, c.name);
+                return { label: c ? c.name : '', list: Array.from(byPhone.values()) };
+            }
+            if (a === 'neighborhood') {
+                const nb = document.getElementById('notifNeighborhood').value;
+                customers.filter(c => String(c.neighborhood || '').trim() === nb).forEach(c => addCust(c.phone, c.name));
+                (appRegistrations || []).filter(r => String(r.neighborhood || '').trim() === nb).forEach(r => addCust(r.phone, r.shopName || r.customerName));
+                return { label: 'حي ' + nb, list: Array.from(byPhone.values()) };
+            }
+            if (a === 'zone') {
+                const z = (salesZonesData.zones || []).find(x => x.id === document.getElementById('notifZone').value);
+                if (z) {
+                    const keys = new Set((z.neighborhoods || []).map(nbKey));
+                    customers.filter(c => keys.has(nbKey(c.neighborhood))).forEach(c => addCust(c.phone, c.name));
+                    (appRegistrations || []).filter(r => keys.has(nbKey(r.neighborhood))).forEach(r => addCust(r.phone, r.shopName || r.customerName));
+                }
+                return { label: 'منطقة ' + (z ? z.name : ''), list: Array.from(byPhone.values()) };
+            }
+            if (a === 'repCustomers') {
+                const code = document.getElementById('notifRep').value;
+                customers.filter(c => c.salesmanCode === code).forEach(c => addCust(c.phone, c.name));
+                return { label: 'عملاء ' + repName(code), list: Array.from(byPhone.values()) };
+            }
+            if (a === 'inactive') {
+                const days = Math.max(1, Number(document.getElementById('notifInactiveDays').value) || 14);
+                const since = Date.now() - days * 86400000, last = {};
+                const bump = (l, t) => { if (l && t > (last[l] || 0)) last[l] = t; };
+                invoices.forEach(i => { if (i.type === 'sale') { const c = customers.find(x => x.code === i.customerCode); bump(notifLast10(c ? c.phone : i.customerCode), new Date(i.date).getTime() || 0); } });
+                customerOrders.forEach(o => bump(notifLast10(o.phone || o.customerCode), Number(o.createdAt) || 0));
+                customers.forEach(c => { const l = notifLast10(c.phone); if (l.length === 10 && (last[l] || 0) < since) addCust(c.phone, c.name); });
+                (appRegistrations || []).forEach(r => { const l = notifLast10(r.phone); if (l.length === 10 && (last[l] || 0) < since) addCust(r.phone, r.shopName || r.customerName); });
+                return { label: `ما طلبوش من ${days} يوم`, list: Array.from(byPhone.values()) };
+            }
+            if (a === 'reps') return { label: 'كل المناديب', reps: salesmen.filter(x => !x.status || x.status === 'نشط').map(x => ({ rep: x.code, name: x.name })) };
+            if (a === 'rep') { const code = document.getElementById('notifRep').value; return { label: 'المندوب ' + repName(code), reps: code ? [{ rep: code, name: repName(code) }] : [] }; }
+            return { label: 'كل العملاء', all: true };
+        }
+        function notifUpdateCount() {
+            const el = document.getElementById('notifAudienceCount'); if (!el) return;
+            try {
+                const r = notifRecipients();
+                el.textContent = r.all ? 'هيوصل لكل اللي مفعّلين الإشعارات على الأبليكشن' : r.reps ? `${r.reps.length} مندوب` : `${r.list.length} عميل في السيستم (هيوصل بس للي عندهم الأبليكشن)`;
+            } catch (e) { el.textContent = ''; }
+        }
+        let notifSending = false;
         function sendAppNotification() {
-            const target = document.getElementById('notificationTarget').value;
+            if (notifSending) return;
             const title = document.getElementById('notificationTitle').value.trim();
             const message = document.getElementById('notificationMessage').value.trim();
             if (!title || !message) { showToast('الرجاء إدخال العنوان والرسالة', 'error'); return; }
-            const targetLabel = target === 'all' ? 'كل العملاء' : (customers.find(c => c.code === target)?.name || target);
-            appNotifications.push({ id: 'notif_' + Date.now(), title, message, target, targetLabel, createdAt: Date.now() });
-            localStorage.setItem('appNotifications', JSON.stringify(appNotifications));
-            logAction('إرسال إشعار', `العنوان: ${title} - المستلم: ${targetLabel}`);
-            document.getElementById('notificationTitle').value = '';
-            document.getElementById('notificationMessage').value = '';
-            renderNotificationsLog();
-            sendPushNotification(target, title, message).then(function(ok) {
-                showToast(ok ? 'تم إرسال الإشعار فعليًا للعميل/العملاء ✓' : 'تعذر إرسال الإشعار — تأكد إن إعدادات OneSignal متظبطة صح', ok ? 'success' : 'error', 5000);
-            });
+            const r = notifRecipients();
+            if (!r.all && !((r.list && r.list.length) || (r.reps && r.reps.length))) { showToast('مفيش مستلمين للاختيار ده', 'error'); return; }
+            const extra = { kind: 'manual' };
+            const img = document.getElementById('notifImage').value.trim(); if (/^https?:\/\//i.test(img)) extra.image = img;
+            const pv = document.getElementById('notifProduct').value.trim();
+            if (pv) { const code = pv.includes('|') ? pv.split('|').pop().trim() : pv; const p = products.find(x => x.code === code || x.name === pv); if (p) extra.productCode = p.code; }
+            const count = r.all ? 'كل العملاء' : (r.reps ? r.reps.length + ' مندوب' : r.list.length + ' عميل');
+            if (!confirm(`إرسال "${title}"\nإلى: ${r.label} (${count})\nتكمل؟`)) return;
+            notifSending = true;
+            const btn = document.getElementById('notifSendBtn'); if (btn) btn.disabled = true;
+            const prog = document.getElementById('notifSendProgress');
+            const done = (reached, total) => {
+                notifSending = false; if (btn) btn.disabled = false; if (prog) prog.textContent = '';
+                const entry = { id: 'notif_' + Date.now(), title, message, targetLabel: r.label, reached, total, by: (currentUser && (currentUser.fullName || currentUser.username)) || '', createdAt: Date.now(), image: extra.image || '', productCode: extra.productCode || '' };
+                if (db) { const ref = db.collection('meta').doc('notifLog'); db.runTransaction(t => t.get(ref).then(s => { const items = (s.exists && s.data().items) || []; items.unshift(entry); t.set(ref, { items: items.slice(0, 400) }); })).then(renderNotificationsLog).catch(e => console.error(e)); }
+                logAction('إرسال إشعار', `العنوان: ${title} - المستلم: ${r.label} - وصل لـ ${reached}`);
+                document.getElementById('notificationTitle').value = ''; document.getElementById('notificationMessage').value = '';
+                showToast(r.all ? (reached ? 'تم إرسال الإشعار لكل العملاء ✓' : 'تعذر إرسال الإشعار — تأكد من إعدادات OneSignal') : `تم الإرسال ✓ — وصل لـ ${reached} من ${total}`, reached ? 'success' : 'warning', 6000);
+            };
+            if (r.all) {
+                const item = notifItem(title, message, extra);
+                const ref = db ? db.collection('appMeta').doc('broadcasts') : null;
+                if (ref) db.runTransaction(t => t.get(ref).then(s => { const items = (s.exists && s.data().items) || []; items.unshift(item); t.set(ref, { items: items.slice(0, 40), updatedAt: Date.now() }); })).catch(e => console.error(e));
+                sendPushNotification('all', title, message, extra).then(ok => done(ok ? 'الكل' : 0, 'الكل'));
+                return;
+            }
+            const jobs = r.reps ? r.reps.map(x => () => notifyRep(x.rep, title, message, extra).then(ok => ok ? 1 : 0)) : r.list.map(x => () => notifyCustomerPhone(x.phone, title, message, extra));
+            let i = 0, reached = 0;
+            const worker = () => i >= jobs.length ? Promise.resolve() : jobs[i++]().then(n => { reached += n || 0; if (prog) prog.textContent = `جاري الإرسال... ${i} من ${jobs.length}`; }).catch(() => {}).then(worker);
+            Promise.all([worker(), worker(), worker(), worker()]).then(() => done(reached, jobs.length));
         }
-
         function renderNotificationsLog() {
             const tbody = document.getElementById('appNotificationsTable');
             if (!tbody) return;
-            if (appNotifications.length === 0) { tbody.innerHTML = `<tr><td colspan="4" class="empty-state"><i class="fas fa-bell"></i><h3>لم يتم إرسال أي إشعارات بعد</h3></td></tr>`; return; }
-            const sorted = [...appNotifications].sort((a, b) => b.createdAt - a.createdAt);
-            tbody.innerHTML = sorted.map(n => `<tr><td><strong>${n.title}</strong></td><td>${n.message}</td><td>${n.targetLabel}</td><td>${new Date(n.createdAt).toLocaleString('ar-EG')}</td></tr>`).join('');
+            const draw = (newer) => {
+                const rows = (newer || []).concat((appNotifications || []).map(n => Object.assign({ legacy: true }, n))).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+                if (!rows.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty-state"><i class="fas fa-bell"></i><h3>لم يتم إرسال أي إشعارات بعد</h3></td></tr>`; return; }
+                tbody.innerHTML = rows.slice(0, 300).map(n => `<tr><td><strong>${escapeHtml(n.title || '')}</strong></td><td>${escapeHtml(n.message || '')}</td><td>${escapeHtml(n.targetLabel || '')}</td><td>${n.legacy ? '-' : escapeHtml(String(n.reached != null ? n.reached : '-')) + (n.total && n.total !== 'الكل' ? ' من ' + n.total : '')}</td><td>${escapeHtml(n.by || '-')}</td><td>${new Date(n.createdAt).toLocaleString('ar-EG')}</td></tr>`).join('');
+            };
+            draw([]);
+            if (db) db.collection('meta').doc('notifLog').get().then(s => draw((s.exists && s.data().items) || [])).catch(e => console.error(e));
         }
+        // ---------- إعدادات الإشعارات (المدير) ----------
+        function renderNotifSettingsForm() {
+            const s = nsGet();
+            const tb = document.getElementById('notifEventsTable');
+            if (tb) tb.innerHTML = Object.keys(NOTIF_EVENTS).map(k => `<tr data-ev="${k}"><td style="text-align:center;"><input type="checkbox" class="ns-on" ${s.events[k].on ? 'checked' : ''}></td><td><strong>${NOTIF_EVENTS[k].label}</strong></td><td><input class="form-control ns-title" value="${escapeHtml(s.events[k].title)}"></td><td><input class="form-control ns-body" value="${escapeHtml(s.events[k].body)}"></td></tr>`).join('');
+            const rt = document.getElementById('notifRepToggles');
+            if (rt) rt.innerHTML = Object.keys(NOTIF_REP_EVENTS).map(k => `<label style="display:flex;align-items:center;gap:6px;font-size:13px;"><input type="checkbox" class="ns-rep" data-k="${k}" ${s.rep[k] ? 'checked' : ''}> ${NOTIF_REP_EVENTS[k]}</label>`).join('');
+            const st = document.getElementById('notifStaffToggles');
+            if (st) st.innerHTML = Object.keys(NOTIF_STAFF).map(k => `<label style="display:flex;align-items:center;gap:6px;font-size:13px;"><input type="checkbox" class="ns-staff" data-k="${k}" ${s.staff[k] ? 'checked' : ''}> ${NOTIF_STAFF[k].label}</label>`).join('');
+            const lh = document.getElementById('notifLateHours'); if (lh) lh.value = s.lateHours;
+            const bt = document.getElementById('notifBigTreasury'); if (bt) bt.value = s.bigTreasury;
+        }
+        function saveNotifSettings() {
+            if (!nacIsAdmin()) { showToast('للمدير بس', 'error'); return; }
+            if (!db) { showToast('لازم يكون فيه إنترنت', 'error'); return; }
+            const data = { events: {}, rep: {}, staff: {}, updatedAt: Date.now(), updatedBy: (currentUser && (currentUser.fullName || currentUser.username)) || '' };
+            document.querySelectorAll('#notifEventsTable tr[data-ev]').forEach(tr => {
+                const k = tr.dataset.ev;
+                data.events[k] = { on: tr.querySelector('.ns-on').checked, title: tr.querySelector('.ns-title').value.trim() || NOTIF_EVENTS[k].title, body: tr.querySelector('.ns-body').value.trim() || NOTIF_EVENTS[k].body };
+            });
+            document.querySelectorAll('#notifRepToggles .ns-rep').forEach(x => { data.rep[x.dataset.k] = x.checked; });
+            document.querySelectorAll('#notifStaffToggles .ns-staff').forEach(x => { data.staff[x.dataset.k] = x.checked; });
+            data.lateHours = Math.max(1, Number(document.getElementById('notifLateHours').value) || 3);
+            data.bigTreasury = Math.max(0, Number(document.getElementById('notifBigTreasury').value) || 0);
+            db.collection('meta').doc('notifSettings').set(data).then(() => {
+                notifSettingsRaw = data;
+                logAction('تعديل إعدادات الإشعارات', 'اتحفظت');
+                showToast('اتحفظت إعدادات الإشعارات ✓');
+                try { renderStaffBell(); } catch (e) {}
+            }).catch(e => { console.error(e); showToast('تعذر الحفظ: ' + (e.message || ''), 'error'); });
+        }
+
+        // ---------- جرس الموظفين ----------
+        function staffRole() { return String((currentUser && currentUser.role) || '').trim().toLowerCase(); }
+        function staffAlertAllowed(k) {
+            const s = nsGet(); if (!s.staff[k]) return false;
+            const r = staffRole(); return r === 'admin' || NOTIF_STAFF[k].roles.includes(r);
+        }
+        function computeStaffAlerts() {
+            const s = nsGet(), out = [], now = Date.now();
+            const add = (k, id, title, detail, at) => out.push({ k, id, title, detail, at: at || now, icon: NOTIF_STAFF[k].icon, section: NOTIF_STAFF[k].section });
+            const oname = o => o.shopName || o.customerName || 'عميل';
+            if (staffAlertAllowed('newOrder')) customerOrders.filter(o => o.status === 'pending').forEach(o => add('newOrder', 'ord_' + o.id, 'طلب جديد من ' + oname(o), `#${String(o.id).slice(-6)} — ${(Number(o.total) || 0).toLocaleString('en-US')} ج.م${o.repName ? ' — من المندوب ' + o.repName : ''}`, Number(o.createdAt) || now));
+            if (staffAlertAllowed('late')) {
+                const lim = s.lateHours * 3600000;
+                customerOrders.filter(o => (o.status === 'pending' || o.status === 'preparing') && now - (Number(o.createdAt) || now) > lim).forEach(o => add('late', 'late_' + o.id, 'طلب متأخر: ' + oname(o), `#${String(o.id).slice(-6)} — بقاله ${Math.floor((now - Number(o.createdAt)) / 3600000)} ساعة ${o.status === 'pending' ? 'لسه جديد' : 'قيد التجهيز'}`, (Number(o.createdAt) || now) + lim));
+            }
+            if (staffAlertAllowed('approval') && typeof purchaseDrafts !== 'undefined') purchaseDrafts.filter(d => d.status === 'pending').forEach(d => add('approval', 'pd_' + d.id, 'طلب اعتماد مستنيك', `${(typeof APPROVAL_KIND_LABEL !== 'undefined' && APPROVAL_KIND_LABEL[d.kind || 'purchase']) || 'طلب'}${d.supplierName ? ' — ' + d.supplierName : ''}${d.createdBy && d.createdBy.name ? ' — من ' + d.createdBy.name : ''}`, Number(d.submittedAt) || now));
+            if (staffAlertAllowed('repReturn') && typeof repReturnOrders !== 'undefined') repReturnOrders.filter(o => o.repReturnPending).forEach(o => add('repReturn', 'rr_' + o.id, 'مرتجع مستني استلام', `${o.repReturnRepName || 'مندوب'} — ${oname(o)}`, Number(o.repReturnAt || o.updatedAt || o.createdAt) || now));
+            if (staffAlertAllowed('stock')) {
+                const inApp = products.filter(p => p.showInApp !== false);
+                const out0 = inApp.filter(p => (Number((inventory[p.code] || {}).qty) || 0) <= 0);
+                const low = inApp.filter(p => { const q = Number((inventory[p.code] || {}).qty) || 0, m = Number((inventory[p.code] || {}).minStock || p.minStock) || 0; return q > 0 && m > 0 && q <= m; });
+                const day = new Date().toISOString().slice(0, 10);
+                if (out0.length) add('stock', 'oos_' + day + '_' + out0.length, `${out0.length} صنف خلص من المخزن`, out0.slice(0, 6).map(p => p.name).join('، ') + (out0.length > 6 ? '...' : ''));
+                if (low.length) add('stock', 'low_' + day + '_' + low.length, `${low.length} صنف قرب يخلص`, low.slice(0, 6).map(p => p.name).join('، ') + (low.length > 6 ? '...' : ''));
+            }
+            if (staffAlertAllowed('treasury') && s.bigTreasury > 0) (treasury || []).filter(t => (Number(t.amount) || 0) >= s.bigTreasury && now - new Date(t.date).getTime() < 48 * 3600000 && t.partyType !== 'transfer').forEach(t => add('treasury', 'trs_' + t.id, `${t.type === 'in' ? 'قبض' : 'صرف'} ${(Number(t.amount) || 0).toLocaleString('en-US')} ج.م`, `${t.reference || ''} — ${t.notes || ''}`, new Date(t.date).getTime()));
+            if (staffAlertAllowed('security')) (auditLog || []).filter(a => a.type === 'تنبيه أمان' && now - new Date(a.date).getTime() < 7 * 86400000).forEach(a => add('security', 'sec_' + a.id, 'تنبيه أمان', `${a.details || ''} — ${a.fullName || a.username || ''}`, new Date(a.date).getTime()));
+            return out.sort((a, b) => b.at - a.at);
+        }
+        const staffSeenKey = () => 'notifSeen_' + ((currentUser && currentUser.username) || '');
+        function staffSeen() { try { return new Set(JSON.parse(localStorage.getItem(staffSeenKey()) || '[]')); } catch (e) { return new Set(); } }
+        let staffBellKnown = null, staffBellOpen = false;
+        function renderStaffBell() {
+            const btn = document.getElementById('staffBellBtn'); if (!btn) return;
+            if (!currentUser) { btn.style.display = 'none'; return; }
+            btn.style.display = '';
+            const alerts = computeStaffAlerts(), seen = staffSeen();
+            const unseen = alerts.filter(a => !seen.has(a.id));
+            const c = document.getElementById('staffBellCount');
+            c.textContent = unseen.length > 99 ? '99+' : unseen.length; c.style.display = unseen.length ? '' : 'none';
+            // تنبيه على الكمبيوتر (لو التاب مش ظاهر) للحاجات الجديدة بس
+            if (staffBellKnown) {
+                const fresh = unseen.filter(a => !staffBellKnown.has(a.id));
+                if (fresh.length && document.hidden && window.Notification && Notification.permission === 'granted') {
+                    try { new Notification(fresh.length === 1 ? fresh[0].title : `${fresh.length} تنبيهات جديدة`, { body: fresh.length === 1 ? fresh[0].detail : fresh.slice(0, 3).map(a => a.title).join(' • '), tag: 'almoallem-staff' }); } catch (e) {}
+                }
+            }
+            staffBellKnown = new Set(alerts.map(a => a.id));
+            if (staffBellOpen) drawStaffBellPanel(alerts, seen);
+        }
+        function drawStaffBellPanel(alerts, seen) {
+            const p = document.getElementById('staffBellPanel'); if (!p) return;
+            const perm = window.Notification ? Notification.permission : 'unsupported';
+            p.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);"><strong>التنبيهات</strong><span>${perm === 'default' ? '<button class="btn btn-info btn-sm" onclick="Notification.requestPermission().then(()=>renderStaffBell())">فعّل تنبيهات الكمبيوتر</button> ' : ''}<button class="btn btn-secondary btn-sm" onclick="markStaffAlertsSeen()">علّم الكل مقروء</button></span></div>` +
+                (alerts.length ? alerts.slice(0, 80).map(a => `<div onclick="openStaffAlert('${a.section}','${a.id.replace(/'/g, '')}')" style="cursor:pointer;display:flex;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);background:${seen.has(a.id) ? 'transparent' : 'rgba(52,152,219,0.08)'};"><i class="fas ${a.icon}" style="margin-top:3px;color:var(--primary);"></i><div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:13px;">${escapeHtml(a.title)}</div><div style="font-size:12px;color:var(--text-light);overflow:hidden;text-overflow:ellipsis;">${escapeHtml(a.detail || '')}</div><div style="font-size:11px;color:var(--text-light);">${new Date(a.at).toLocaleString('ar-EG')}</div></div></div>`).join('')
+                    : '<div style="padding:24px;text-align:center;color:var(--text-light);">مفيش تنبيهات دلوقتي 👌</div>');
+        }
+        function toggleStaffBell(ev) {
+            if (ev) ev.stopPropagation();
+            staffBellOpen = !staffBellOpen;
+            const p = document.getElementById('staffBellPanel'); if (!p) return;
+            p.style.display = staffBellOpen ? 'block' : 'none';
+            if (staffBellOpen) drawStaffBellPanel(computeStaffAlerts(), staffSeen());
+        }
+        function markStaffAlertsSeen(id) {
+            const seen = staffSeen();
+            (id ? [id] : computeStaffAlerts().map(a => a.id)).forEach(x => seen.add(x));
+            try { localStorage.setItem(staffSeenKey(), JSON.stringify(Array.from(seen).slice(-3000))); } catch (e) {}
+            renderStaffBell();
+        }
+        function openStaffAlert(section, id) {
+            markStaffAlertsSeen(id);
+            staffBellOpen = false; const p = document.getElementById('staffBellPanel'); if (p) p.style.display = 'none';
+            try { showSection(section); } catch (e) {}
+        }
+        document.addEventListener('click', function(e) {
+            if (!staffBellOpen) return;
+            const p = document.getElementById('staffBellPanel'), b = document.getElementById('staffBellBtn');
+            if (p && !p.contains(e.target) && b && !b.contains(e.target)) { staffBellOpen = false; p.style.display = 'none'; }
+        });
+        setInterval(function() { try { renderStaffBell(); } catch (e) {} }, 20000);
 
 
         function saveProduct() {
@@ -13725,6 +14104,15 @@
             db.collection('customerOrders').doc(order.id).update({ items: newItems, total: newTotal, editedAt: Date.now(), editedBy: DEVICE_ID })
                 .then(() => {
                     showToast('تم حفظ تعديلات الطلب ✓');
+                    // إشعار للعميل (وللمندوب لو هو اللي عامل الطلب) باللي اتغير
+                    try {
+                        const keyOf = it => it.productCode + '|' + (it.unit || '');
+                        const after = {}; newItems.forEach(it => { after[keyOf(it)] = it; });
+                        const removed = order.items.filter(it => !after[keyOf(it)]).map(it => it.productName);
+                        const changed = order.items.filter(it => after[keyOf(it)] && Number(after[keyOf(it)].qty) !== Number(it.qty)).map(it => it.productName);
+                        const parts = []; if (removed.length) parts.push('اتشال: ' + removed.slice(0, 4).join('، ')); if (changed.length) parts.push('اتغيرت كمية: ' + changed.slice(0, 4).join('، '));
+                        if (parts.length) notifyOrderEvent(Object.assign({}, order, { items: newItems, total: newTotal }), 'edited', { 'التغيير': ' (' + parts.join(' — ') + ')' });
+                    } catch (e) { console.error(e); }
                     order.items = newItems; order.total = newTotal;
                     document.getElementById('orderInvoiceContent').innerHTML = buildOrderInvoiceHtml(order);
                     toggleOrderInvoiceEdit();
