@@ -1169,6 +1169,12 @@
                     <div style="background:rgba(231,76,60,0.06);border-radius:12px;padding:14px;"><div style="font-size:13px;color:var(--text-light);"><i class="fas fa-star"></i> نقاط ولاء مستحقة للعملاء (التزام)</div><div style="font-size:24px;font-weight:800;" id="loyaltyLiability">—</div><button class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="computeLoyaltyLiability()">احسب دلوقتي</button></div>
                 </div>
             </div>
+            <div class="card" id="cashCloseCard">
+                <div class="card-header"><div class="card-title"><i class="fas fa-lock"></i> قفل الخزنة اليومي</div>
+                    <button class="btn btn-success btn-sm" onclick="openCashClose()"><i class="fas fa-cash-register"></i> اعدّ واقفل الخزنة</button></div>
+                <div id="cashCloseSummary" style="padding:0 20px 12px;font-size:13.5px;"></div>
+                <div class="table-container" style="max-height:260px;overflow:auto;"><table><thead><tr><th>وقت القفل</th><th>المفروض</th><th>اتعدّ فعلاً</th><th>الفرق</th><th>اتسجل كتسوية؟</th><th>بواسطة</th><th>ملاحظة</th></tr></thead><tbody id="cashCloseTable"></tbody></table></div>
+            </div>
             <div class="stats-grid">
                 <div class="stat-card sales">
                     <div class="stat-icon"><i class="fas fa-arrow-down" style="color:var(--accent);"></i></div>
@@ -1309,6 +1315,7 @@
                     <div style="display:flex;gap:10px;">
                         <button class="btn btn-success btn-sm" onclick="openStockAdjustmentModal()"><i class="fas fa-sliders-h"></i> تعديل مخزون</button>
                         <button class="btn btn-warning btn-sm" onclick="openStockAudit()"><i class="fas fa-search-plus"></i> مراجعة حركة الصنف</button>
+                        <button class="btn btn-secondary btn-sm" onclick="openAllReserved()"><i class="fas fa-lock"></i> مين حاجز البضاعة؟</button>
                         <button class="btn btn-info btn-sm" onclick="exportInventoryCountSheet()"><i class="fas fa-file-export"></i> شيت الجرد Excel</button>
                         <button class="btn btn-primary btn-sm" onclick="document.getElementById('invCountFileInput').click()"><i class="fas fa-file-excel"></i> رفع شيت الجرد</button><input type="file" id="invCountFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importInventoryCountSheet(event)">
                         <button class="btn btn-teal btn-sm" onclick="showSection('purchase-invoice')"><i class="fas fa-cart-plus"></i> فاتورة شراء</button>
@@ -2255,6 +2262,19 @@
     </div>
 
     <!-- Stock Adjustment Modal -->
+    <div class="modal-overlay" id="cashCloseModal">
+        <div class="modal" style="max-width:520px;width:96%;">
+            <div class="modal-header"><h3 class="modal-title"><i class="fas fa-cash-register" style="color:var(--accent);"></i> عدّ وقفل الخزنة</h3><button class="modal-close" onclick="closeModal('cashCloseModal')">&times;</button></div>
+            <div class="modal-body">
+                <div id="cashCloseInfo" style="font-size:14px;line-height:1.9;margin-bottom:12px;"></div>
+                <div class="form-group"><label class="form-label">النقدية اللي اتعدّت في الدرج فعلاً (ج.م)</label><input type="number" step="0.01" class="form-control" id="cashCloseCounted" oninput="updateCashCloseDiff()" style="font-size:20px;font-weight:800;"></div>
+                <div id="cashCloseDiff" style="font-size:15px;font-weight:800;margin:-4px 0 12px;"></div>
+                <label id="cashCloseAdjustWrap" style="display:none;align-items:center;gap:8px;font-size:13.5px;margin-bottom:12px;"><input type="checkbox" id="cashCloseAdjust" checked> سجّل الفرق في الخزنة (عجز أو زيادة) عشان رصيد السيستم يبقى زي اللي في الدرج</label>
+                <div class="form-group"><label class="form-label">ملاحظة (اختياري)</label><input type="text" class="form-control" id="cashCloseNote" placeholder="مثال: اتسلمت لعبدالله"></div>
+                <button class="btn btn-success" id="cashCloseSaveBtn" onclick="saveCashClose()" style="width:100%;"><i class="fas fa-lock"></i> اقفل الخزنة</button>
+            </div>
+        </div>
+    </div>
     <div class="modal-overlay" id="salesZonesModal">
         <div class="modal" style="max-width:1000px;width:96%;">
             <div class="modal-header"><h3 class="modal-title"><i class="fas fa-map-marked-alt" style="color:var(--info);"></i> مناطق البيع (مناديب البيع)</h3><button class="modal-close" onclick="closeModal('salesZonesModal')">&times;</button></div>
@@ -3100,6 +3120,15 @@
 
             // حماية من المسح الجماعي: لو فيه أكتر من 5 عناصر هتتمسح مرة واحدة، لازم تأكيد صريح
             const toDelete = Object.keys(prevMap).filter(function(id) { return !currentMap[id]; });
+            if (toDelete.length > 5 && conf.money) {
+                // (2026-10-14) حركات الفلوس (خزنة/مصروفات/مرتجعات/تسويات) ممنوع تتمسح جماعي نهائيًا — بترجع لوحدها
+                toDelete.forEach(function(id) { current.push(prevMap[id]); currentMap[id] = prevMap[id]; });
+                setListByKey(key, current);
+                _origLocalStorageSetItem(key, JSON.stringify(current));
+                try { logAction('تنبيه أمان', 'اتمنع مسح ' + toDelete.length + ' سجل فلوس (' + key + ') مرة واحدة — رجعوا تاني ومحدش اتمسح'); } catch (e) {}
+                try { showToast('اتمنع مسح ' + toDelete.length + ' حركة فلوس مرة واحدة — رجعوا تاني', 'warning', 8000); } catch (e) {}
+                toDelete.length = 0;
+            }
             if (toDelete.length > 5) {
                 const label = { products: 'صنف', customers: 'عميل', suppliers: 'مورد' }[key] || 'سجل';
                 const okDel = confirm('تنبيه أمان: السيستم هيمسح ' + toDelete.length + ' ' + label + ' من السحابة نهائيًا.\nلو انت اللي مسحتهم بنفسك دوس OK.\nلو مش انت، دوس Cancel وهيرجعوا تاني.');
@@ -3190,7 +3219,13 @@
             (lastSyncedSplit[key] || []).forEach(it => { if (it && it[idField] != null) prevMap[it[idField]] = JSON.stringify(it); });
             (local || []).forEach(it => { if (it && it[idField] != null) localMap[it[idField]] = it; });
             let pending = false;
-            let out = serverArr.filter(it => { const id = it[idField]; if (prevMap[id] !== undefined && !localMap[id]) { pending = true; return false; } return true; });
+            // (2026-10-14) حماية الفلوس: لو الجهاز ناقصه أكتر من 5 حركات فلوس موجودة على السحابة، ده معناه إن بيانات الجهاز
+            // قديمة/اتمسحت — مش إن حد مسحهم. فبناخد نسخة السحابة زي ما هي ومش بنعتبرهم "اتمسحوا من الجهاز".
+            const conf0 = SPLIT_COLLECTION_KEYS[key] || {};
+            const missingLocally = serverArr.filter(it => prevMap[it[idField]] !== undefined && !localMap[it[idField]]).length;
+            const trustServer = conf0.money && missingLocally > 5;
+            if (trustServer) { try { console.warn('money guard: ' + key + ' — kept ' + missingLocally + ' cloud records the device was missing'); logAction('تنبيه أمان', 'الجهاز ده كان ناقصه ' + missingLocally + ' سجل (' + key + ') — اترجعوا من السحابة ومامسحناش حاجة'); } catch (e) {} }
+            let out = serverArr.filter(it => { const id = it[idField]; if (!trustServer && prevMap[id] !== undefined && !localMap[id]) { pending = true; return false; } return true; });
             // لو فيه تعديل محلي لسه ما اترفعش، ناخد الخانات اللي اتعدلت محليًا بس فوق نسخة السحابة (مش الكارت القديم كله)
             out = out.map(it => { const id = it[idField], loc = localMap[id]; if (loc && prevMap[id] !== undefined && JSON.stringify(loc) !== prevMap[id]) {
                 pending = true; const prevObj = JSON.parse(prevMap[id]); const merged = Object.assign({}, it);
@@ -3366,6 +3401,7 @@
                     try { startSalesZonesListener(); } catch (e) { console.error(e); }
                     try { startRepReturnsListenerSys(); } catch (e) { console.error(e); }
                     try { startNotifSettingsListener(); } catch (e) { console.error(e); }
+                    try { startCashCloseListener(); } catch (e) { console.error(e); }
                     setTimeout(function() { try { renderStaffBell(); } catch (e) {} }, 5000);
                     setTimeout(function() { try { startLoyaltyListener(); } catch (e) { console.error(e); } }, 4000);
                     try { activateMoneySplit(); } catch (e) { console.error(e); }
@@ -8495,6 +8531,154 @@
             }).join('');
         }
 
+        // ==================== قفل الخزنة اليومي (2026-10-14) ====================
+        // المحاسب/المدير بيعدّ النقدية اللي في الدرج ويقفل. السيستم بيقارنها برصيد النقدية ويسجّل الفرق (لو اختار).
+        // بعد القفل: أي حركة خزنة قبل وقت القفل مايتمسحش (المحاسب ممنوع، المدير بتأكيد ويتسجل في السجل).
+        // التخزين: meta/cashClose_<وقت القفل> (مكان مسموح في قواعد الأمان الحالية)
+        let cashCloses = [], cashCloseListenerStarted = false;
+        function startCashCloseListener() {
+            if (!db || cashCloseListenerStarted) return;
+            cashCloseListenerStarted = true;
+            db.collection('meta').where('kind', '==', 'cashClose').onSnapshot(function(snap) {
+                cashCloses = snap.docs.map(d => Object.assign({ id: d.id }, d.data())).sort((a, b) => (b.at || 0) - (a.at || 0));
+                try { renderCashClose(); } catch (e) {}
+                try { renderStaffBell(); } catch (e) {}
+            }, function(e) { console.error('cash close listener', e); });
+        }
+        function lastCashCloseAt() { return cashCloses.length ? Number(cashCloses[0].at) || 0 : 0; }
+        function canCloseCash() { const r = String((currentUser && currentUser.role) || '').toLowerCase(); return r === 'admin' || r === 'accountant'; }
+        function cashSince(ts) {
+            let inn = 0, out = 0, n = 0;
+            (treasury || []).forEach(t => {
+                if (treasuryAccountOf(t) !== 'cash') return;
+                if (new Date(t.date).getTime() <= ts) return;
+                n++; if (t.type === 'in') inn += Number(t.amount) || 0; else out += Number(t.amount) || 0;
+            });
+            return { inn, out, n };
+        }
+        const ccf = n => (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        function renderCashClose() {
+            const sum = document.getElementById('cashCloseSummary'), tb = document.getElementById('cashCloseTable');
+            if (!sum || !tb) return;
+            const last = cashCloses[0];
+            const since = cashSince(last ? last.at : 0);
+            sum.innerHTML = last
+                ? `آخر قفل: <b>${new Date(last.at).toLocaleString('ar-EG')}</b> (${escapeHtml((last.by && last.by.name) || '')}) — من ساعتها: قبض <b style="color:var(--accent);">${ccf(since.inn)}</b> · صرف <b style="color:var(--danger);">${ccf(since.out)}</b> · النقدية دلوقتي <b>${ccf(getTreasuryBalance('cash'))} ج.م</b>`
+                : `<span style="color:var(--warning);font-weight:700;">الخزنة ما اتقفلتش قبل كده.</span> اعدّ النقدية اللي في الدرج واقفل، ومن بعدها كل يوم آخر الشغل.`;
+            tb.innerHTML = cashCloses.slice(0, 60).map(c => `<tr><td style="white-space:nowrap;">${new Date(c.at).toLocaleString('ar-EG')}</td><td>${ccf(c.expected)}</td><td><b>${ccf(c.counted)}</b></td><td style="font-weight:800;color:${Math.abs(c.diff) < 0.005 ? 'var(--accent)' : (c.diff < 0 ? 'var(--danger)' : 'var(--info)')};">${Math.abs(c.diff) < 0.005 ? 'مظبوط ✓' : (c.diff < 0 ? 'عجز ' : 'زيادة ') + ccf(Math.abs(c.diff))}</td><td>${Math.abs(c.diff) < 0.005 ? '-' : (c.adjusted ? 'أيوه' : 'لأ')}</td><td>${escapeHtml((c.by && c.by.name) || '')}</td><td>${escapeHtml(c.note || '')}</td></tr>`).join('')
+                || '<tr><td colspan="7" style="text-align:center;color:var(--text-light);padding:14px;">مفيش قفل لسه</td></tr>';
+        }
+        function openCashClose() {
+            if (!canCloseCash()) { showToast('قفل الخزنة للمحاسب أو المدير بس', 'error'); return; }
+            if (!db) { showToast('لازم يكون فيه إنترنت', 'error'); return; }
+            const last = cashCloses[0], since = cashSince(last ? last.at : 0), exp = getTreasuryBalance('cash');
+            document.getElementById('cashCloseInfo').innerHTML =
+                (last ? `من آخر قفل (${new Date(last.at).toLocaleString('ar-EG')}): ${since.n} حركة — قبض <b>${ccf(since.inn)}</b> · صرف <b>${ccf(since.out)}</b><br>` : '') +
+                `النقدية اللي المفروض تكون في الدرج دلوقتي: <b style="font-size:18px;">${ccf(exp)} ج.م</b>`;
+            document.getElementById('cashCloseInfo').dataset.expected = String(exp);
+            document.getElementById('cashCloseCounted').value = '';
+            document.getElementById('cashCloseNote').value = '';
+            document.getElementById('cashCloseAdjust').checked = true;
+            updateCashCloseDiff();
+            openModal('cashCloseModal');
+            setTimeout(() => { try { document.getElementById('cashCloseCounted').focus(); } catch (e) {} }, 100);
+        }
+        function updateCashCloseDiff() {
+            const exp = Number(document.getElementById('cashCloseInfo').dataset.expected) || 0;
+            const v = document.getElementById('cashCloseCounted').value;
+            const el = document.getElementById('cashCloseDiff'), wrap = document.getElementById('cashCloseAdjustWrap');
+            if (v === '') { el.textContent = ''; wrap.style.display = 'none'; return; }
+            const diff = Math.round(((Number(v) || 0) - exp) * 100) / 100;
+            el.innerHTML = Math.abs(diff) < 0.005 ? '<span style="color:var(--accent);">مظبوط ✓ — مفيش فرق</span>' : (diff < 0 ? `<span style="color:var(--danger);">عجز ${ccf(-diff)} ج.م</span>` : `<span style="color:var(--info);">زيادة ${ccf(diff)} ج.م</span>`);
+            wrap.style.display = Math.abs(diff) < 0.005 ? 'none' : 'flex';
+        }
+        let cashCloseBusy = false;
+        function saveCashClose() {
+            if (cashCloseBusy || !canCloseCash() || !db) return;
+            const v = document.getElementById('cashCloseCounted').value;
+            if (v === '' || isNaN(Number(v)) || Number(v) < 0) { showToast('اكتب المبلغ اللي اتعدّ', 'error'); return; }
+            const counted = Math.round(Number(v) * 100) / 100;
+            const expected = Math.round(getTreasuryBalance('cash') * 100) / 100;   // نحسبه تاني لحظة الحفظ
+            const diff = Math.round((counted - expected) * 100) / 100;
+            const note = document.getElementById('cashCloseNote').value.trim();
+            const adjust = Math.abs(diff) >= 0.005 && document.getElementById('cashCloseAdjust').checked;
+            if (!confirm(`قفل الخزنة:\nالمفروض: ${ccf(expected)}\nاتعدّ: ${ccf(counted)}\n${Math.abs(diff) < 0.005 ? 'مفيش فرق' : (diff < 0 ? 'عجز ' : 'زيادة ') + ccf(Math.abs(diff)) + (adjust ? ' (هيتسجل في الخزنة)' : ' (مش هيتسجل)')}\n\nتكمل؟`)) return;
+            cashCloseBusy = true;
+            const btn = document.getElementById('cashCloseSaveBtn'); if (btn) btn.disabled = true;
+            if (adjust) addTreasuryEntry(diff > 0 ? 'in' : 'out', Math.abs(diff), 'قفل الخزنة', 'system', (diff > 0 ? 'زيادة' : 'عجز') + ' في عدّ الخزنة' + (note ? ' — ' + note : ''), 'فرق قفل الخزنة', false, 'cash');
+            const at = Date.now();
+            const rec = { kind: 'cashClose', at, day: new Date(at).toISOString().slice(0, 10), expected, counted, diff, adjusted: adjust, note, by: pdUser(), prevAt: lastCashCloseAt() };
+            db.collection('meta').doc('cashClose_' + at).set(rec).then(() => {
+                cashCloses.unshift(Object.assign({ id: 'cashClose_' + at }, rec));
+                logAction('قفل الخزنة', `المفروض ${ccf(expected)} — اتعدّ ${ccf(counted)} — ${Math.abs(diff) < 0.005 ? 'مظبوط' : (diff < 0 ? 'عجز ' : 'زيادة ') + ccf(Math.abs(diff)) + (adjust ? ' (اتسجل)' : ' (ماتسجلش)')}${note ? ' — ' + note : ''}`);
+                closeModal('cashCloseModal');
+                showToast('اتقفلت الخزنة ✓', 'success');
+                try { renderTreasury(); updateDashboardStats(); } catch (e) {}
+                renderCashClose();
+            }).catch(e => { console.error(e); showToast('تعذر الحفظ: ' + (e.message || ''), 'error'); })
+              .finally(() => { cashCloseBusy = false; if (btn) btn.disabled = false; });
+        }
+        // حركة قبل آخر قفل: المحاسب ممنوع يمسحها، والمدير بتأكيد وبيتسجل
+        function treasuryEntryLocked(t) {
+            const lc = lastCashCloseAt();
+            if (!t || !lc || new Date(t.date).getTime() > lc) return false;
+            if (!nacIsAdmin()) { showToast('الحركة دي قبل آخر قفل للخزنة (' + new Date(lc).toLocaleString('ar-EG') + ') — مسحها للمدير بس', 'error', 6000); return true; }
+            if (!confirm('تنبيه: الحركة دي قبل آخر قفل للخزنة (' + new Date(lc).toLocaleString('ar-EG') + ').\nمسحها هيخلّي العدّ اللي اتقفل مختلف عن السيستم.\nتكمل؟')) return true;
+            try { logAction('مسح حركة في خزنة مقفولة', `${t.type === 'in' ? 'قبض' : 'صرف'} ${ccf(t.amount)} — ${t.reference || ''} ${t.notes || ''}`); } catch (e) {}
+            return false;
+        }
+
+        // ==================== مين حاجز الصنف ده؟ (2026-10-14) ====================
+        // الكمية المحجوزة = طلبات لسه ما اتسلمتش (جديد / قيد التجهيز / خرج للتسليم / مرتجع مع المندوب).
+        // قيد التجهيز أو جديد من أكتر من يوم = غالبًا البضاعة خرجت والطلب ماتحدثش — ده اللي بيبان "ناقص" في المخزن.
+        const RESV_STATUS = { pending: 'جديد', preparing: 'قيد التجهيز', ready: 'خرج للتسليم', returned: 'مرتجع' };
+        function reservationsFor(code) {
+            const out = [];
+            customerOrders.forEach(o => {
+                if (['delivered', 'merged', 'cancelled', 'rejected'].includes(o.status)) return;
+                const v = reservedStockLedger[o.id]; if (!v || !(Number(v[code]) > 0)) return;
+                out.push({ o, qty: Number(v[code]) || 0, age: Date.now() - (Number(o.createdAt) || Date.now()) });
+            });
+            return out.sort((a, b) => b.age - a.age);
+        }
+        function reservedTotal(code) { return reservationsFor(code).reduce((s, r) => s + r.qty, 0); }
+        function resvAge(ms) { const h = Math.floor(ms / 3600000); return h < 1 ? 'أقل من ساعة' : h < 48 ? h + ' ساعة' : Math.floor(h / 24) + ' يوم'; }
+        function openReservedFor(code) {
+            const p = products.find(x => x.code === code) || { name: code, unit: '' };
+            const list = reservationsFor(code);
+            const total = list.reduce((s, r) => s + r.qty, 0);
+            const rows = list.map(r => {
+                const old = (r.o.status === 'pending' || r.o.status === 'preparing') && r.age > 24 * 3600000;
+                return `<tr style="${old ? 'background:rgba(231,76,60,0.07);' : ''}"><td><b>${escapeHtml(r.o.shopName || r.o.customerName || '')}</b><div style="font-size:11px;color:var(--text-light);">#${escapeHtml(String(r.o.id).slice(-6))}${r.o.repName ? ' — مندوب ' + escapeHtml(r.o.repName) : ''}</div></td><td>${RESV_STATUS[r.o.status] || r.o.status}</td><td><b>${Math.round(r.qty * 1000) / 1000}</b></td><td>${resvAge(r.age)}${old ? ' <span class="badge badge-danger">قديم</span>' : ''}</td><td><button class="btn btn-info btn-sm" onclick="closeModal('reservedModal'); showSection('customer-orders'); setTimeout(function(){ try { viewOrderAsInvoice('${escapeHtml(r.o.id)}'); } catch (e) {} }, 300);"><i class="fas fa-eye"></i> افتح الطلب</button></td></tr>`;
+            }).join('');
+            showReservedModal(`${escapeHtml(p.name)} — محجوز ${Math.round(total * 1000) / 1000} ${escapeHtml(p.unit || '')}`,
+                (list.some(r => (r.o.status === 'pending' || r.o.status === 'preparing') && r.age > 24 * 3600000) ? `<div style="background:rgba(231,76,60,0.08);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:13px;">الطلبات اللي باللون الأحمر بقالها أكتر من يوم ولسه "جديد" أو "قيد التجهيز". لو البضاعة خرجت فعلاً، افتح الطلب وحوّله "خرج للتسليم" أو "اتسلم". ولو الطلب اتلغى، ارفضه. كده الحجز يتفك والمخزن يتظبط.</div>` : '') +
+                (rows ? `<div class="table-container"><table><thead><tr><th>العميل</th><th>حالة الطلب</th><th>الكمية</th><th>بقاله</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p style="color:var(--text-light);">مفيش طلبات حاجزة الصنف ده.</p>'));
+        }
+        function openAllReserved() {
+            const per = {};
+            customerOrders.forEach(o => {
+                if (['delivered', 'merged', 'cancelled', 'rejected'].includes(o.status)) return;
+                const v = reservedStockLedger[o.id]; if (!v) return;
+                const old = (o.status === 'pending' || o.status === 'preparing') && Date.now() - (Number(o.createdAt) || Date.now()) > 24 * 3600000;
+                Object.keys(v).forEach(c => { const q = Number(v[c]) || 0; if (q <= 0) return; per[c] = per[c] || { qty: 0, orders: 0, old: 0 }; per[c].qty += q; per[c].orders++; if (old) per[c].old++; });
+            });
+            const codes = Object.keys(per).sort((a, b) => (per[b].old - per[a].old) || (per[b].qty - per[a].qty));
+            const rows = codes.map(c => { const p = products.find(x => x.code === c) || { name: c, unit: '' }; return `<tr style="cursor:pointer;${per[c].old ? 'background:rgba(231,76,60,0.07);' : ''}" onclick="openReservedFor('${escapeHtml(c)}')"><td><b>${escapeHtml(p.name)}</b></td><td><b>${Math.round(per[c].qty * 1000) / 1000}</b> ${escapeHtml(p.unit || '')}</td><td>${per[c].orders}</td><td>${per[c].old ? '<span class="badge badge-danger">' + per[c].old + ' قديم</span>' : '-'}</td><td>${Math.round((Number((inventory[c] || {}).qty) || 0) * 1000) / 1000}</td></tr>`; }).join('');
+            showReservedModal('الأصناف المحجوزة لطلبات', rows ? `<p style="font-size:13px;color:var(--text-light);margin-top:0;">دوس على أي صنف تشوف الطلبات اللي حاجزاه. "المتاح" هو اللي بيظهر للعملاء في الأبليكشن.</p><div class="table-container" style="max-height:60vh;overflow:auto;"><table><thead><tr><th>الصنف</th><th>محجوز</th><th>عدد الطلبات</th><th>طلبات قديمة</th><th>المتاح</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p>مفيش أي صنف محجوز دلوقتي 👌</p>');
+        }
+        function showReservedModal(title, html) {
+            let m = document.getElementById('reservedModal');
+            if (!m) {
+                m = document.createElement('div'); m.className = 'modal-overlay'; m.id = 'reservedModal';
+                m.innerHTML = `<div class="modal" style="max-width:820px;width:96%;"><div class="modal-header"><h3 class="modal-title" id="reservedModalTitle"></h3><button class="modal-close" onclick="closeModal('reservedModal')">&times;</button></div><div class="modal-body" id="reservedModalBody"></div></div>`;
+                document.body.appendChild(m);
+            }
+            document.getElementById('reservedModalTitle').innerHTML = '<i class="fas fa-lock" style="color:var(--warning);"></i> ' + title;
+            document.getElementById('reservedModalBody').innerHTML = html;
+            openModal('reservedModal');
+        }
+
         // ==================== الإشعارات (2026-10-13: اتهيكلت من جديد) ====================
         // 1) العميل: إشعار على الموبايل (OneSignal) + نسخة في "جرس" جوه الأبليكشن (appMeta/inbox_<رقم التليفون>)
         //    الأبليكشن متسجل بـ"رقم التليفون" — فأي إشعار لعميل لازم يتبعت على رقمه مش على كوده في السيستم.
@@ -8522,7 +8706,9 @@
             repReturn: { label: 'مرتجع مندوب مستني استلام', roles: ['admin', 'warehouse_keeper'], icon: 'fa-undo', section: 'inventory' },
             stock: { label: 'أصناف خلصت أو قربت تخلص', roles: ['admin', 'warehouse_keeper'], icon: 'fa-box-open', section: 'inventory' },
             treasury: { label: 'حركة خزنة كبيرة', roles: ['admin', 'accountant'], icon: 'fa-coins', section: 'treasury' },
-            security: { label: 'تنبيه أمان (محاولة مسح جماعي)', roles: ['admin'], icon: 'fa-shield-alt', section: 'audit-log' }
+            security: { label: 'تنبيه أمان (محاولة مسح جماعي)', roles: ['admin'], icon: 'fa-shield-alt', section: 'audit-log' },
+            cashClose: { label: 'الخزنة ما اتقفلتش', roles: ['admin', 'accountant'], icon: 'fa-cash-register', section: 'treasury' },
+            reserved: { label: 'طلبات قديمة حاجزة بضاعة', roles: ['admin', 'warehouse_keeper'], icon: 'fa-lock', section: 'inventory' }
         };
         let notifSettingsRaw = (function() { try { return JSON.parse(localStorage.getItem('notifSettings') || '{}') || {}; } catch (e) { return {}; } })();
         let notifSettingsListenerStarted = false;
@@ -8843,6 +9029,16 @@
             }
             if (staffAlertAllowed('treasury') && s.bigTreasury > 0) (treasury || []).filter(t => (Number(t.amount) || 0) >= s.bigTreasury && now - new Date(t.date).getTime() < 48 * 3600000 && t.partyType !== 'transfer').forEach(t => add('treasury', 'trs_' + t.id, `${t.type === 'in' ? 'قبض' : 'صرف'} ${(Number(t.amount) || 0).toLocaleString('en-US')} ج.م`, `${t.reference || ''} — ${t.notes || ''}`, new Date(t.date).getTime()));
             if (staffAlertAllowed('security')) (auditLog || []).filter(a => a.type === 'تنبيه أمان' && now - new Date(a.date).getTime() < 7 * 86400000).forEach(a => add('security', 'sec_' + a.id, 'تنبيه أمان', `${a.details || ''} — ${a.fullName || a.username || ''}`, new Date(a.date).getTime()));
+            if (staffAlertAllowed('cashClose') && typeof cashCloseListenerStarted !== 'undefined' && cashCloseListenerStarted) {
+                const today0 = new Date(); today0.setHours(0, 0, 0, 0);
+                const lc = lastCashCloseAt();
+                const pendingCash = (treasury || []).filter(t => treasuryAccountOf(t) === 'cash' && new Date(t.date).getTime() > lc && new Date(t.date).getTime() < today0.getTime());
+                if (pendingCash.length) { const firstDay = new Date(Math.min.apply(null, pendingCash.map(t => new Date(t.date).getTime()))); add('cashClose', 'cc_' + today0.toISOString().slice(0, 10) + '_' + lc, 'الخزنة ما اتقفلتش', `فيه ${pendingCash.length} حركة نقدية من ${firstDay.toLocaleDateString('ar-EG')} من غير قفل — اعدّ الدرج واقفل`, today0.getTime()); }
+            }
+            if (staffAlertAllowed('reserved')) {
+                const oldOrders = customerOrders.filter(o => (o.status === 'pending' || o.status === 'preparing') && now - (Number(o.createdAt) || now) > 24 * 3600000 && reservedStockLedger[o.id] && Object.keys(reservedStockLedger[o.id]).length);
+                if (oldOrders.length) add('reserved', 'resv_' + new Date().toISOString().slice(0, 10) + '_' + oldOrders.length, `${oldOrders.length} طلب بقالهم أكتر من يوم حاجزين بضاعة`, 'لو البضاعة خرجت، حدّث حالة الطلب عشان المخزن يتظبط — دوس "مين حاجز البضاعة؟" في المخزن');
+            }
             return out.sort((a, b) => b.at - a.at);
         }
         const staffSeenKey = () => 'notifSeen_' + ((currentUser && currentUser.username) || '');
@@ -9057,7 +9253,7 @@
                 return `<tr>
                     <td><span class="badge badge-primary">${p.code}</span></td>
                     <td><strong>${p.name}</strong></td><td>${p.unit}</td>
-                    <td><strong style="color:${isCritical ? 'var(--danger)' : (isLow ? 'var(--warning)' : 'var(--accent)')};">${inv.qty}</strong></td>
+                    <td><strong style="color:${isCritical ? 'var(--danger)' : (isLow ? 'var(--warning)' : 'var(--accent)')};">${inv.qty}</strong>${(() => { const r = reservedTotal(p.code); return r > 0 ? `<div><a href="javascript:void(0)" onclick="openReservedFor('${p.code}')" style="font-size:11.5px;color:var(--warning);font-weight:700;white-space:nowrap;"><i class="fas fa-lock"></i> محجوز ${Math.round(r * 1000) / 1000}</a></div>` : ''; })()}</td>
                     <td>${inv.minStock || p.minStock || 0}</td>
                     <td>${(inv.cost || p.cost || 0).toFixed(2)} ج.م</td>
                     <td>${p.price.toFixed(2)} ج.م</td>
@@ -10211,6 +10407,7 @@
 
         function renderTreasury() {
             rebuildTreasuryChain();
+            try { renderCashClose(); } catch (e) {}
             try { renderTreasuryAccounts(); } catch (e) { console.error(e); }
             const tbody = document.getElementById('treasuryTable');
             if (treasury.length === 0) {
@@ -10259,6 +10456,7 @@
                 showToast('حذف سندات الصرف للموردين متاح للمدير فقط', 'error');
                 return;
             }
+            if (treasuryEntryLocked(entryCheck)) return;
             if (!confirm('هل أنت متأكد من حذف هذه الحركة؟')) return;
             treasury = treasury.filter(t => t.id !== id);
             // Recalculate balances
@@ -10274,6 +10472,7 @@
         function undoLastTreasuryEntry() {
             if (treasury.length === 0) { showToast('لا توجد حركات لإلغائها', 'error'); return; }
             const last = treasury.slice().sort((a, b) => b.id - a.id)[0];
+            if (treasuryEntryLocked(last)) return;
             if (last.partyType === 'supplier' && (!currentUser || String(currentUser.role || '').trim().toLowerCase() !== 'admin')) {
                 showToast('التراجع عن سندات الصرف للموردين متاح للمدير فقط', 'error');
                 return;
