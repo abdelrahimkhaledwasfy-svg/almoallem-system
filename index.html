@@ -8726,7 +8726,7 @@
             const el = document.getElementById('notifAudienceCount'); if (!el) return;
             try {
                 const r = notifRecipients();
-                el.textContent = r.all ? 'هيوصل لكل اللي مفعّلين الإشعارات على الأبليكشن' : r.reps ? `${r.reps.length} مندوب` : `${r.list.length} عميل في السيستم (هيوصل بس للي عندهم الأبليكشن)`;
+                el.textContent = r.all ? `هيوصل لكل اللي مفعّلين الإشعارات على الأبليكشن${(appRegistrations || []).length ? ' (' + appRegistrations.length + ' حساب أبليكشن)' : ''}` : r.reps ? `${r.reps.length} مندوب` : `${r.list.length} عميل في السيستم (هيوصل بس للي عندهم الأبليكشن)`;
             } catch (e) { el.textContent = ''; }
         }
         let notifSending = false;
@@ -8752,7 +8752,7 @@
                 if (db) { const ref = db.collection('meta').doc('notifLog'); db.runTransaction(t => t.get(ref).then(s => { const items = (s.exists && s.data().items) || []; items.unshift(entry); t.set(ref, { items: items.slice(0, 400) }); })).then(renderNotificationsLog).catch(e => console.error(e)); }
                 logAction('إرسال إشعار', `العنوان: ${title} - المستلم: ${r.label} - وصل لـ ${reached}`);
                 document.getElementById('notificationTitle').value = ''; document.getElementById('notificationMessage').value = '';
-                if (reached) showToast(r.all ? 'تم إرسال الإشعار لكل العملاء ✓' : `تم الإرسال ✓ — وصل لـ ${reached} من ${total}`, 'success', 6000);
+                if (reached) showToast(`تم الإرسال ✓ — وصل لـ ${reached} موبايل${r.all ? ' (من ' + total + ' حساب أبليكشن)' : ' من ' + total}`, 'success', 7000);
                 else alert('الإشعار ما وصلش لحد.\n\n' + (window.lastPushError ? 'رد OneSignal: ' + window.lastPushError + '\n\n' : (r.all ? '' : 'السبب: مفيش حساب على الأبليكشن بالرقم ده (رقم العميل في السيستم مختلف عن الرقم اللي داخل بيه على الأبليكشن).\n\n')) + 'صوّر الرسالة دي وابعتها لـ Claude.');
                 window.lastPushError = '';
             };
@@ -8760,10 +8760,15 @@
                 const item = notifItem(title, message, extra);
                 const ref = db ? db.collection('appMeta').doc('broadcasts') : null;
                 if (ref) db.runTransaction(t => t.get(ref).then(s => { const items = (s.exists && s.data().items) || []; items.unshift(item); t.set(ref, { items: items.slice(0, 40), updatedAt: Date.now() }); })).catch(e => console.error(e));
-                sendPushNotification('all', title, message, extra).then(ok => done(ok ? 'الكل' : 0, 'الكل'));
-                return;
             }
-            const jobs = r.reps ? r.reps.map(x => () => notifyRep(x.rep, title, message, extra).then(ok => ok ? 1 : 0)) : r.list.map(x => () => notifyCustomerPhone(x.phone, title, message, extra));
+            // (2026-10-13) "كل العملاء" بيتبعت لكل عميل عنده الأبليكشن واحد واحد (نفس طريقة العميل الواحد اللي شغالة)،
+            // واللي مش موافق على الإشعارات OneSignal بيتخطاه لوحده. الجرس اتكتب مرة واحدة فوق (broadcasts).
+            let jobs;
+            if (r.all) {
+                const ids = Array.from(new Set((appRegistrations || []).map(x => String(x.phone || '')).filter(Boolean)));
+                if (ids.length) jobs = ids.map(id => () => sendPushNotification(id, title, message, extra).then(ok => ok ? 1 : 0));
+                else jobs = customers.filter(c => notifLast10(c.phone).length === 10).map(c => () => resolveAppIds(c.phone).then(list => list.length ? Promise.all(list.map(id => sendPushNotification(id, title, message, extra))).then(a => a.some(Boolean) ? 1 : 0) : 0));
+            } else jobs = r.reps ? r.reps.map(x => () => notifyRep(x.rep, title, message, extra).then(ok => ok ? 1 : 0)) : r.list.map(x => () => notifyCustomerPhone(x.phone, title, message, extra));
             let i = 0, reached = 0;
             const worker = () => i >= jobs.length ? Promise.resolve() : jobs[i++]().then(n => { reached += n || 0; if (prog) prog.textContent = `جاري الإرسال... ${i} من ${jobs.length}`; }).catch(() => {}).then(worker);
             Promise.all([worker(), worker(), worker(), worker()]).then(() => done(reached, jobs.length));
