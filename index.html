@@ -3253,10 +3253,10 @@
                 body: JSON.stringify(payload)
             }).then(function(res) { return res.json(); })
               .then(function(data) {
-                  if (data.errors) { console.error('OneSignal send error:', data.errors); return false; }
+                  if (data.errors) { console.error('OneSignal send error:', data.errors); window.lastPushError = JSON.stringify(data.errors).slice(0, 300); return false; }
                   return true;
               })
-              .catch(function(err) { console.error('Notification proxy request failed:', err); return false; });
+              .catch(function(err) { console.error('Notification proxy request failed:', err); window.lastPushError = 'مقدرناش نوصل لسيرفر الإشعارات: ' + (err && err.message || ''); return false; });
         }
 
         let db = null;
@@ -8664,7 +8664,11 @@
         function filterNotificationTargets() {
             const q = document.getElementById('notificationTargetSearch').value.trim().toLowerCase();
             const box = document.getElementById('notificationTargetResults');
-            const all = !q ? customers : customers.filter(c => (c.name || '').toLowerCase().includes(q) || (c.shopName || '').toLowerCase().includes(q) || (c.code || '').toLowerCase().includes(q) || (c.phone || '').includes(q));
+            const sysL10 = new Set(customers.map(c => notifLast10(c.phone)));
+            // عملاء عاملين حساب على الأبليكشن ومش متسجلين في السيستم لسه
+            const appOnly = (appRegistrations || []).filter(r => !sysL10.has(notifLast10(r.phone))).map(r => ({ code: 'app:' + r.phone, name: (r.shopName || r.customerName || 'عميل أبليكشن') + ' (أبليكشن)', phone: r.phone, shopName: r.shopName || '' }));
+            const pool = customers.concat(appOnly);
+            const all = !q ? pool : pool.filter(c => (c.name || '').toLowerCase().includes(q) || (c.shopName || '').toLowerCase().includes(q) || (c.code || '').toLowerCase().includes(q) || (c.phone || '').includes(q));
             const matches = all.slice(0, 50);
             let html = matches.length ? matches.map(c => `<div style="padding:8px 12px;cursor:pointer;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background=''" onmousedown="selectNotificationTarget('${escapeHtml(String(c.code)).replace(/'/g, "\\'")}', '${escapeHtml(String(c.name || c.code)).replace(/'/g, "\\'")}')">${escapeHtml(c.name || '')} <span style="color:#999;font-size:12px;">(${escapeHtml(c.code)}${c.phone ? ' - ' + escapeHtml(c.phone) : ''})</span></div>`).join('')
                 : `<div style="padding:10px 12px;color:#888;">لا يوجد عملاء مطابقين</div>`;
@@ -8679,6 +8683,7 @@
             const addCust = (phone, name) => { const l = notifLast10(phone); if (l.length === 10 && !byPhone.has(l)) byPhone.set(l, { phone, name }); };
             if (a === 'customer') {
                 const code = document.getElementById('notificationTarget').value;
+                if (String(code).indexOf('app:') === 0) { const ph = code.slice(4); addCust(ph, ph); return { label: document.getElementById('notificationTargetSearch').value || ph, list: Array.from(byPhone.values()) }; }
                 const c = customers.find(x => x.code === code);
                 if (c) addCust(c.phone || c.code, c.name);
                 return { label: c ? c.name : '', list: Array.from(byPhone.values()) };
@@ -8738,7 +8743,7 @@
             if (pv) { const code = pv.includes('|') ? pv.split('|').pop().trim() : pv; const p = products.find(x => x.code === code || x.name === pv); if (p) extra.productCode = p.code; }
             const count = r.all ? 'كل العملاء' : (r.reps ? r.reps.length + ' مندوب' : r.list.length + ' عميل');
             if (!confirm(`إرسال "${title}"\nإلى: ${r.label} (${count})\nتكمل؟`)) return;
-            notifSending = true;
+            notifSending = true; window.lastPushError = '';
             const btn = document.getElementById('notifSendBtn'); if (btn) btn.disabled = true;
             const prog = document.getElementById('notifSendProgress');
             const done = (reached, total) => {
@@ -8747,7 +8752,9 @@
                 if (db) { const ref = db.collection('meta').doc('notifLog'); db.runTransaction(t => t.get(ref).then(s => { const items = (s.exists && s.data().items) || []; items.unshift(entry); t.set(ref, { items: items.slice(0, 400) }); })).then(renderNotificationsLog).catch(e => console.error(e)); }
                 logAction('إرسال إشعار', `العنوان: ${title} - المستلم: ${r.label} - وصل لـ ${reached}`);
                 document.getElementById('notificationTitle').value = ''; document.getElementById('notificationMessage').value = '';
-                showToast(r.all ? (reached ? 'تم إرسال الإشعار لكل العملاء ✓' : 'تعذر إرسال الإشعار — تأكد من إعدادات OneSignal') : `تم الإرسال ✓ — وصل لـ ${reached} من ${total}`, reached ? 'success' : 'warning', 6000);
+                if (reached) showToast(r.all ? 'تم إرسال الإشعار لكل العملاء ✓' : `تم الإرسال ✓ — وصل لـ ${reached} من ${total}`, 'success', 6000);
+                else alert('الإشعار ما وصلش لحد.\n\n' + (window.lastPushError ? 'رد OneSignal: ' + window.lastPushError + '\n\n' : (r.all ? '' : 'السبب: مفيش حساب على الأبليكشن بالرقم ده (رقم العميل في السيستم مختلف عن الرقم اللي داخل بيه على الأبليكشن).\n\n')) + 'صوّر الرسالة دي وابعتها لـ Claude.');
+                window.lastPushError = '';
             };
             if (r.all) {
                 const item = notifItem(title, message, extra);
