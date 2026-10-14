@@ -1838,6 +1838,7 @@
                         <button class="btn btn-warning btn-sm" onclick="restoreCustomerRepsFromInvoices()"><i class="fas fa-user-check"></i> رجّع المناديب للعملاء</button>
                         <button class="btn btn-info btn-sm" onclick="openSalesZonesModal()"><i class="fas fa-map-marked-alt"></i> مناطق البيع</button>
                         <button class="btn btn-primary btn-sm" onclick="distributeCustomersByZone()"><i class="fas fa-random"></i> وزّع حسب المنطقة</button>
+                        <button class="btn btn-warning btn-sm admin-only" onclick="openMergeCustomers()"><i class="fas fa-object-group"></i> دمج العملاء المكررين</button>
                         <button class="btn btn-danger btn-sm" onclick="openDeleteAllCustomersModal()"><i class="fas fa-trash-alt"></i> مسح الكل</button>
                         <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleExcelUpload(event)">
                     </div>
@@ -3105,6 +3106,7 @@
         // بيقارن النسخة الحالية بآخر نسخة اترفعت، وبيبعت للسحابة بس العناصر اللي اتغيرت/اتضافت/اتشالت -
         // مش الملف كله زي الطريقة القديمة. كده لو موظفين مختلفين عدلوا أصناف مختلفة في نفس اللحظة،
         // تعديل كل واحد فيهم بيتحفظ لوحده من غير ما يمسح تعديل التاني.
+        const splitExpectedDeletes = {};
         function pushSplitDiff(key) {
             if (!db) return;
             if (key === 'inventory') { pushInventoryDiff(); return; }
@@ -3120,7 +3122,10 @@
 
             // حماية من المسح الجماعي: لو فيه أكتر من 5 عناصر هتتمسح مرة واحدة، لازم تأكيد صريح
             const toDelete = Object.keys(prevMap).filter(function(id) { return !currentMap[id]; });
-            if (toDelete.length > 5 && conf.money) {
+            // (2026-10-14) مسح متوقع (زي دمج العملاء) مايتحسبش في تنبيه المسح الجماعي
+            const expectedDel = splitExpectedDeletes[key] || new Set();
+            const riskyDeleteCount = toDelete.filter(function(id) { return !expectedDel.has(String(id)); }).length;
+            if (riskyDeleteCount > 5 && conf.money) {
                 // (2026-10-14) حركات الفلوس (خزنة/مصروفات/مرتجعات/تسويات) ممنوع تتمسح جماعي نهائيًا — بترجع لوحدها
                 toDelete.forEach(function(id) { current.push(prevMap[id]); currentMap[id] = prevMap[id]; });
                 setListByKey(key, current);
@@ -3129,7 +3134,7 @@
                 try { showToast('اتمنع مسح ' + toDelete.length + ' حركة فلوس مرة واحدة — رجعوا تاني', 'warning', 8000); } catch (e) {}
                 toDelete.length = 0;
             }
-            if (toDelete.length > 5) {
+            if (riskyDeleteCount > 5 && toDelete.length > 5) {
                 const label = { products: 'صنف', customers: 'عميل', suppliers: 'مورد' }[key] || 'سجل';
                 const okDel = confirm('تنبيه أمان: السيستم هيمسح ' + toDelete.length + ' ' + label + ' من السحابة نهائيًا.\nلو انت اللي مسحتهم بنفسك دوس OK.\nلو مش انت، دوس Cancel وهيرجعوا تاني.');
                 // (2026-10-13) بيتسجل في سجل العمليات ويظهر للمدير في الجرس — سواء اتمسحوا أو رجعوا
@@ -4055,7 +4060,7 @@
         // بحيث تقدر تتابع مديونيته ونقاطه زي أي عميل تاني في النظام
         function syncCustomerFromOrder(order) {
             if (!order.customerCode) return false;
-            const exists = customers.find(c => c.code === order.customerCode);
+            const exists = customers.find(c => c.code === order.customerCode || (Array.isArray(c.aliases) && c.aliases.includes(String(order.customerCode))));
             if (exists) return false;
             const addressParts = [order.addressDetail, order.neighborhood, order.city, order.governorate].filter(Boolean);
             customers.push({
@@ -5145,7 +5150,7 @@
                     id: Date.now(), number: String(txResult.invoiceNumber || getNextDocNumber(invoices.filter(i => i.type === 'sale'))).padStart(4, '0'),
                     // (2026-10-08) لو المندوب هو اللي سلّم: تاريخ الفاتورة = وقت التسليم الفعلي (مش وقت ما السيستم اتفتح)
                     type: 'sale', date: (order.repDelivery && order.repDelivery.at) ? new Date(order.repDelivery.at).toISOString() : new Date().toISOString(),
-                    customerCode: order.customerCode || '', customerName: order.customerName || '',
+                    customerCode: resolveCustomerCode(order.customerCode) || '', customerName: order.customerName || '',
                     salesmanCode: order.repCode || '', salesmanName: order.repName || '',
                     // (2026-10-08) مندوب العميل المسؤول وقت البيع نفسه: لو العميل اتنقل لمندوب تاني بعدين، مبيعاته القديمة تفضل للمندوب الأولاني
                     responsibleRepCode: order.repCode || (cust && cust.salesmanCode) || '',
@@ -9635,6 +9640,97 @@
             c.repHistory = (Array.isArray(c.repHistory) ? c.repHistory : []).concat([{ from, to: code, at: Date.now(), by, src: source || '' }]).slice(-15);
             if (!(opts && opts.silentLog)) { try { logAction('تغيير مندوب عميل', `${c.shopName || c.name || c.code} (${c.code}): ${repName(from)} ← ${repName(code)} — ${source || ''}`); } catch (e) {} }
             return true;
+        }
+
+        // ==================== دمج العملاء المكررين (2026-10-14) ====================
+        // العميل التاني (المكرر) بيتشال من قاعدة العملاء، وكل حاجته بتتنقل على العميل الأساسي:
+        // فواتيره ومرتجعاته وحركات الخزنة والنقاط. كوده وتليفونه بيتسجلوا "أسماء تانية" للأساسي، فأي طلب جاي
+        // بالكود القديم (زي طلبات الأبليكشن اللي كودها رقم التليفون) بيروح للأساسي ومش بيعمل عميل جديد.
+        // حساب العميل على الأبليكشن مش بيتلمس خالص. ونسخة كاملة من بيانات المكرر بتتحفظ جوه الأساسي (mergedRecords).
+        function resolveCustomerCode(code) {
+            if (!code) return code;
+            if (customers.some(c => c.code === code)) return code;
+            const p = customers.find(c => Array.isArray(c.aliases) && c.aliases.includes(String(code)));
+            return p ? p.code : code;
+        }
+        function mergeCustomers(primaryCode, dupCode, opts) {
+            opts = opts || {};
+            if (!db) return Promise.reject(new Error('لازم يكون فيه إنترنت'));
+            if (!primaryCode || !dupCode || primaryCode === dupCode) return Promise.reject(new Error('اختار عميلين مختلفين'));
+            const P = customers.find(c => c.code === primaryCode), D = customers.find(c => c.code === dupCode);
+            if (!P || !D) return Promise.reject(new Error('العميل مش موجود: ' + (!P ? primaryCode : dupCode)));
+            const by = (currentUser && (currentUser.fullName || currentUser.username)) || '';
+            // 1) النقاط: رصيد المكرر بيتضم لحساب الأساسي (نفس طريقة "توحيد النقاط")
+            const grp = loyaltyGroupFor(P.code, P.phone);
+            const dKey = loyaltyKeyOfCustomer(D);
+            [D.code, dKey].concat(loyaltyGroupFor(D.code, D.phone).codes).forEach(x => { if (x && !grp.codes.includes(x)) grp.codes.push(x); });
+            return db.runTransaction(t => readLoyaltyInTx(t, grp).then(rd => {
+                if (!rd.merge.length) return rd.points;
+                writeLoyaltyInTx(t, grp, rd, rd.points, { at: Date.now(), by, type: 'merge', delta: 0, balance: rd.points, note: 'دمج العميل ' + D.code + ' في ' + P.code });
+                return rd.points;
+            })).then(points => {
+                // 2) الفواتير
+                let invN = 0;
+                invoices.forEach(inv => {
+                    if (inv.customerCode !== D.code) return;
+                    inv.customerCode = P.code; inv.mergedFromCustomer = D.code; invN++;
+                    db.collection('invoiceRecords').doc(String(inv.id)).set({ customerCode: P.code, mergedFromCustomer: D.code }, { merge: true }).catch(e => console.error('merge invoice sync', e));
+                });
+                if (invN) _origLocalStorageSetItem('invoices', JSON.stringify(invoices));
+                // 3) المرتجعات وحركات الخزنة
+                let retN = 0, trN = 0;
+                salesReturns.forEach(r => { if (r.customerCode === D.code) { r.customerCode = P.code; r.mergedFromCustomer = D.code; retN++; } });
+                if (retN) localStorage.setItem('salesReturns', JSON.stringify(salesReturns));
+                treasury.forEach(tr => { if (tr.partyType === 'customer' && tr.party === D.code) { tr.party = P.code; tr.mergedFromCustomer = D.code; trN++; } });
+                if (trN) localStorage.setItem('treasury', JSON.stringify(treasury));
+                // 4) بيانات العميل: اللي ناقص في الأساسي بيتكمّل من المكرر، والمكرر بيتحفظ جواه كامل
+                ['phone', 'shopName', 'address', 'neighborhood', 'location', 'salesmanCode'].forEach(f => { if (!P[f] && D[f]) P[f] = D[f]; });
+                const al = new Set(Array.isArray(P.aliases) ? P.aliases : []);
+                [D.code, D.phone].concat(Array.isArray(D.aliases) ? D.aliases : []).forEach(x => { if (x && String(x) !== P.code) al.add(String(x)); });
+                P.aliases = Array.from(al);
+                P.mergedRecords = (Array.isArray(P.mergedRecords) ? P.mergedRecords : []).concat([Object.assign({}, D, { mergedAt: Date.now(), mergedBy: by })]).slice(-20);
+                if (points != null) P.loyaltyPoints = points;
+                (splitExpectedDeletes.customers = splitExpectedDeletes.customers || new Set()).add(String(D.code));
+                customers = customers.filter(c => c.code !== D.code);
+                localStorage.setItem('customers', JSON.stringify(customers));
+                logAction('دمج عميلين', `${D.shopName || D.name} (${D.code}) اتدمج في ${P.shopName || P.name} (${P.code}) — ${invN} فاتورة، ${retN} مرتجع، ${trN} حركة خزنة`);
+                if (!opts.silent) { try { renderCustomers(); updateInvoiceDropdowns(); } catch (e) {} }
+                return { invN, retN, trN };
+            });
+        }
+        function duplicateCustomerGroups() {
+            const by = {};
+            customers.forEach(c => { const k = phoneKey(c.phone) || phoneKey(c.code); if (k) (by[k] = by[k] || []).push(c); });
+            return Object.keys(by).filter(k => by[k].length > 1).map(k => ({ phone: k, list: by[k] }));
+        }
+        function openMergeCustomers() {
+            const groups = duplicateCustomerGroups();
+            const invCount = code => invoices.filter(i => i.customerCode === code).length;
+            const rowHtml = (g, gi) => `<div class="card" style="margin-bottom:10px;padding:10px 12px;"><div style="font-weight:800;margin-bottom:6px;">📞 ${escapeHtml(g.phone)}</div>` +
+                g.list.map((c, ci) => `<label style="display:flex;gap:8px;align-items:center;padding:4px 0;font-size:13px;"><input type="radio" name="mg_${gi}" value="${escapeHtml(c.code)}" ${ci === (g.list.findIndex(x => x.source !== 'app') >= 0 ? g.list.findIndex(x => x.source !== 'app') : 0) ? 'checked' : ''}> <b>${escapeHtml(c.shopName || c.name || '')}</b> <span style="color:var(--text-light);">(${escapeHtml(c.code)}) · ${escapeHtml(c.neighborhood || 'من غير حي')} · ${escapeHtml(repName(c.salesmanCode || ''))} · ${invCount(c.code)} فاتورة${c.source === 'app' ? ' · اتعمل من الأبليكشن' : ''}</span></label>`).join('') +
+                `<button class="btn btn-primary btn-sm" style="margin-top:6px;" onclick="mergeGroupFromUi(${gi})"><i class="fas fa-object-group"></i> ادمجهم في اللي متعلّم عليه</button></div>`;
+            window._mergeGroups = groups;
+            showReservedModal('دمج العملاء المكررين',
+                `<p style="font-size:13px;color:var(--text-light);margin-top:0;">دول عملاء متسجلين أكتر من مرة بنفس رقم التليفون. اختار العميل الأساسي، والباقي هيتدمج فيه: فواتيرهم ومرتجعاتهم ونقاطهم بتتنقل عليه، وحساب الأبليكشن مش بيتأثر.</p>
+                <div style="background:rgba(52,152,219,0.07);border-radius:10px;padding:10px;margin-bottom:12px;font-size:13px;"><b>دمج يدوي:</b> <input id="mgDup" class="form-control" style="display:inline-block;width:150px;" placeholder="كود المكرر"> يتدمج في <input id="mgMain" class="form-control" style="display:inline-block;width:150px;" placeholder="كود الأساسي"> <button class="btn btn-primary btn-sm" onclick="mergeManualFromUi()">ادمج</button></div>` +
+                (groups.length ? groups.map(rowHtml).join('') : '<p>مفيش عملاء متكررين بنفس الرقم 👌</p>'));
+        }
+        function mergeGroupFromUi(gi) {
+            const g = (window._mergeGroups || [])[gi]; if (!g) return;
+            const sel = document.querySelector(`input[name="mg_${gi}"]:checked`); if (!sel) return;
+            const main = sel.value, dups = g.list.map(c => c.code).filter(c => c !== main);
+            const mainC = customers.find(c => c.code === main);
+            if (!confirm(`دمج ${dups.length} عميل في "${mainC ? (mainC.shopName || mainC.name) : main}" (${main})؟\n\nالفواتير والمرتجعات والنقاط هتتنقل عليه، والعميل المكرر هيتشال من القايمة (نسخة منه بتتحفظ). حساب الأبليكشن مش هيتأثر.`)) return;
+            dups.reduce((p, d) => p.then(() => mergeCustomers(main, d, { silent: true })), Promise.resolve())
+                .then(() => { try { renderCustomers(); updateInvoiceDropdowns(); } catch (e) {} showToast('اتدمجوا ✓', 'success'); openMergeCustomers(); })
+                .catch(e => { console.error(e); showToast('تعذر الدمج: ' + (e.message || ''), 'error'); });
+        }
+        function mergeManualFromUi() {
+            const d = document.getElementById('mgDup').value.trim(), m = document.getElementById('mgMain').value.trim();
+            const D = customers.find(c => c.code === d), M = customers.find(c => c.code === m);
+            if (!D || !M) { showToast('اكتب كودين موجودين', 'error'); return; }
+            if (!confirm(`دمج "${D.shopName || D.name}" (${d}) في "${M.shopName || M.name}" (${m})؟`)) return;
+            mergeCustomers(m, d).then(() => { showToast('اتدمج ✓', 'success'); openMergeCustomers(); }).catch(e => showToast('تعذر الدمج: ' + (e.message || ''), 'error'));
         }
 
         // ---------- شاشة مناطق البيع ----------
@@ -16630,7 +16726,8 @@
                             neighborhood: headerMap.neighborhood >= 0 ? String(row[headerMap.neighborhood] || '').trim() : '',
                             salesmanCode: resolvedSalesmanCode, salesmanNameInput: salesmanNameVal, salesmanNotFound: salesmanNotFound,
                             creditLimit: creditLimitVal === '' || creditLimitVal === undefined || creditLimitVal === null ? null : parseFloat(creditLimitVal),
-                            repLocked: headerMap.repLocked >= 0 ? /^(نعم|ايوه|أيوه|اه|آه|yes|y|1|true|✓)$/i.test(String(row[headerMap.repLocked] || '').trim()) : null
+                            repLocked: headerMap.repLocked >= 0 ? /^(نعم|ايوه|أيوه|اه|آه|yes|y|1|true|✓)$/i.test(String(row[headerMap.repLocked] || '').trim()) : null,
+                            mergeInto: headerMap.mergeInto >= 0 ? String(row[headerMap.mergeInto] == null ? '' : row[headerMap.mergeInto]).trim() : ''
                         };
                         if (customer.code && customer.name && customer.code.toLowerCase() !== 'كود العميل') { excelCustomersData.push(customer); }
                         else { skippedRows++; }
@@ -16669,7 +16766,8 @@
                 salesmanName: ['اسم المندوب', 'المندوب', 'مندوب البيع', 'مندوب البيع المتابع', 'salesman', 'salesman name', 'rep name'],
                 salesmanCode: ['كود المندوب', 'salesman code', 'rep code'],
                 creditLimit: ['الحد الائتماني', 'حد الائتمان', 'credit limit', 'creditlimit'],
-                repLocked: ['استثناء من المنطقة', 'استثناء']
+                repLocked: ['استثناء من المنطقة', 'استثناء'],
+                mergeInto: ['دمج في كود', 'دمج في']
             };
             const map = {};
             for (const [key, possible] of Object.entries(possibleHeaders)) {
@@ -16688,6 +16786,7 @@
                 if (map.creditLimit === undefined) map.creditLimit = -1;
                 if (map.shopName === undefined) map.shopName = -1;
                 if (map.repLocked === undefined) map.repLocked = -1;
+                if (map.mergeInto === undefined) map.mergeInto = -1;
                 return map;
             }
             if (headers.length >= 2) {
@@ -16704,7 +16803,8 @@
                 if (exists) duplicateCount++; else validCount++;
                 if (c.salesmanNotFound) salesmanWarnCount++;
                 let issueBadge = '';
-                if (c.salesmanNotFound) issueBadge = `<span class="badge badge-warning"><i class="fas fa-exclamation-triangle"></i> اسم مندوب "${escapeHtml(c.salesmanNameInput)}" غير معروف</span>`;
+                if (c.mergeInto) issueBadge = customers.some(x => x.code === c.mergeInto) && c.mergeInto !== c.code ? `<span class="badge badge-info"><i class="fas fa-object-group"></i> هيتدمج في ${escapeHtml(c.mergeInto)}</span>` : `<span class="badge badge-danger">كود الدمج "${escapeHtml(c.mergeInto)}" مش موجود</span>`;
+                else if (c.salesmanNotFound) issueBadge = `<span class="badge badge-warning"><i class="fas fa-exclamation-triangle"></i> اسم مندوب "${escapeHtml(c.salesmanNameInput)}" غير معروف</span>`;
                 else if (exists) issueBadge = '<span class="badge badge-danger"><i class="fas fa-exclamation-circle"></i> موجود (هيتحدث لو فعلت الخيار تحت)</span>';
                 else if (!c.phone) issueBadge = '<span class="badge badge-warning"><i class="fas fa-phone-slash"></i> لا يوجد هاتف</span>';
                 else issueBadge = '<span class="badge badge-success"><i class="fas fa-check-circle"></i> جديد</span>';
@@ -16773,6 +16873,12 @@
                 }
             });
             localStorage.setItem('customers', JSON.stringify(customers));
+            // (2026-10-14) عمود "دمج في كود": بعد التحديثات، كل عميل مكتوب قدامه كود بيتدمج فيه
+            const merges = excelCustomersData.filter(c => c.mergeInto && c.mergeInto !== c.code && customers.some(x => x.code === c.code) && customers.some(x => x.code === c.mergeInto));
+            if (merges.length) {
+                merges.reduce((p, c) => p.then(n => mergeCustomers(c.mergeInto, c.code, { silent: true }).then(() => n + 1).catch(e => { console.error('merge from sheet', c.code, e); return n; })), Promise.resolve(0))
+                    .then(n => { try { renderCustomers(); updateInvoiceDropdowns(); } catch (e) {} showToast(`اتدمج ${n} عميل من الشيت ✓`, 'success', 6000); });
+            }
             logAction('استيراد عملاء من Excel', `تم إضافة ${added} عميل جديد` + (updated > 0 ? ` وتحديث ${updated} عميل (اتغير فعلاً ${changedRows}، منهم ${repChanged} مندوبهم اتغير)` : ''));
             if (unknownReps.length) setTimeout(() => alert('أسامي مناديب في الشيت السيستم ما عرفهاش (العملاء دول فضلوا على مندوبهم القديم):\n\n' + unknownReps.slice(0, 20).join('\n') + '\n\nاكتب الاسم زي ما هو في "قاعدة المناديب" وارفع تاني.'), 300);
             if (!updateExisting && skipped > 0) setTimeout(() => alert(`تنبيه: ${skipped} عميل موجود اتخطّوا ومحدش فيهم اتعدّل، لأن خانة "تحديث العملاء الموجودين" مش متعلّم عليها.`), 300);
@@ -16792,16 +16898,16 @@
         function exportCustomersToExcel() {
             if (customers.length === 0) { showToast('لا يوجد عملاء لتصديرهم', 'warning'); return; }
             // (2026-10-14) + منطقة البيع، الاستثناء، منطقة/مندوب التسليم. أعمدة "للعرض" مش بتتقري وقت الرفع
-            const templateData = [['كود العميل', 'اسم العميل', 'اسم المحل', 'رقم الهاتف', 'العنوان', 'الحي الجغرافي', 'اسم المندوب', 'الحد الائتماني', 'استثناء من المنطقة', 'منطقة البيع (للعرض)', 'منطقة التسليم (للعرض)', 'مندوب التسليم (للعرض)']];
+            const templateData = [['كود العميل', 'اسم العميل', 'اسم المحل', 'رقم الهاتف', 'العنوان', 'الحي الجغرافي', 'اسم المندوب', 'الحد الائتماني', 'استثناء من المنطقة', 'دمج في كود', 'منطقة البيع (للعرض)', 'منطقة التسليم (للعرض)', 'مندوب التسليم (للعرض)']];
             customers.forEach(c => {
                 const salesmanName = c.salesmanCode ? ((salesmen.find(s => s.code === c.salesmanCode) || {}).name || '') : '';
                 const sz = c.neighborhood ? salesZoneOfNeighborhood(c.neighborhood) : null;
                 let dz = '', dr = '';
                 try { dz = c.neighborhood ? (getOrderZoneName({ neighborhood: c.neighborhood }) || '') : ''; const z = deliveryZones.find(x => x.name === dz); dr = z ? getDeliveryReps().filter(s => (s.deliveryZoneIds || []).includes(z.id)).map(s => s.name).join(' / ') : ''; } catch (e) {}
-                templateData.push([c.code, c.name, c.shopName || '', c.phone || '', c.address || '', c.neighborhood || '', salesmanName, c.creditLimit ?? '', c.repLocked ? 'نعم' : '', sz ? sz.name : '', dz, dr]);
+                templateData.push([c.code, c.name, c.shopName || '', c.phone || '', c.address || '', c.neighborhood || '', salesmanName, c.creditLimit ?? '', c.repLocked ? 'نعم' : '', '', sz ? sz.name : '', dz, dr]);
             });
             const ws = XLSX.utils.aoa_to_sheet(templateData);
-            ws['!cols'] = [{ wch: 15 }, { wch: 35 }, { wch: 25 }, { wch: 18 }, { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 16 }, { wch: 20 }, { wch: 20 }, { wch: 22 }];
+            ws['!cols'] = [{ wch: 15 }, { wch: 35 }, { wch: 25 }, { wch: 18 }, { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 16 }, { wch: 14 }, { wch: 20 }, { wch: 20 }, { wch: 22 }];
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'العملاء');
             XLSX.writeFile(wb, 'عملاء_' + new Date().toISOString().slice(0, 10) + '.xlsx');
