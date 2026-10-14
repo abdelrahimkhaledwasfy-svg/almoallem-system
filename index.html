@@ -5550,18 +5550,12 @@
         // كل الطلبات اللي لسه متسلمتش، حتى لو من يوم بيع قبل كده (عشان مفيش طلب متأخر يقع من التجميع)
         // (2026-10-14) كل حالة لوحدها: التجميع والبيان والفواتير بيطلعوا لحالة واحدة بس (جديد / قيد التجهيز / خرج للتسليم)
         const ROUTE_STATUS_LABEL = { pending: 'جديد', preparing: 'قيد التجهيز', ready: 'خرج للتسليم' };
-        let routesStatus = 'preparing';
-        try { const st = localStorage.getItem('routesStatus'); if (ROUTE_STATUS_LABEL[st]) routesStatus = st; } catch (e) {}
+        // (2026-10-14) بطلب عيسى: البيان والتجميع والفواتير لطلبات "قيد التجهيز" بس (مرحلة المخزن)
+        const routesStatus = 'preparing';
         function routeOrders() {
             return customerOrders.filter(o => o.status === routesStatus);
         }
-        function setRoutesStatus(st) {
-            if (!ROUTE_STATUS_LABEL[st]) return;
-            routesStatus = st;
-            try { localStorage.setItem('routesStatus', st); } catch (e) {}
-            const el = document.getElementById('prepZonesReportContent');
-            if (el) el.innerHTML = buildPrepZonesReportHtml();
-        }
+
         function lateOrdersCount(orders) {
             const start = svSalesDayStart().getTime();
             return orders.filter(o => (o.createdAt || 0) < start).length;
@@ -5693,9 +5687,7 @@
             const zones = buildRoutesData();
             const isRep = routesMode === 'rep';
             const cnt = st => customerOrders.filter(o => o.status === st).length;
-            const statusBar = `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px;padding:8px 10px;background:rgba(52,152,219,0.07);border-radius:10px;"><span style="font-weight:800;">طلبات أنهي حالة؟</span>` +
-                Object.keys(ROUTE_STATUS_LABEL).map(st => `<button class="btn btn-sm ${routesStatus === st ? 'btn-primary' : 'btn-secondary'}" onclick="setRoutesStatus('${st}')">${ROUTE_STATUS_LABEL[st]} (${cnt(st)})</button>`).join('') +
-                `<span style="font-size:12px;color:var(--text-light);">التجميع والبيان والفواتير هيطلعوا لطلبات "${ROUTE_STATUS_LABEL[routesStatus]}" بس</span></div>`;
+            const statusBar = `<div style="margin-bottom:10px;padding:8px 12px;background:rgba(52,152,219,0.07);border-radius:10px;font-size:13.5px;"><b>طلبات قيد التجهيز: ${cnt('preparing')}</b> — البيان والتجميع والفواتير بيطلعوا للطلبات دي بس.${cnt('pending') ? ` <span style="color:var(--text-light);">(فيه ${cnt('pending')} طلب جديد لسه ما اتحولش لقيد التجهيز)</span>` : ''}</div>`;
             const toggle = statusBar + `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px;"><span style="font-weight:700;">تقسيم البيان والتجميع:</span><button class="btn btn-sm ${isRep ? 'btn-primary' : 'btn-secondary'}" onclick="setRoutesMode('rep')"><i class="fas fa-user"></i> باسم المندوب</button><button class="btn btn-sm ${!isRep ? 'btn-primary' : 'btn-secondary'}" onclick="setRoutesMode('zone')"><i class="fas fa-map-marker-alt"></i> حسب خط السير</button></div>`;
             if (!zones.length) return toggle + `<div class="empty-state"><i class="fas fa-boxes"></i><h3>مفيش طلبات "${ROUTE_STATUS_LABEL[routesStatus]}" دلوقتي</h3></div>`;
             const unassigned = isRep ? zones.filter(z => z.key.startsWith('__')).reduce((n, z) => n + z.orders.length, 0) : 0;
