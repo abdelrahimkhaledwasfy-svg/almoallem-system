@@ -9666,9 +9666,8 @@
             saveSalesZonesData().then(function() {
                 logAction('تعديل منطقة بيع', `${name}: ${repCodes.map(repName).join('، ') || 'بدون مندوب'} — ${nbs.length} حي`);
                 closeModal('salesZoneEditorModal'); renderSalesZones();
-                const pending = buildZoneDistribution().entries.filter(e => e.status === 'update').length;
-                if (pending && confirm(`اتحفظت المنطقة ✓\n\nفيه ${pending} عميل مندوبهم مختلف عن مندوب منطقتهم. تحب تشوفهم وتوزعهم دلوقتي؟`)) distributeCustomersByZone();
-                else showToast('اتحفظت منطقة البيع ✓');
+                const moved = autoApplyZoneReps('تعديل منطقة البيع ' + name);
+                showToast(moved ? `اتحفظت المنطقة ✓ — ${moved} عميل اتنقلوا لمندوبها (الاستثناءات زي ما هي)` : 'اتحفظت منطقة البيع ✓', 'success', 6000);
             }).catch(function() {});
         }
         function deleteSalesZone(id) {
@@ -9688,6 +9687,7 @@
                 if (zr.reps.length > 1) { multi++; return; }
                 if (!zr.code) { noRep++; return; }
                 if ((c.salesmanCode || '') === zr.code) return;
+                if (c.repLocked) return;   // استثناء: متثبّت على مندوبه بقصد
                 entries.push({ row: ++row, c, to: zr.code, status: 'update', cells: [c.shopName || c.name, c.neighborhood, zr.zone.name, repName(c.salesmanCode || ''), repName(zr.code)] });
             });
             return { entries, multi, noRep, noZone, noNb };
@@ -9708,6 +9708,24 @@
                     try { renderCustomers(); updateInvoiceDropdowns(); } catch (e) {}
                     showToast(`اتنقل ${n} عميل لمندوب منطقتهم ✓`);
                 } });
+        }
+        // (2026-10-14) الحي هو اللي بيثبّت العميل: أي عميل (مش استثناء) في منطقة بيع ليها مندوب واحد بيتنقل لوحده لمندوبها
+        function autoApplyZoneReps(reason, onlyCodes) {
+            const set = onlyCodes ? new Set(onlyCodes) : null;
+            let n = 0;
+            customers.forEach(c => {
+                if (set && !set.has(c.code)) return;
+                if (c.repLocked || !c.neighborhood) return;
+                const zr = zoneRepForNeighborhood(c.neighborhood);
+                if (!zr.code || (c.salesmanCode || '') === zr.code) return;
+                if (setCustomerRep(c, zr.code, reason, { silentLog: true })) n++;
+            });
+            if (n) {
+                localStorage.setItem('customers', JSON.stringify(customers));
+                try { logAction('تثبيت العملاء على مندوب المنطقة', `${n} عميل اتنقلوا لمندوب منطقتهم — ${reason}`); } catch (e) {}
+                try { renderCustomers(); updateInvoiceDropdowns(); } catch (e) {}
+            }
+            return n;
         }
         // سجل تغييرات مندوب العميل (بيظهر في شاشة تعديل العميل)
         function customerRepHistoryHtml(c) {
@@ -9755,7 +9773,8 @@
             const phone = document.getElementById('customerPhone').value.trim();
             const address = document.getElementById('customerAddress').value.trim();
             const neighborhood = document.getElementById('customerNeighborhood').value;
-            const salesmanCode = document.getElementById('customerSalesman').value;
+            let salesmanCode = document.getElementById('customerSalesman').value;
+            let custRepLocked = editingCustomer ? !!(customers.find(c => c.code === editingCustomer.code) || {}).repLocked : false;
             const creditLimitRaw = document.getElementById('customerCreditLimit').value;
             const creditLimit = creditLimitRaw === '' ? null : parseFloat(creditLimitRaw);
             if (!code || !name) { showToast('الرجاء ملء الحقول الإلزامية', 'error'); return; }
@@ -9776,19 +9795,23 @@
             }
             {
                 const zr = zoneRepForNeighborhood(neighborhood);
-                if (zr.code && salesmanCode !== zr.code && !confirm(`العميل ده في منطقة البيع "${zr.zone.name}" ومندوبها ${repName(zr.code)}.\nتحفظه على ${repName(salesmanCode)} برضه؟\n\n(ملحوظة: زرار "وزّع حسب المنطقة" هيرجّعه لمندوب المنطقة)`)) return;
+                // (2026-10-14) مندوب غير مندوب المنطقة = استثناء متثبّت؛ لو رفضت يرجع لمندوب المنطقة
+                if (zr.code && salesmanCode !== zr.code) {
+                    if (confirm(`العميل ده في منطقة البيع "${zr.zone.name}" ومندوبها ${repName(zr.code)}.\n\nOK = ثبّته على ${repName(salesmanCode)} كـ"استثناء" (مش هيتنقل لما المنطقة تتعدل)\nCancel = خليه على مندوب المنطقة ${repName(zr.code)}`)) custRepLocked = true;
+                    else { salesmanCode = zr.code; custRepLocked = false; }
+                } else if (zr.code && salesmanCode === zr.code) custRepLocked = false;
             }
             if (editingCustomer) {
                 const idx = customers.findIndex(c => c.code === editingCustomer.code);
                 // بنحافظ على كل بيانات العميل التانية (النقاط، اللوكيشن، ...) ونغيّر بس اللي في الشاشة
                 if (idx !== -1) {
-                    const updated = Object.assign({}, customers[idx], { code, name, shopName, phone, address, neighborhood, creditLimit });
+                    const updated = Object.assign({}, customers[idx], { code, name, shopName, phone, address, neighborhood, creditLimit, repLocked: custRepLocked });
                     setCustomerRep(updated, salesmanCode, 'تعديل بيانات العميل');
                     customers[idx] = updated;
                 }
             } else {
                 if (customers.find(c => c.code === code)) { showToast('كود العميل موجود مسبقاً', 'error'); return; }
-                const nc = { code, name, shopName, phone, address, neighborhood, salesmanCode: '', creditLimit };
+                const nc = { code, name, shopName, phone, address, neighborhood, salesmanCode: '', creditLimit, repLocked: custRepLocked };
                 setCustomerRep(nc, salesmanCode, 'إضافة عميل', { silentLog: true });
                 customers.push(nc);
             }
@@ -16555,7 +16578,7 @@
                     excelCustomerColumnsPresent = {
                         phone: headerMap.phone >= 0, address: headerMap.address >= 0, neighborhood: headerMap.neighborhood >= 0,
                         salesman: headerMap.salesmanName >= 0 || headerMap.salesmanCode >= 0, creditLimit: headerMap.creditLimit >= 0,
-                        shopName: headerMap.shopName >= 0
+                        shopName: headerMap.shopName >= 0, repLocked: headerMap.repLocked >= 0
                     };
 
                     excelCustomersData = []; let skippedRows = 0;
@@ -16571,7 +16594,7 @@
                         let resolvedSalesmanCode = headerMap.salesmanCode >= 0 ? String(row[headerMap.salesmanCode] || '').trim() : '';
                         let salesmanNotFound = false;
                         if (!resolvedSalesmanCode && salesmanNameVal) {
-                            const match = salesmen.find(s => s.name && s.name.trim().toLowerCase() === salesmanNameVal.toLowerCase());
+                            const match = findSalesmanByName(salesmanNameVal);
                             if (match) resolvedSalesmanCode = match.code; else salesmanNotFound = true;
                         }
                         const creditLimitVal = headerMap.creditLimit >= 0 ? row[headerMap.creditLimit] : '';
@@ -16582,7 +16605,8 @@
                             address: headerMap.address >= 0 ? String(row[headerMap.address] || '').trim() : '',
                             neighborhood: headerMap.neighborhood >= 0 ? String(row[headerMap.neighborhood] || '').trim() : '',
                             salesmanCode: resolvedSalesmanCode, salesmanNameInput: salesmanNameVal, salesmanNotFound: salesmanNotFound,
-                            creditLimit: creditLimitVal === '' || creditLimitVal === undefined || creditLimitVal === null ? null : parseFloat(creditLimitVal)
+                            creditLimit: creditLimitVal === '' || creditLimitVal === undefined || creditLimitVal === null ? null : parseFloat(creditLimitVal),
+                            repLocked: headerMap.repLocked >= 0 ? /^(نعم|ايوه|أيوه|اه|آه|yes|y|1|true|✓)$/i.test(String(row[headerMap.repLocked] || '').trim()) : null
                         };
                         if (customer.code && customer.name && customer.code.toLowerCase() !== 'كود العميل') { excelCustomersData.push(customer); }
                         else { skippedRows++; }
@@ -16596,6 +16620,19 @@
             event.target.value = '';
         }
 
+        // (2026-10-14) اسم المندوب في الشيت بيتعرف حتى لو بهمزة/تاء مربوطة مختلفة أو مكتوب الاسم الأول بس (لو مفيش غيره)
+        function findSalesmanByName(raw) {
+            const k = normalizeArabicText(raw).replace(/\s+/g, ' ').trim();
+            if (!k) return null;
+            const list = salesmen.filter(s => s.name);
+            const exact = list.filter(s => normalizeArabicText(s.name) === k);
+            if (exact.length) return exact.find(s => s.status === 'نشط') || exact[0];
+            const partial = list.filter(s => { const n = normalizeArabicText(s.name); return n.startsWith(k + ' ') || k.startsWith(n + ' ') || n.replace(/ /g, '') === k.replace(/ /g, ''); });
+            const active = partial.filter(s => s.status === 'نشط');
+            if (active.length === 1) return active[0];
+            if (partial.length === 1) return partial[0];
+            return null;
+        }
         function detectHeaders(headers) {
             if (!headers || headers.length === 0) return null;
             const possibleHeaders = {
@@ -16607,7 +16644,8 @@
                 neighborhood: ['الحي الجغرافي', 'الحي', 'neighborhood', 'district', 'المنطقة الجغرافية', 'حي'],
                 salesmanName: ['اسم المندوب', 'المندوب', 'مندوب البيع', 'مندوب البيع المتابع', 'salesman', 'salesman name', 'rep name'],
                 salesmanCode: ['كود المندوب', 'salesman code', 'rep code'],
-                creditLimit: ['الحد الائتماني', 'حد الائتمان', 'credit limit', 'creditlimit']
+                creditLimit: ['الحد الائتماني', 'حد الائتمان', 'credit limit', 'creditlimit'],
+                repLocked: ['استثناء من المنطقة', 'استثناء']
             };
             const map = {};
             for (const [key, possible] of Object.entries(possibleHeaders)) {
@@ -16625,6 +16663,7 @@
                 if (map.salesmanCode === undefined) map.salesmanCode = -1;
                 if (map.creditLimit === undefined) map.creditLimit = -1;
                 if (map.shopName === undefined) map.shopName = -1;
+                if (map.repLocked === undefined) map.repLocked = -1;
                 return map;
             }
             if (headers.length >= 2) {
@@ -16654,7 +16693,8 @@
             }).join('');
             document.getElementById('excelPreviewCount').innerHTML = `${excelCustomersData.length} عميل`;
             document.getElementById('excelPreviewValid').innerHTML = `<span style="color:var(--accent);"><i class="fas fa-check"></i> ${validCount} جديد</span>${duplicateCount > 0 ? ` | <span style="color:var(--danger);"><i class="fas fa-times"></i> ${duplicateCount} موجود</span>` : ''}${salesmanWarnCount > 0 ? ` | <span style="color:var(--warning);"><i class="fas fa-exclamation-triangle"></i> ${salesmanWarnCount} اسم مندوب مش متعرف عليه</span>` : ''}${skippedCount > 0 ? ` | <span style="color:var(--warning);"><i class="fas fa-filter"></i> ${skippedCount} صف تخطى</span>` : ''}`;
-            document.getElementById('excelUpdateExisting').checked = false;
+            // (2026-10-14) لو الشيت فيه عملاء موجودين (يعني شيت معدّل من التصدير) خانة التحديث بتتعلّم لوحدها
+            document.getElementById('excelUpdateExisting').checked = duplicateCount > 0;
             openModal('excelPreviewModal');
         }
 
@@ -16666,7 +16706,8 @@
 
         function importExcelCustomers() {
             const updateExisting = document.getElementById('excelUpdateExisting').checked;
-            let added = 0, updated = 0, skipped = 0;
+            let added = 0, updated = 0, skipped = 0, repChanged = 0, changedRows = 0;
+            const unknownReps = Array.from(new Set(excelCustomersData.filter(c => c.salesmanNotFound).map(c => c.salesmanNameInput)));
             // *** إصلاح 2026-10-06: قبل كده خانة المندوب الفاضية كانت بتمسح المندوب، والشيت القديم كان بيرجّع كل عميل لمندوبه القديم ***
             // من غير ما تاخد بالك. دلوقتي: الخانة الفاضية = متغيّرش، وأي تغيير في المندوب بيتعرض عليك الأول.
             if (updateExisting && excelCustomerColumnsPresent.salesman) {
@@ -16680,7 +16721,7 @@
                 if (idx !== -1) {
                     if (!updateExisting) { skipped++; return; }
                     const existing = customers[idx];
-                    const newRep = (excelCustomerColumnsPresent.salesman && c.salesmanCode && !c.salesmanNotFound) ? c.salesmanCode : (existing.salesmanCode || '');
+                    let newRep = (excelCustomerColumnsPresent.salesman && c.salesmanCode && !c.salesmanNotFound) ? c.salesmanCode : (existing.salesmanCode || '');
                     customers[idx] = Object.assign({}, existing, {
                         code: existing.code,
                         name: c.name || existing.name,
@@ -16691,24 +16732,32 @@
                         salesmanCode: existing.salesmanCode || '',
                         creditLimit: excelCustomerColumnsPresent.creditLimit ? c.creditLimit : existing.creditLimit
                     });
-                    setCustomerRep(customers[idx], newRep, 'رفع شيت عملاء Excel', { silentLog: true });
+                    // الاستثناء: من عمود "استثناء من المنطقة" لو موجود، وإلا لو الشيت حط مندوب غير مندوب المنطقة بقصد
+                    const zrI = zoneRepForNeighborhood(customers[idx].neighborhood);
+                    if (excelCustomerColumnsPresent.repLocked && c.repLocked !== null && c.repLocked !== undefined) customers[idx].repLocked = !!c.repLocked;
+                    else if (zrI.code && newRep && newRep !== zrI.code && newRep !== (existing.salesmanCode || '')) customers[idx].repLocked = true;
+                    if (zrI.code && !customers[idx].repLocked) newRep = zrI.code;
+                    if (setCustomerRep(customers[idx], newRep, 'رفع شيت عملاء Excel', { silentLog: true })) repChanged++;
+                    if (JSON.stringify(existing) !== JSON.stringify(customers[idx])) changedRows++;
                     updated++;
                 } else {
                     const nc = { code: c.code, name: c.name, shopName: c.shopName || '', phone: c.phone || '', address: c.address || '',
-                        neighborhood: c.neighborhood || '', salesmanCode: '', creditLimit: c.creditLimit };
+                        neighborhood: c.neighborhood || '', salesmanCode: '', creditLimit: c.creditLimit, repLocked: !!c.repLocked };
                     setCustomerRep(nc, (c.salesmanNotFound ? '' : c.salesmanCode) || zoneRepForNeighborhood(nc.neighborhood).code || '', 'رفع شيت عملاء Excel', { silentLog: true });
                     customers.push(nc);
                     added++;
                 }
             });
             localStorage.setItem('customers', JSON.stringify(customers));
-            logAction('استيراد عملاء من Excel', `تم إضافة ${added} عميل جديد` + (updated > 0 ? ` وتحديث ${updated} عميل` : ''));
+            logAction('استيراد عملاء من Excel', `تم إضافة ${added} عميل جديد` + (updated > 0 ? ` وتحديث ${updated} عميل (اتغير فعلاً ${changedRows}، منهم ${repChanged} مندوبهم اتغير)` : ''));
+            if (unknownReps.length) setTimeout(() => alert('أسامي مناديب في الشيت السيستم ما عرفهاش (العملاء دول فضلوا على مندوبهم القديم):\n\n' + unknownReps.slice(0, 20).join('\n') + '\n\nاكتب الاسم زي ما هو في "قاعدة المناديب" وارفع تاني.'), 300);
+            if (!updateExisting && skipped > 0) setTimeout(() => alert(`تنبيه: ${skipped} عميل موجود اتخطّوا ومحدش فيهم اتعدّل، لأن خانة "تحديث العملاء الموجودين" مش متعلّم عليها.`), 300);
             renderCustomers(); updateInvoiceDropdowns(); updateDashboardStats();
             closeModal('excelPreviewModal'); excelCustomersData = [];
             if (added > 0 || updated > 0) {
                 let msg = '';
                 if (added > 0) msg += `تم إضافة ${added} عميل جديد`;
-                if (updated > 0) msg += (msg ? ' و' : 'تم ') + `تحديث ${updated} عميل`;
+                if (updated > 0) msg += (msg ? ' و' : 'تم ') + `تحديث ${updated} عميل (اتغير فعلاً ${changedRows}، مندوب ${repChanged})`;
                 if (skipped > 0) msg += ` (تم تخطي ${skipped} موجود)`;
                 showToast(msg);
             } else {
@@ -16718,13 +16767,17 @@
 
         function exportCustomersToExcel() {
             if (customers.length === 0) { showToast('لا يوجد عملاء لتصديرهم', 'warning'); return; }
-            const templateData = [['كود العميل', 'اسم العميل', 'اسم المحل', 'رقم الهاتف', 'العنوان', 'الحي الجغرافي', 'اسم المندوب', 'الحد الائتماني']];
+            // (2026-10-14) + منطقة البيع، الاستثناء، منطقة/مندوب التسليم. أعمدة "للعرض" مش بتتقري وقت الرفع
+            const templateData = [['كود العميل', 'اسم العميل', 'اسم المحل', 'رقم الهاتف', 'العنوان', 'الحي الجغرافي', 'اسم المندوب', 'الحد الائتماني', 'استثناء من المنطقة', 'منطقة البيع (للعرض)', 'منطقة التسليم (للعرض)', 'مندوب التسليم (للعرض)']];
             customers.forEach(c => {
                 const salesmanName = c.salesmanCode ? ((salesmen.find(s => s.code === c.salesmanCode) || {}).name || '') : '';
-                templateData.push([c.code, c.name, c.shopName || '', c.phone || '', c.address || '', c.neighborhood || '', salesmanName, c.creditLimit ?? '']);
+                const sz = c.neighborhood ? salesZoneOfNeighborhood(c.neighborhood) : null;
+                let dz = '', dr = '';
+                try { dz = c.neighborhood ? (getOrderZoneName({ neighborhood: c.neighborhood }) || '') : ''; const z = deliveryZones.find(x => x.name === dz); dr = z ? getDeliveryReps().filter(s => (s.deliveryZoneIds || []).includes(z.id)).map(s => s.name).join(' / ') : ''; } catch (e) {}
+                templateData.push([c.code, c.name, c.shopName || '', c.phone || '', c.address || '', c.neighborhood || '', salesmanName, c.creditLimit ?? '', c.repLocked ? 'نعم' : '', sz ? sz.name : '', dz, dr]);
             });
             const ws = XLSX.utils.aoa_to_sheet(templateData);
-            ws['!cols'] = [{ wch: 15 }, { wch: 35 }, { wch: 25 }, { wch: 18 }, { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 15 }];
+            ws['!cols'] = [{ wch: 15 }, { wch: 35 }, { wch: 25 }, { wch: 18 }, { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 16 }, { wch: 20 }, { wch: 20 }, { wch: 22 }];
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'العملاء');
             XLSX.writeFile(wb, 'عملاء_' + new Date().toISOString().slice(0, 10) + '.xlsx');
