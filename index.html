@@ -4990,7 +4990,7 @@
                 if (list.length === 0) return '';
                 const rows = list.map((o, idx) => {
                     const itemsSummary = (o.items || []).map(i => `${i.productName} × ${i.qty}`).join('، ');
-                    const addressInfo = [o.shopName, o.addressDetail, o.neighborhood, o.city].filter(Boolean).join(' - ') || '-';
+                    const addressInfo = [o.shopName, o.addressDetail, orderNeighborhood(o), o.city].filter(Boolean).join(' - ') || '-';
                     return `<tr>
                         <td style="border:1px solid #ccc;padding:8px;text-align:center;">${idx + 1}</td>
                         <td style="border:1px solid #ccc;padding:8px;">${o.customerName || o.customerCode || '-'}<br><small>${o.phone || ''}</small></td>
@@ -7668,8 +7668,32 @@
         }
 
         // بيرجع اسم منطقة التسليم لطلب معيّن (حسب الحي المسجل بيه)، أو "بدون منطقة" لو الحي مش متعيّن له منطقة
+        // (2026-10-14) حي الطلب = حي العميل في السيستم (إنت المرجع)، ولو العميل مش متسجل في السيستم أو حيّه فاضي ← الحي اللي جه مع الطلب
+        let _custNbIdx = null, _custNbAt = 0, _custNbRef = null, _custNbLen = -1;
+        function customerNbIndex() {
+            if (_custNbIdx && _custNbRef === customers && _custNbLen === customers.length && Date.now() - _custNbAt < 3000) return _custNbIdx;
+            _custNbRef = customers; _custNbLen = customers.length;
+            // byCode: كل العملاء — byPhone: العملاء اللي إنت مسجلهم بإيدك بس (مش اللي اتعملوا أوتوماتيك من طلب أبليكشن)
+            const byCode = {}, byPhone = {};
+            const l10 = v => String(v || '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/\D/g, '').slice(-10);
+            customers.forEach(c => { if (!c || !c.neighborhood) return; byCode[c.code] = { nb: c.neighborhood, auto: c.source === 'app' }; const p = l10(c.phone); if (c.source !== 'app' && p.length === 10 && !byPhone[p]) byPhone[p] = c.neighborhood; });
+            _custNbIdx = { byCode, byPhone, l10 }; _custNbAt = Date.now();
+            return _custNbIdx;
+        }
+        function orderNeighborhood(o) {
+            if (!o) return '';
+            if (o.customerCode || o.phone) {
+                const ix = customerNbIndex();
+                const own = ix.byCode[o.customerCode];
+                if (own && !own.auto) return own.nb;
+                const manual = ix.byPhone[ix.l10(o.phone)] || ix.byPhone[ix.l10(o.customerCode)];
+                if (manual) return manual;
+                if (own) return own.nb;
+            }
+            return o.neighborhood || '';
+        }
         function getOrderZoneName(order) {
-            const zoneId = neighborhoodZoneMap[order.neighborhood];
+            const zoneId = neighborhoodZoneMap[orderNeighborhood(order)];
             if (!zoneId) return 'بدون منطقة';
             const zone = deliveryZones.find(z => z.id === zoneId);
             return zone ? zone.name : 'بدون منطقة';
@@ -11507,7 +11531,7 @@
         function getDeliveryReps() { return salesmen.filter(s => s.repType === 'delivery' && s.status !== 'غير نشط'); }
         function getOrderDeliveryAssignment(o) {
             if (o.assignedDeliveryRep && o.assignedDeliveryRep.code) return { manual: true, reps: [o.assignedDeliveryRep] };
-            const zoneId = neighborhoodZoneMap[o.neighborhood];
+            const zoneId = neighborhoodZoneMap[orderNeighborhood(o)];
             const reps = zoneId ? getDeliveryReps().filter(s => (s.deliveryZoneIds || []).includes(zoneId)) : [];
             return { manual: false, zoneId, reps };
         }
@@ -11535,9 +11559,9 @@
             if (list.length === 1) {
                 const o = list[0];
                 const a = getOrderDeliveryAssignment(o);
-                const autoText = (() => { const z = neighborhoodZoneMap[o.neighborhood]; const reps = z ? getDeliveryReps().filter(s => (s.deliveryZoneIds || []).includes(z)) : []; return reps.length ? `تلقائي حسب المنطقة (${reps.map(r => r.name).join(' / ')})` : 'تلقائي (المنطقة ملهاش مندوب، هيظهر للكل)'; })();
+                const autoText = (() => { const z = neighborhoodZoneMap[orderNeighborhood(o)]; const reps = z ? getDeliveryReps().filter(s => (s.deliveryZoneIds || []).includes(z)) : []; return reps.length ? `تلقائي حسب المنطقة (${reps.map(r => r.name).join(' / ')})` : 'تلقائي (المنطقة ملهاش مندوب، هيظهر للكل)'; })();
                 if (titleEl) titleEl.textContent = 'مندوب التسليم للطلب ده';
-                document.getElementById('deliveryAssignInfo').textContent = `${o.customerName || ''} — ${o.neighborhood || 'من غير حي'} — ${getOrderZoneName(o)}`;
+                document.getElementById('deliveryAssignInfo').textContent = `${o.customerName || ''} — ${orderNeighborhood(o) || 'من غير حي'} — ${getOrderZoneName(o)}`;
                 sel.innerHTML = `<option value="">${escapeHtml(autoText)}</option>` + getDeliveryReps().map(s => `<option value="${escapeHtml(s.code)}">${escapeHtml(s.name)}</option>`).join('');
                 sel.value = a.manual ? a.reps[0].code : '';
             } else {
@@ -13440,7 +13464,7 @@
         }
         function invoiceRouteName(inv) {
             const o = inv.sourceOrderId ? customerOrders.find(x => x.id === inv.sourceOrderId) : null;
-            const nb = (o && o.neighborhood) || (customers.find(c => c.code === inv.customerCode) || {}).neighborhood;
+            const nb = (o && orderNeighborhood(o)) || (customers.find(c => c.code === inv.customerCode) || {}).neighborhood;
             return getOrderZoneName({ neighborhood: nb });
         }
         function dailySalesData() {
