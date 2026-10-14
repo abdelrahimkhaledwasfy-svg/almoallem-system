@@ -5548,8 +5548,19 @@
         // ==================== خطوط السير: التجميع (بالوحدتين) + بيان المتحصلات + الفواتير ====================
         // خط السير = منطقة التسليم. الطلبات = كل طلبات يوم البيع اللي لسه متسلمتش (جديد / قيد التجهيز / خرج للتسليم)
         // كل الطلبات اللي لسه متسلمتش، حتى لو من يوم بيع قبل كده (عشان مفيش طلب متأخر يقع من التجميع)
+        // (2026-10-14) كل حالة لوحدها: التجميع والبيان والفواتير بيطلعوا لحالة واحدة بس (جديد / قيد التجهيز / خرج للتسليم)
+        const ROUTE_STATUS_LABEL = { pending: 'جديد', preparing: 'قيد التجهيز', ready: 'خرج للتسليم' };
+        let routesStatus = 'preparing';
+        try { const st = localStorage.getItem('routesStatus'); if (ROUTE_STATUS_LABEL[st]) routesStatus = st; } catch (e) {}
         function routeOrders() {
-            return customerOrders.filter(o => ['pending', 'preparing', 'ready'].includes(o.status));
+            return customerOrders.filter(o => o.status === routesStatus);
+        }
+        function setRoutesStatus(st) {
+            if (!ROUTE_STATUS_LABEL[st]) return;
+            routesStatus = st;
+            try { localStorage.setItem('routesStatus', st); } catch (e) {}
+            const el = document.getElementById('prepZonesReportContent');
+            if (el) el.innerHTML = buildPrepZonesReportHtml();
         }
         function lateOrdersCount(orders) {
             const start = svSalesDayStart().getTime();
@@ -5660,10 +5671,10 @@
         const pageBreak = '<div style="page-break-after:always;break-after:page;"></div>';
         function printRoute(groupKey, what) {
             const zones = buildRoutesData().filter(z => !groupKey || z.key === groupKey || z.name === groupKey);
-            if (!zones.length) { showToast('مفيش طلبات لسه متسلمتش', 'warning'); return; }
+            if (!zones.length) { showToast('مفيش طلبات "' + ROUTE_STATUS_LABEL[routesStatus] + '" دلوقتي', 'warning'); return; }
             const pages = [];
             zones.forEach(z => {
-                if (what === 'prep' || what === 'all') pages.push(prepTableHtml(z, z.kind === 'rep' ? 'مجمّع أصناف المندوب' : 'تجميع أصناف خط السير'));
+                if (what === 'prep' || what === 'all') pages.push(prepTableHtml(z, (z.kind === 'rep' ? 'مجمّع أصناف المندوب' : 'تجميع أصناف خط السير') + ' — ' + ROUTE_STATUS_LABEL[routesStatus]));
                 if (what === 'bundle' || what === 'all') {
                     pages.push(collectionsStatementHtml(z));
                     z.orders.forEach(o => pages.push(buildCustomerInvoiceHtml(orderAsInvoice(o))));
@@ -5676,13 +5687,17 @@
             if (!zones.length) { showToast('مفيش طلبات', 'warning'); return; }
             const all = { key: '__all', kind: 'zone', name: routesMode === 'rep' ? 'كل المناديب' : 'كل خطوط السير', orders: [], products: {} };
             zones.forEach(z => { all.orders = all.orders.concat(z.orders); Object.values(z.products).forEach(p => { const e = all.products[p.code] || (all.products[p.code] = Object.assign({}, p, { total: 0 })); e.total += p.total; }); });
-            printHtml(prepTableHtml(all, routesMode === 'rep' ? 'إجمالي تجميع كل المناديب' : 'إجمالي تجميع كل خطوط السير'), 'إجمالي التجميع');
+            printHtml(prepTableHtml(all, (routesMode === 'rep' ? 'إجمالي تجميع كل المناديب' : 'إجمالي تجميع كل خطوط السير') + ' — ' + ROUTE_STATUS_LABEL[routesStatus]), 'إجمالي التجميع');
         }
         function buildPrepZonesReportHtml() {
             const zones = buildRoutesData();
             const isRep = routesMode === 'rep';
-            const toggle = `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px;"><span style="font-weight:700;">تقسيم البيان والتجميع:</span><button class="btn btn-sm ${isRep ? 'btn-primary' : 'btn-secondary'}" onclick="setRoutesMode('rep')"><i class="fas fa-user"></i> باسم المندوب</button><button class="btn btn-sm ${!isRep ? 'btn-primary' : 'btn-secondary'}" onclick="setRoutesMode('zone')"><i class="fas fa-map-marker-alt"></i> حسب خط السير</button></div>`;
-            if (!zones.length) return toggle + `<div class="empty-state"><i class="fas fa-boxes"></i><h3>مفيش طلبات لسه متسلمتش</h3></div>`;
+            const cnt = st => customerOrders.filter(o => o.status === st).length;
+            const statusBar = `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px;padding:8px 10px;background:rgba(52,152,219,0.07);border-radius:10px;"><span style="font-weight:800;">طلبات أنهي حالة؟</span>` +
+                Object.keys(ROUTE_STATUS_LABEL).map(st => `<button class="btn btn-sm ${routesStatus === st ? 'btn-primary' : 'btn-secondary'}" onclick="setRoutesStatus('${st}')">${ROUTE_STATUS_LABEL[st]} (${cnt(st)})</button>`).join('') +
+                `<span style="font-size:12px;color:var(--text-light);">التجميع والبيان والفواتير هيطلعوا لطلبات "${ROUTE_STATUS_LABEL[routesStatus]}" بس</span></div>`;
+            const toggle = statusBar + `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px;"><span style="font-weight:700;">تقسيم البيان والتجميع:</span><button class="btn btn-sm ${isRep ? 'btn-primary' : 'btn-secondary'}" onclick="setRoutesMode('rep')"><i class="fas fa-user"></i> باسم المندوب</button><button class="btn btn-sm ${!isRep ? 'btn-primary' : 'btn-secondary'}" onclick="setRoutesMode('zone')"><i class="fas fa-map-marker-alt"></i> حسب خط السير</button></div>`;
+            if (!zones.length) return toggle + `<div class="empty-state"><i class="fas fa-boxes"></i><h3>مفيش طلبات "${ROUTE_STATUS_LABEL[routesStatus]}" دلوقتي</h3></div>`;
             const unassigned = isRep ? zones.filter(z => z.key.startsWith('__')).reduce((n, z) => n + z.orders.length, 0) : 0;
             const warn = unassigned ? `<div style="background:#FFF4E5;border:1px solid #F0B429;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:13px;"><i class="fas fa-exclamation-triangle"></i> فيه ${unassigned} طلب من غير مندوب تسليم واحد محدد — حددهم من صفحة الطلبات (علّم عليهم ← "تحديد مندوب التسليم للمحدد") عشان يدخلوا في بيان المندوب.</div>` : '';
             return toggle + warn + `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;"><button class="btn btn-primary btn-sm" onclick="printRoute(null,'prep')"><i class="fas fa-boxes"></i> طباعة تجميع ${isRep ? 'كل المناديب' : 'كل الخطوط'}</button><button class="btn btn-success btn-sm" onclick="printRoute(null,'bundle')"><i class="fas fa-file-invoice"></i> طباعة البيانات والفواتير ${isRep ? 'لكل المناديب' : 'لكل الخطوط'}</button><button class="btn btn-secondary btn-sm" onclick="printAllRoutesPrepTotal()"><i class="fas fa-layer-group"></i> إجمالي التجميع في صفحة</button></div>` +
@@ -14984,13 +14999,13 @@
         function renderSalesTracking() {
             const trackTodaySalesEl = document.getElementById('trackTodaySales');
             if (!trackTodaySalesEl) return;
-            const now = new Date();
-            const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            // (2026-10-14) يوم البيع من 9 الصبح لـ 9 الصبح، وبيتحسب بوقت الطلب (زي التقرير اليومي وداشبورد المشرف)
+            const startOfToday = svSalesDayStart();
             const startOfWeek = new Date(startOfToday); startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const startOfMonth = new Date(startOfToday.getFullYear(), startOfToday.getMonth(), 1, 9, 0, 0, 0);
 
-            const sales = invoices;
-            const sumSince = (since) => sales.filter(inv => new Date(inv.date) >= since).reduce((s, inv) => s + inv.grandTotal, 0);
+            const sales = invoices.filter(inv => inv.type === 'sale' || !inv.type);
+            const sumSince = (since) => { const t0 = since.getTime(); return sales.filter(inv => saleTimeOf(inv) >= t0).reduce((s, inv) => s + (Number(inv.grandTotal) || 0), 0); };
             trackTodaySalesEl.textContent = sumSince(startOfToday).toFixed(2) + ' ج.م';
             document.getElementById('trackWeekSales').textContent = sumSince(startOfWeek).toFixed(2) + ' ج.م';
             document.getElementById('trackMonthSales').textContent = sumSince(startOfMonth).toFixed(2) + ' ج.م';
@@ -16090,9 +16105,10 @@
 
         // ==================== DASHBOARD ENHANCEMENTS ====================
         // ---- فترة عرض إحصائيات لوحة التحكم (بتتقلب على الشهر الجديد تلقائيًا) ----
+        // (2026-10-14) الشهر بيتحسب بأيام البيع: من 9 الصبح يوم 1 لحد 9 الصبح يوم 1 في الشهر اللي بعده
         function getMonthRange(year, monthIndex0) {
-            const start = new Date(year, monthIndex0, 1, 0, 0, 0, 0);
-            const end = new Date(year, monthIndex0 + 1, 0, 23, 59, 59, 999);
+            const start = new Date(year, monthIndex0, 1, 9, 0, 0, 0);
+            const end = new Date(new Date(year, monthIndex0 + 1, 1, 9, 0, 0, 0).getTime() - 1);
             return { start, end };
         }
 
@@ -16127,7 +16143,7 @@
             const value = select ? select.value : 'current';
             const now = new Date();
             if (value === 'all') return null; // null = بدون فلتر تاريخ (كل الفترة)
-            if (value === 'current' || !value) return getMonthRange(now.getFullYear(), now.getMonth());
+            if (value === 'current' || !value) { const sd = svSalesDayStart(); return getMonthRange(sd.getFullYear(), sd.getMonth()); }
             const [y, mo] = value.split('-').map(Number);
             return getMonthRange(y, mo - 1);
         }
@@ -16153,7 +16169,7 @@
             const periodPurchaseInvoices = purchaseInvoices.filter(inv => inRange(inv.date));
             const periodExpenses = expenses.filter(e => inRange(e.date));
 
-            const ps = profitSummary(new Date(range.start).getTime(), new Date(range.end).getTime());
+            const ps = range ? profitSummary(new Date(range.start).getTime(), new Date(range.end).getTime()) : profitSummary(0, Date.now() + 86400000 * 3650);
             const totalSales = ps.netSales;   // صافي المبيعات بعد خصم النقاط والمرتجعات
             const totalPurchases = periodPurchaseInvoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
             const totalExpenses = ps.exp;
