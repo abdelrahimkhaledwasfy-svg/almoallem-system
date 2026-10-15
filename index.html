@@ -5254,6 +5254,8 @@
                 return true;
             }).catch(function(err) {
                 console.error('Fulfill order failed:', err);
+                // (2026-10-15) آخر سبب فشل بيتحفظ ويظهر في مربع "طلبات المندوب سلّمها ولسه ماتقفلتش"
+                try { repDeliveryErrors[order.id] = { at: Date.now(), msg: String((err && (err.message || err.code)) || err || 'خطأ غير معروف').slice(0, 200) }; } catch (e) {}
                 const prefix = order.customerName ? (order.customerName + ': ') : '';
                 showToast(prefix + (err.message || 'تعذر تنفيذ الطلب، الكمية غير متوفرة أو حدث خطأ في الاتصال'), 'error', 5000);
                 return false;
@@ -11500,7 +11502,7 @@
         // ==================== طلبات سلّمها مندوب التسليم من الأبليكشن ====================
         // المندوب بيدوس "تم التسليم" في الأبليكشن، فبيتكتب على الطلب (repDelivery). أي جهاز فاتح السيستم
         // بيقفل الطلب ويعمل الفاتورة والنقاط. fulfillOrderCore معاملة ذرية، فلو جهازين حاولوا مع بعض واحد بس بينجح.
-        const repDeliveryAttempts = {};
+        const repDeliveryAttempts = {}, repDeliveryErrors = {};
         let repStuckToastAt = 0;
         // (2026-10-08) طلبات سلّمها المندوب من أكتر من 30 دقيقة ولسه ماتقفلتش (فيه مشكلة في قفلها): بتظهر في شاشة فلوس المناديب
         function renderRepDeliveryStuck() {
@@ -11509,7 +11511,7 @@
             if (box) {
                 box.style.display = stuck.length ? '' : 'none';
                 box.innerHTML = stuck.length ? `<div style="font-weight:800;color:var(--danger);margin-bottom:8px;"><i class="fas fa-triangle-exclamation"></i> ${stuck.length} طلب المندوب سلّمهم ولسه الفاتورة متعملتش</div>` +
-                    stuck.map(o => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed var(--border);font-size:13px;"><span>${escapeHtml(o.customerName || '')} #${o.id.slice(-6)} — سلّمه ${escapeHtml(o.repDelivery.name || '')} من ${pdAgo(Number(o.repDelivery.at) || Date.now())}</span><button class="btn btn-warning btn-sm" onclick="fulfillOrderCore('${o.id}').then(ok => { if (ok) { renderCustomerOrders(); renderRepDeliveryStuck(); } })"><i class="fas fa-redo"></i> اقفله دلوقتي وشوف السبب</button></div>`).join('') : '';
+                    stuck.map(o => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed var(--border);font-size:13px;"><span>${escapeHtml(o.customerName || '')} #${o.id.slice(-6)} — سلّمه ${escapeHtml(o.repDelivery.name || '')} من ${pdAgo(Number(o.repDelivery.at) || Date.now())}${repDeliveryErrors[o.id] ? `<br><span style="color:var(--danger);font-size:12px;">السبب: ${escapeHtml(repDeliveryErrors[o.id].msg)}</span>` : `<br><span style="color:var(--text-light);font-size:12px;">مفيش جهاز حاول يقفله لسه (لازم السيستم يتفتح بحساب مدير/محاسب/أمين مخزن)</span>`}</span><button class="btn btn-warning btn-sm" onclick="fulfillOrderCore('${o.id}').then(ok => { if (ok) { renderCustomerOrders(); renderRepDeliveryStuck(); } })"><i class="fas fa-redo"></i> اقفله دلوقتي وشوف السبب</button></div>`).join('') : '';
             }
             if (stuck.length && Date.now() - repStuckToastAt > 10 * 60000 && ['admin', 'accountant'].includes(String((currentUser && currentUser.role) || '').toLowerCase())) {
                 repStuckToastAt = Date.now();
