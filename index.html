@@ -9727,7 +9727,7 @@
                 (pending.length ? Object.keys(byRep).map(k => `<div style="margin-bottom:12px;"><div style="font-weight:800;margin-bottom:6px;"><i class="fas fa-user"></i> ${escapeHtml(byRep[k].name)} — <span style="color:var(--danger);">${byRep[k].list.length} طلب بـ ${byRep[k].value.toFixed(2)} ج مستني استلام</span></div>
                     <div class="table-container"><table><thead><tr><th>العميل</th><th>المرتجع</th><th>القيمة</th><th>إمتى</th><th></th></tr></thead><tbody>` +
                     byRep[k].list.map(o => `<tr><td>${escapeHtml(o.customerName || '')}<br><span style="font-size:11px;color:var(--text-light);">#${o.id.slice(-6)} ${o.repReturnKind === 'full' ? '— الطلب كله رجع' : ''}</span></td><td style="font-size:12.5px;">${itemsTxt(o)}</td><td><strong>${(Number(o.repReturnValue) || 0).toFixed(2)}</strong></td><td style="font-size:12px;">${new Date(o.repReturnAt).toLocaleString('ar-EG')}</td>
-                        <td>${canReceiveRepReturns() ? `<button class="btn btn-success btn-sm" onclick="openRepReturnReceive('${o.id}')"><i class="fas fa-dolly"></i> استلام</button> <button class="btn btn-secondary btn-sm" style="margin-top:4px;" title="البضاعة رجعت المخزن واتعدّت في الجرد" onclick="closeRepReturnCounted('${o.id}')"><i class="fas fa-check-double"></i> قفل (اتعدّ في الجرد)</button>` : '<span style="font-size:11px;color:var(--text-light);">لأمين المخزن</span>'}</td></tr>`).join('') + '</tbody></table></div></div>').join('')
+                        <td>${canReceiveRepReturns() ? `<button class="btn btn-success btn-sm" onclick="openRepReturnReceive('${o.id}')"><i class="fas fa-dolly"></i> استلام المرتجع</button>` + (canCloseRepReturnCounted() ? ` <button class="btn btn-secondary btn-sm" style="margin-top:4px;" title="البضاعة رجعت المخزن واتعدّت في الجرد" onclick="closeRepReturnCounted('${o.id}')"><i class="fas fa-check-double"></i> قفل (اتعدّ في الجرد)</button>` : '') : '<span style="font-size:11px;color:var(--text-light);">لأمين المخزن</span>'}</td></tr>`).join('') + '</tbody></table></div></div>').join('')
                  : '<p style="color:var(--success);margin:0 0 10px;">✓ مفيش مرتجعات مستنية استلام</p>') +
                 `<div style="display:flex;gap:8px;align-items:center;margin:10px 0 6px;flex-wrap:wrap;"><strong>اتسلّم من يوم</strong> <input type="date" id="repReturnsFrom" class="form-control" style="width:auto;" value="${fromEl && fromEl.value ? fromEl.value : new Date(dayStart.getTime() - dayStart.getTimezoneOffset() * 60000).toISOString().slice(0, 10)}" onchange="renderRepReturnsCard()"> <button class="btn btn-info btn-sm" onclick="exportRepReturns()"><i class="fas fa-file-export"></i> Excel</button></div>` +
                 (received.length ? '<div class="table-container"><table><thead><tr><th>المندوب</th><th>العميل</th><th>المرتجع</th><th>القيمة</th><th>استلمه</th><th>عجز</th></tr></thead><tbody>' + received.map(o => `<tr><td>${escapeHtml(o.repReturnRepName || '')}</td><td>${escapeHtml(o.customerName || '')}</td><td style="font-size:12.5px;">${itemsTxt(o)}</td><td>${(Number(o.repReturnValue) || 0).toFixed(2)}</td><td style="font-size:12px;">${escapeHtml((o.repReturnReceived.by || ''))}<br>${new Date(o.repReturnReceived.at).toLocaleString('ar-EG')}</td><td style="color:var(--danger);font-weight:700;">${o.repReturnReceived.shortageValue ? o.repReturnReceived.shortageValue.toFixed(2) : '-'}</td></tr>`).join('') + '</tbody></table></div>' : '<p style="color:var(--text-light);font-size:13px;">مفيش مرتجعات اتسلمت في الفترة دي</p>');
@@ -9742,6 +9742,8 @@
         }
         let receivingReturnId = null;
         const canReceiveRepReturns = () => ['admin', 'warehouse_keeper'].includes(xlRole());
+        // (2026-10-17) زرار "قفل (اتعدّ في الجرد)" للمدير بس — أمين المخزن عنده "استلام المرتجع" بس
+        const canCloseRepReturnCounted = () => xlRole() === 'admin';
         function openRepReturnReceive(id) {
             if (!canReceiveRepReturns()) { showToast('استلام المرتجع لأمين المخزن أو المدير بس', 'error'); return; }
             const o = repReturnOrders.find(x => x.id === id); if (!o) return;
@@ -9753,7 +9755,7 @@
         // (2026-10-10) مرتجع البضاعة بتاعته رجعت المخزن واتعدّت في الجرد قبل ما يتعمل له "استلام":
         // بيتقفل من غير ما المخزون يزيد (عشان ماتتحسبش مرتين) ومن غير أي عجز على المندوب
         function closeRepReturnCounted(id) {
-            if (!canReceiveRepReturns()) { showToast('لأمين المخزن أو المدير بس', 'error'); return; }
+            if (!canCloseRepReturnCounted()) { showToast('قفل المرتجع من غير استلام للمدير بس', 'error'); return; }
             const o0 = repReturnOrders.find(x => x.id === id); if (!o0 || !db) return;
             const list = (o0.repReturns || []).map(r => `• ${r.productName}: ${r.qty} ${r.unit || ''}`).join('\n');
             if (!confirm(`قفل مرتجع ${o0.repReturnRepName || ''} — ${o0.customerName || ''}:\n${list}\n\nالبضاعة دي رجعت المخزن واتعدّت في الجرد؟\nالمرتجع هيتقفل من غير ما المخزون يزيد ومن غير عجز على المندوب.`)) return;
@@ -12457,7 +12459,7 @@
             p.onConfirm(p.entries.filter(e => e.status !== 'error' && e.status !== 'same'));
         }
         const xlNum = v => { if (v === '' || v === undefined) return null; const n = Number(String(v).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/,/g, '')); return isNaN(n) ? NaN : n; };
-        const xlRole = () => String((currentUser && currentUser.role) || '').toLowerCase();
+        const xlRole = () => String((currentUser && currentUser.role) || '').trim().toLowerCase();
 
         // ==================== 1) جرد المخزون بالإكسل ====================
         // ==================== مراجعة حركة الصنف ====================
