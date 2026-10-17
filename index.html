@@ -1950,6 +1950,29 @@
         </section>
 
         <section id="reports-section" class="section">
+            <!-- (2026-10-17) تقرير العملاء المرن -->
+            <div class="card" style="border-right:4px solid var(--primary);">
+                <div class="card-header"><div class="card-title"><i class="fas fa-users"></i> تقرير العملاء (أفضل العملاء / النايمين / حسب المندوب)</div></div>
+                <div style="padding:0 20px 16px;">
+                    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+                        <div class="form-group" style="margin:0;min-width:160px;"><label class="form-label">المندوب</label><select class="form-control" id="crRep"></select></div>
+                        <div class="form-group" style="margin:0;min-width:200px;"><label class="form-label">العملاء</label><select class="form-control" id="crKind" onchange="renderCustomerReportCard()"><option value="buyers">اللي اشتروا (مترتبين من الأعلى)</option><option value="all">كل العملاء</option><option value="dormant">النايمين (وقفوا شرا)</option><option value="never">عمرهم ما اشتروا</option></select></div>
+                        <div class="form-group" id="crDaysWrap" style="margin:0;max-width:150px;display:none;"><label class="form-label">ما اشتروش من (يوم)</label><input type="number" class="form-control" id="crDays" value="14" min="1"></div>
+                        <div class="form-group" style="margin:0;"><label class="form-label">من تاريخ</label><input type="date" class="form-control" id="crFrom"></div>
+                        <div class="form-group" style="margin:0;"><label class="form-label">لحد تاريخ</label><input type="date" class="form-control" id="crTo"></div>
+                        <div class="form-group" style="margin:0;max-width:150px;"><label class="form-label">أعلى كام لكل مندوب</label><input type="number" class="form-control" id="crLimit" placeholder="الكل" min="1"></div>
+                    </div>
+                    <details style="margin:12px 0;" open><summary style="cursor:pointer;font-weight:700;">الخانات اللي تظهر في التقرير</summary><div id="crColsBox" style="display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:8px;"></div></details>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                        <button class="btn btn-primary btn-sm" onclick="showCustomerReport()"><i class="fas fa-eye"></i> اعرض</button>
+                        <button class="btn btn-success btn-sm" onclick="exportCustomerReportExcel()"><i class="fas fa-file-excel"></i> تصدير Excel</button>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;"><input type="checkbox" id="crSheetPerRep" checked> كل مندوب في شيت لوحده</label>
+                        <button class="btn btn-secondary btn-sm" onclick="printCustomerReport()"><i class="fas fa-print"></i> طباعة (كل مندوب في ورقة)</button>
+                    </div>
+                    <div style="font-size:12px;color:var(--text-light);margin-top:6px;">الفترة بتتحسب بأيام البيع (9 الصبح لـ 9 الصبح). سيب التاريخ فاضي = من الأول لحد النهارده. "النايمين" بيتحسبوا بآخر شرا ليهم على الإطلاق.</div>
+                    <div id="crResult" style="margin-top:10px;"></div>
+                </div>
+            </div>
             <div style="display:flex;justify-content:flex-end;margin-bottom:15px;">
                 <button class="btn btn-success" onclick="exportAllReportsToExcel()"><i class="fas fa-file-excel"></i> تصدير كل التقارير في ملف إكسيل واحد</button>
             </div>
@@ -7454,7 +7477,7 @@
                 'users': 'المستخدمون والصلاحيات', 'audit-log': 'سجل العمليات', 'accounting': 'الشجرة المحاسبية والقيود'
             };
             document.getElementById('pageTitle').textContent = titles[sectionName] || sectionName;
-            if (sectionName === 'reports') { renderSalesSummary(); renderAdvancedReports(); renderDailyShipmentReport(); }
+            if (sectionName === 'reports') { renderSalesSummary(); renderAdvancedReports(); renderDailyShipmentReport(); try { renderCustomerReportCard(); } catch (e) { console.error(e); } }
             if (sectionName === 'app-management') { populateAppBrandCategoryOptions(); renderAppCategories(); renderAppBrands(); }
             if (sectionName === 'dashboard') { updateDashboardStats(); renderTopProducts(); renderPaymentSummary(); updateSalesChart(); renderLowStock(); applyDashboardRoleFilters(); }
             if (sectionName === 'inventory') { renderInventory(); renderMovements(); }
@@ -8724,6 +8747,131 @@
             document.getElementById('reservedModalTitle').innerHTML = '<i class="fas fa-lock" style="color:var(--warning);"></i> ' + title;
             document.getElementById('reservedModalBody').innerHTML = html;
             openModal('reservedModal');
+        }
+
+        // ==================== تقرير العملاء المرن (2026-10-17) ====================
+        // فلتر بالمندوب والفترة والنوع (كل / اشتروا / نايمين / عمرهم ما اشتروا) + اختيار الأعمدة + Excel (شيت لكل مندوب) + طباعة
+        const CR_COLS = [
+            ['code', 'كود العميل', true], ['name', 'اسم العميل', true], ['shop', 'اسم المحل', true], ['phone', 'رقم التليفون', true],
+            ['address', 'العنوان', false], ['nb', 'الحي', true], ['salesZone', 'منطقة البيع', true], ['delZone', 'منطقة التسليم', false],
+            ['rep', 'مندوب البيع', true], ['delRep', 'مندوب التسليم', false], ['total', 'إجمالي المشتريات', true], ['count', 'عدد الفواتير', true],
+            ['avg', 'متوسط الفاتورة', false], ['returns', 'المرتجعات', false], ['net', 'الصافي بعد المرتجعات', false], ['first', 'أول شراء', false],
+            ['last', 'آخر شراء', true], ['days', 'بقاله كام يوم من آخر شراء', true], ['points', 'النقاط', false], ['app', 'عنده الأبليكشن؟', false]
+        ];
+        function crSelectedCols() {
+            let saved = null; try { saved = JSON.parse(localStorage.getItem('crCols') || 'null'); } catch (e) {}
+            const boxes = document.querySelectorAll('#crColsBox input[data-col]');
+            if (boxes.length) return Array.from(boxes).filter(b => b.checked).map(b => b.dataset.col);
+            return saved || CR_COLS.filter(c => c[2]).map(c => c[0]);
+        }
+        function renderCustomerReportCard() {
+            const repSel = document.getElementById('crRep'); if (!repSel) return;
+            const cur = repSel.value;
+            repSel.innerHTML = '<option value="">كل المناديب</option><option value="__none">بدون مندوب</option>' + salesmen.filter(s => s.repType !== 'delivery').map(s => `<option value="${escapeHtml(s.code)}">${escapeHtml(s.name)}${s.status && s.status !== 'نشط' ? ' (موقوف)' : ''}</option>`).join('');
+            if (cur) repSel.value = cur;
+            const box = document.getElementById('crColsBox');
+            if (box && !box.children.length) {
+                const sel = new Set(crSelectedCols());
+                box.innerHTML = CR_COLS.map(c => `<label style="display:flex;align-items:center;gap:5px;font-size:13px;white-space:nowrap;"><input type="checkbox" data-col="${c[0]}" ${sel.has(c[0]) ? 'checked' : ''} onchange="try{localStorage.setItem('crCols', JSON.stringify(crSelectedCols()))}catch(e){}"> ${c[1]}</label>`).join('');
+            }
+            const kind = document.getElementById('crKind').value;
+            document.getElementById('crDaysWrap').style.display = kind === 'dormant' ? '' : 'none';
+        }
+        function crRange() {
+            const f = document.getElementById('crFrom').value, t = document.getElementById('crTo').value;
+            const start = f ? (() => { const [y, m, d] = f.split('-').map(Number); return new Date(y, m - 1, d, 9).getTime(); })() : 0;
+            const end = t ? (() => { const [y, m, d] = t.split('-').map(Number); return new Date(y, m - 1, d + 1, 9).getTime(); })() : Date.now() + 86400000;
+            return { start, end };
+        }
+        function buildCustomerReport() {
+            const rep = document.getElementById('crRep').value, kind = document.getElementById('crKind').value;
+            const days = Math.max(1, Number(document.getElementById('crDays').value) || 14);
+            const limit = Number(document.getElementById('crLimit').value) || 0;
+            const { start, end } = crRange();
+            const stats = {};
+            const st = code => stats[code] || (stats[code] = { total: 0, count: 0, returns: 0, first: 0, last: 0, lastAll: 0 });
+            invoices.forEach(inv => {
+                if (inv.type && inv.type !== 'sale') return;
+                const code = resolveCustomerCode(inv.customerCode); if (!code) return;
+                const t = saleTimeOf(inv), s = st(code);
+                if (t > s.lastAll) s.lastAll = t;
+                if (t < start || t >= end) return;
+                s.total += Number(inv.grandTotal) || 0; s.count++;
+                if (!s.first || t < s.first) s.first = t; if (t > s.last) s.last = t;
+            });
+            salesReturns.forEach(r => { const code = resolveCustomerCode(r.customerCode); const t = new Date(r.date).getTime(); if (code && t >= start && t < end) st(code).returns += Number(r.grandTotal) || 0; });
+            const appSet = new Set((appRegistrations || []).map(r => notifLast10(r.phone)));
+            const now = Date.now();
+            let list = customers.filter(c => !rep || (rep === '__none' ? !c.salesmanCode : c.salesmanCode === rep)).map(c => {
+                const s = stats[c.code] || { total: 0, count: 0, returns: 0, first: 0, last: 0, lastAll: 0 };
+                const sz = c.neighborhood ? salesZoneOfNeighborhood(c.neighborhood) : null;
+                let dz = '', dr = '';
+                try { dz = c.neighborhood ? getOrderZoneName({ neighborhood: c.neighborhood }) : ''; const z = deliveryZones.find(x => x.name === dz); dr = z ? getDeliveryReps().filter(x => (x.deliveryZoneIds || []).includes(z.id)).map(x => x.name).join(' / ') : ''; } catch (e) {}
+                return { c, s, sz: sz ? sz.name : '', dz: dz === 'بدون منطقة' ? '' : dz, dr };
+            });
+            if (kind === 'buyers') list = list.filter(x => x.s.count > 0);
+            else if (kind === 'dormant') list = list.filter(x => x.s.lastAll > 0 && now - x.s.lastAll > days * 86400000);
+            else if (kind === 'never') list = list.filter(x => !x.s.lastAll);
+            list.sort((a, b) => kind === 'dormant' ? (b.s.total - a.s.total) || (a.s.lastAll - b.s.lastAll) : (b.s.total - a.s.total) || String(a.c.name).localeCompare(String(b.c.name), 'ar'));
+            const groups = {};
+            list.forEach(x => { const k = x.c.salesmanCode || '__none'; (groups[k] = groups[k] || []).push(x); });
+            if (limit > 0) Object.keys(groups).forEach(k => { groups[k] = groups[k].slice(0, limit); });
+            const d = t => t ? new Date(t).toLocaleDateString('ar-EG') : '-';
+            const val = (x, col) => {
+                const c = x.c, s = x.s;
+                switch (col) {
+                    case 'code': return c.code; case 'name': return c.name || ''; case 'shop': return c.shopName || ''; case 'phone': return c.phone || '';
+                    case 'address': return c.address || ''; case 'nb': return c.neighborhood || ''; case 'salesZone': return x.sz; case 'delZone': return x.dz;
+                    case 'rep': return c.salesmanCode ? repName(c.salesmanCode) : ''; case 'delRep': return x.dr;
+                    case 'total': return Math.round(s.total * 100) / 100; case 'count': return s.count; case 'avg': return s.count ? Math.round(s.total / s.count * 100) / 100 : 0;
+                    case 'returns': return Math.round(s.returns * 100) / 100; case 'net': return Math.round((s.total - s.returns) * 100) / 100;
+                    case 'first': return d(s.first); case 'last': return d(s.lastAll); case 'days': return s.lastAll ? Math.floor((now - s.lastAll) / 86400000) : '';
+                    case 'points': return Number(c.loyaltyPoints) || 0; case 'app': return appSet.has(notifLast10(c.phone)) || appSet.has(notifLast10(c.code)) ? 'أيوه' : 'لأ';
+                }
+                return '';
+            };
+            const cols = crSelectedCols();
+            const kindLabel = { all: 'كل العملاء', buyers: 'العملاء اللي اشتروا', dormant: `العملاء النايمين (ما اشتروش من ${days} يوم)`, never: 'عملاء عمرهم ما اشتروا' }[kind];
+            const periodLabel = (start ? 'من ' + document.getElementById('crFrom').value : 'من الأول') + ' ' + (document.getElementById('crTo').value ? 'لحد ' + document.getElementById('crTo').value : 'لحد النهارده');
+            const repKeys = Object.keys(groups).sort((a, b) => (a === '__none') - (b === '__none') || repName(a).localeCompare(repName(b), 'ar'));
+            return { groups, repKeys, cols, val, kindLabel, periodLabel, count: Object.values(groups).reduce((n, g) => n + g.length, 0) };
+        }
+        function crHeader(col) { return (CR_COLS.find(c => c[0] === col) || [col, col])[1]; }
+        function crTableHtml(R, k, printMode) {
+            const rows = R.groups[k];
+            const tot = rows.reduce((s, x) => s + x.s.total, 0);
+            const th = printMode ? 'style="border:1px solid #000;padding:4px;background:#eee;"' : '', td = printMode ? 'style="border:1px solid #555;padding:4px;"' : '';
+            return `<h4 style="margin:14px 0 6px;">${escapeHtml(k === '__none' ? 'بدون مندوب' : repName(k))} — ${rows.length} عميل — إجمالي ${tot.toLocaleString('en-US', { maximumFractionDigits: 2 })} ج.م</h4>` +
+                `<div class="${printMode ? '' : 'table-container'}" style="${printMode ? '' : 'max-height:420px;overflow:auto;'}"><table style="width:100%;border-collapse:collapse;font-size:12.5px;"><thead><tr><th ${th}>#</th>${R.cols.map(c => `<th ${th}>${escapeHtml(crHeader(c))}</th>`).join('')}</tr></thead><tbody>` +
+                rows.map((x, i) => `<tr><td ${td}>${i + 1}</td>${R.cols.map(c => `<td ${td}>${escapeHtml(String(R.val(x, c)))}</td>`).join('')}</tr>`).join('') + '</tbody></table></div>';
+        }
+        function showCustomerReport() {
+            const R = buildCustomerReport();
+            const out = document.getElementById('crResult');
+            out.innerHTML = `<div style="font-weight:700;margin:6px 0;">${escapeHtml(R.kindLabel)} — ${escapeHtml(R.periodLabel)} — ${R.count} عميل</div>` + (R.count ? R.repKeys.map(k => crTableHtml(R, k, false)).join('') : '<p style="color:var(--text-light);">مفيش عملاء بالفلتر ده</p>');
+        }
+        function exportCustomerReportExcel() {
+            const R = buildCustomerReport();
+            if (!R.count) { showToast('مفيش عملاء بالفلتر ده', 'warning'); return; }
+            const perRep = document.getElementById('crSheetPerRep').checked;
+            const wb = XLSX.utils.book_new();
+            const header = ['#'].concat(R.cols.map(crHeader));
+            const sheetOf = rows => { const ws = XLSX.utils.aoa_to_sheet([header].concat(rows.map((x, i) => [i + 1].concat(R.cols.map(c => R.val(x, c)))))); ws['!cols'] = header.map(h => ({ wch: Math.max(8, Math.min(30, String(h).length + 6)) })); return ws; };
+            if (perRep) {
+                const used = {};
+                R.repKeys.forEach(k => { let n = (k === '__none' ? 'بدون مندوب' : repName(k)).replace(/[\\/?*\[\]:]/g, ' ').slice(0, 28) || 'مندوب'; while (used[n]) n += '_'; used[n] = 1; XLSX.utils.book_append_sheet(wb, sheetOf(R.groups[k]), n); });
+            } else {
+                const all = []; R.repKeys.forEach(k => R.groups[k].forEach(x => all.push(x)));
+                XLSX.utils.book_append_sheet(wb, sheetOf(all), 'العملاء');
+            }
+            XLSX.writeFile(wb, 'تقرير_العملاء_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+            logAction('تصدير تقرير العملاء', `${R.kindLabel} — ${R.count} عميل`);
+        }
+        function printCustomerReport() {
+            const R = buildCustomerReport();
+            if (!R.count) { showToast('مفيش عملاء بالفلتر ده', 'warning'); return; }
+            const pageBreak = '<div style="page-break-after:always;break-after:page;"></div>';
+            printHtml(R.repKeys.map(k => `<div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;"><div style="text-align:center;font-size:17px;font-weight:900;">المعلم — ${escapeHtml(R.kindLabel)}</div><div style="text-align:center;font-size:12px;margin-bottom:6px;">${escapeHtml(R.periodLabel)}</div>${crTableHtml(R, k, true)}</div>`).join(pageBreak), 'تقرير العملاء');
         }
 
         // ==================== الإشعارات (2026-10-13: اتهيكلت من جديد) ====================
