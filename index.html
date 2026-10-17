@@ -7444,6 +7444,41 @@
         window.addEventListener('resize', applyMobileLayoutFix);
         window.addEventListener('orientationchange', applyMobileLayoutFix);
 
+        // ==================== سرعة السيستم (2026-10-17) ====================
+        // الجداول الكبيرة (الفواتير/العملاء/الأصناف/المخزون/الموردين) والداشبورد كانت بتترسم كل شوية حتى وهي مش ظاهرة
+        // (مع كل تحديث بيوصل من السحابة)، وده اللي كان بيعلّق السيستم وقت الفتح. دلوقتي: لو الشاشة مقفولة بنأجل الرسم
+        // لحد ما تتفتح، ولو مفتوحة والتحديثات جاية ورا بعض بسرعة بنجمعها في رسمة واحدة. البيانات نفسها مبتتأثرش خالص.
+        const LAZY_RENDERS = { renderInvoices: 'invoices', renderCustomers: 'customers', renderProducts: 'products', renderInventory: 'inventory', renderMovements: 'inventory', renderSuppliers: 'suppliers', updateDashboardStats: 'dashboard' };
+        const lazyDirty = {}, lazyTimers = {}, lazyLastRun = {};
+        function installLazyRenders() {
+            Object.keys(LAZY_RENDERS).forEach(function(name) {
+                const orig = window[name]; if (typeof orig !== 'function' || orig.__lazy) return;
+                const sec = LAZY_RENDERS[name];
+                const run = function() { lazyDirty[name] = false; lazyLastRun[name] = Date.now(); return orig.apply(window, arguments); };
+                const wrapped = function() {
+                    const el = document.getElementById(sec + '-section');
+                    if (el && !el.classList.contains('active')) { lazyDirty[name] = true; return; }
+                    // الشاشة مفتوحة: لو اترسمت من أقل من ثلث ثانية، بنجمع التحديثات دي في رسمة واحدة بعد شوية
+                    if (Date.now() - (lazyLastRun[name] || 0) < 300) {
+                        lazyDirty[name] = true;
+                        clearTimeout(lazyTimers[name]);
+                        lazyTimers[name] = setTimeout(function() { if (lazyDirty[name]) { try { run(); } catch (e) { console.error(name, e); } } }, 300);
+                        return;
+                    }
+                    return run.apply(this, arguments);
+                };
+                wrapped.__lazy = true; wrapped.__orig = orig;
+                window[name] = wrapped;
+            });
+        }
+        function flushLazyRenders(sectionName) {
+            Object.keys(LAZY_RENDERS).forEach(function(name) {
+                if (LAZY_RENDERS[name] !== sectionName || !lazyDirty[name]) return;
+                const f = window[name]; lazyDirty[name] = false; lazyLastRun[name] = Date.now();
+                try { (f.__orig || f)(); } catch (e) { console.error(name, e); }
+            });
+        }
+        installLazyRenders();
         function showSection(sectionName) {
             if (isMobileDevice()) {
                 const sidebar = document.getElementById('sidebar');
@@ -7461,6 +7496,8 @@
             const sectionEl = document.getElementById(sectionName + '-section');
             if (!sectionEl) { console.error('Section not found:', sectionName); return; }
             sectionEl.classList.add('active');
+            // (2026-10-17) الشاشات اللي اتأجل رسمها وهي مقفولة بتترسم أول ما تتفتح
+            try { flushLazyRenders(sectionName); } catch (e) { console.error(e); }
             document.querySelectorAll('.nav-link').forEach(link => {
                 if (link.getAttribute('onclick') && link.getAttribute('onclick').includes("'" + sectionName + "'")) {
                     link.classList.add('active');
