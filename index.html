@@ -5608,21 +5608,42 @@
             if (a.reps && a.reps.length > 1) return { key: '__multi', name: 'أكتر من مندوب على نفس المنطقة (حدد واحد)' };
             return { key: '__none', name: 'بدون مندوب تسليم محدد' };
         }
+        // تطبيع اسم الوحدة/الصنف عشان "نص كرتونة" و"نص كرتونه " يتحسبوا نفس الحاجة
+        function prepNorm(v) { return String(v == null ? '' : v).trim().replace(/\s+/g, ' ').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[أإآ]/g, 'ا'); }
+        function prepProductsIndex() {
+            const byCode = {}, byName = {};
+            products.forEach(p => { if (!p) return; byCode[p.code] = p; const n = prepNorm(p.name); if (n && !byName[n]) byName[n] = p; });
+            return { byCode, byName };
+        }
+        // سطر واحد من الفاتورة ← كميته بالوحدة الكبيرة. لو الوحدة مش معروفة للصنف، بيطلع سطر لوحده بعلامة ⚠ بدل ما يتحسب غلط
+        function prepLineOf(it, PX) {
+            const qty = Number(it.qty) || 0;
+            const p = PX.byCode[it.productCode] || PX.byName[prepNorm(it.productName)] || null;
+            if (!p) return { key: 'n:' + prepNorm(it.productName || it.productCode), code: it.productCode, name: it.productName || it.productCode || '', brand: '', unit: it.unit || '', sec: null, odd: false, qty };
+            const sec = p.secondaryUnit && p.secondaryUnit.name ? p.secondaryUnit : null;
+            const u = prepNorm(it.unit);
+            const base = { code: p.code, name: p.name || it.productName || '', brand: p.brand || '' };
+            if (sec && u === prepNorm(sec.name)) return Object.assign(base, { key: p.code, unit: p.unit || '', sec, odd: false, qty: qty / (Number(sec.factor) || 1) });
+            if (!u || u === prepNorm(p.unit)) return Object.assign(base, { key: p.code, unit: p.unit || it.unit || '', sec, odd: false, qty });
+            return Object.assign(base, { key: p.code + '|' + u, unit: it.unit, sec: null, odd: true, qty });
+        }
         function buildRoutesData(mode) {
             mode = mode || routesMode;
             const byZone = {};
+            const PX = prepProductsIndex();
             routeOrders().forEach(o => {
                 const zoneName = getOrderZoneName(o);
                 const g = mode === 'rep' ? orderDeliveryRepGroup(o) : { key: 'zone:' + zoneName, name: zoneName };
                 const z = byZone[g.key] || (byZone[g.key] = { key: g.key, kind: mode, name: g.name, orders: [], products: {}, zonesSet: {} });
                 z.orders.push(o);
                 z.zonesSet[zoneName] = true;
-                (o.items || []).forEach(it => {
-                    const p = products.find(x => x.code === it.productCode) || {};
-                    const sec = p.secondaryUnit && p.secondaryUnit.name ? p.secondaryUnit : null;
-                    const inPrimary = sec && it.unit === sec.name ? (Number(it.qty) || 0) / (Number(sec.factor) || 1) : (Number(it.qty) || 0);
-                    const e = z.products[it.productCode] || (z.products[it.productCode] = { code: it.productCode, name: it.productName || p.name, brand: p.brand || '', unit: p.unit || it.unit || '', sec, total: 0 });
-                    e.total += inPrimary;
+                // (2026-10-17) المجمّع بيتحسب من نفس أصناف الفاتورة اللي بتتطبع بالظبط (orderAsInvoice)، عشان الاتنين يطابقوا 100%
+                const inv = orderAsInvoice(o);
+                (inv.items || []).forEach(it => {
+                    const r = prepLineOf(it, PX);
+                    const e = z.products[r.key] || (z.products[r.key] = { key: r.key, code: r.code, name: r.name, brand: r.brand, unit: r.unit, sec: r.sec, odd: r.odd, total: 0, lines: [] });
+                    e.total += r.qty;
+                    e.lines.push({ shop: inv.shopName || inv.customerName || o.customerCode || '', no: String(o.id || '').slice(-6), qty: Number(it.qty) || 0, unit: it.unit || '' });
                 });
             });
             return Object.values(byZone).sort((a, b) => (a.key.startsWith('__') ? 1 : 0) - (b.key.startsWith('__') ? 1 : 0) || a.name.localeCompare(b.name, 'ar'));
@@ -5650,14 +5671,15 @@
             const rows = list.map((p, i) => {
                 const brandRow = p.brand !== lastBrand ? `<tr><td colspan="3" style="background:#f0f0f0;font-weight:800;padding:4px 8px;border:1px solid #000;">${escapeHtml(p.brand || 'بدون شركة')}</td></tr>` : '';
                 lastBrand = p.brand;
-                return brandRow + `<tr><td style="border:1px solid #555;padding:5px;text-align:center;width:30px;">${i + 1}</td><td style="border:1px solid #555;padding:5px;">${escapeHtml(p.name)}</td><td style="border:1px solid #555;padding:5px;text-align:center;font-weight:800;font-size:14px;">${escapeHtml(formatTwoUnits(p.total, p.unit, p.sec))}</td></tr>`;
+                return brandRow + `<tr><td style="border:1px solid #555;padding:5px;text-align:center;width:30px;">${i + 1}</td><td style="border:1px solid #555;padding:5px;">${escapeHtml(p.name)}${p.odd ? ' ⚠ (وحدة مختلفة: ' + escapeHtml(p.unit) + ')' : ''}</td><td style="border:1px solid #555;padding:5px;text-align:center;font-weight:800;font-size:14px;">${escapeHtml(formatTwoUnits(p.total, p.unit, p.sec))}</td></tr>`;
             }).join('');
             return `<div style="font-family:Tajawal,Arial,sans-serif;direction:rtl;color:#000;">
                 <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:3px double #000;padding-bottom:6px;margin-bottom:8px;">
                   <img src="${invoiceSettings.logo || DEFAULT_INVOICE_LOGO}" style="width:70px;height:70px;object-fit:contain;">
                   <div style="text-align:center;"><div style="font-size:18px;font-weight:900;">${title}</div><div style="font-size:13px;">${z.kind === 'rep' ? `المندوب: <b>${escapeHtml(z.name)}</b> · ${z.orders.length} طلب${routeGroupZonesText(z) ? ' · خط السير: ' + escapeHtml(routeGroupZonesText(z)) : ''}` : `خط السير: <b>${escapeHtml(z.name)}</b> · ${z.orders.length} طلب${zoneRepsNames(z.name) ? ' · المندوب: ' + escapeHtml(zoneRepsNames(z.name)) : ''}`}</div></div>
-                  <div style="font-size:12px;text-align:left;">${new Date().toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div></div>
+                  <div style="font-size:12px;text-align:left;">${new Date().toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}<br>الساعة ${new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</div></div>
                 <table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr><th style="border:1.5px solid #000;padding:6px;">#</th><th style="border:1.5px solid #000;padding:6px;text-align:right;">الصنف</th><th style="border:1.5px solid #000;padding:6px;">الكمية المطلوبة</th></tr></thead><tbody>${rows}</tbody></table>
+                <div style="margin-top:8px;font-size:10.5px;line-height:1.6;border-top:1px dashed #777;padding-top:4px;"><b>الفواتير اللي في المجمّع ده (${z.orders.length}):</b> ${z.orders.map(o => { const inv = orderAsInvoice(o); return escapeHtml((inv.shopName || inv.customerName || o.customerCode || '') + ' #' + String(o.id || '').slice(-6)); }).join(' · ')}</div>
                 <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:20px;font-size:12px;"><div>جهّزه (أمين المخزن)<div style="border-bottom:1px dotted #000;height:24px;"></div></div><div>استلمه (المندوب)<div style="border-bottom:1px dotted #000;height:24px;"></div></div></div></div>`;
         }
         // بيان المتحصلات اليومية (وش ورق كل خط سير) - بنفس شكل دفتر المعلم الكلاسيكي، من غير "تحصيلات سابقة" و"الباقي"
@@ -5719,7 +5741,7 @@
             const zones = buildRoutesData();
             if (!zones.length) { showToast('مفيش طلبات', 'warning'); return; }
             const all = { key: '__all', kind: 'zone', name: routesMode === 'rep' ? 'كل المناديب' : 'كل خطوط السير', orders: [], products: {} };
-            zones.forEach(z => { all.orders = all.orders.concat(z.orders); Object.values(z.products).forEach(p => { const e = all.products[p.code] || (all.products[p.code] = Object.assign({}, p, { total: 0 })); e.total += p.total; }); });
+            zones.forEach(z => { all.orders = all.orders.concat(z.orders); Object.values(z.products).forEach(p => { const e = all.products[p.key] || (all.products[p.key] = Object.assign({}, p, { total: 0, lines: [] })); e.total += p.total; e.lines = e.lines.concat(p.lines || []); }); });
             printHtml(prepTableHtml(all, (routesMode === 'rep' ? 'إجمالي تجميع كل المناديب' : 'إجمالي تجميع كل خطوط السير') + ' — ' + ROUTE_STATUS_LABEL[routesStatus]), 'إجمالي التجميع');
         }
         function buildPrepZonesReportHtml() {
@@ -5735,13 +5757,21 @@
                 zones.map(z => {
                     const q = encodeURIComponent(z.key).replace(/'/g, '%27');
                     const rows = Object.values(z.products).sort((a, b) => (a.brand || 'ي').localeCompare(b.brand || 'ي', 'ar') || a.name.localeCompare(b.name, 'ar'))
-                        .map(p => `<tr><td>${escapeHtml(p.name)}${p.brand ? `<div style="font-size:11px;color:var(--text-light);">${escapeHtml(p.brand)}</div>` : ''}</td><td style="text-align:center;font-weight:800;">${escapeHtml(formatTwoUnits(p.total, p.unit, p.sec))}</td></tr>`).join('');
+                        .map(p => `<tr style="cursor:pointer;" title="دوس تشوف مين طالبه" onclick="showPrepLineDetail(decodeURIComponent('${q}'), decodeURIComponent('${encodeURIComponent(p.key).replace(/'/g, '%27')}'))"><td>${escapeHtml(p.name)}${p.odd ? ` <span class="badge badge-warning">⚠ وحدة مختلفة: ${escapeHtml(p.unit)}</span>` : ''}${p.brand ? `<div style="font-size:11px;color:var(--text-light);">${escapeHtml(p.brand)}</div>` : ''}</td><td style="text-align:center;font-weight:800;">${escapeHtml(formatTwoUnits(p.total, p.unit, p.sec))} <i class="fas fa-search" style="font-size:11px;color:var(--text-light);"></i></td></tr>`).join('');
                     return `<div class="card" style="margin-bottom:14px;"><div class="card-header"><div class="card-title">${z.kind === 'rep' ? (z.key.startsWith('__') ? '⚠️' : '👤') : '📍'} ${escapeHtml(z.name)} <span style="font-weight:400;color:var(--text-light);font-size:13px;">(${z.orders.length} طلب${z.kind === 'rep' ? (routeGroupZonesText(z) ? ' · ' + escapeHtml(routeGroupZonesText(z)) : '') : (zoneRepsNames(z.name) ? ' · ' + escapeHtml(zoneRepsNames(z.name)) : '')})</span>${lateOrdersCount(z.orders) ? ` <span class="badge badge-danger">منهم ${lateOrdersCount(z.orders)} متأخر من يوم سابق</span>` : ''}</div>
                         <div style="display:flex;gap:8px;"><button class="btn btn-primary btn-sm" onclick="printRoute(decodeURIComponent('${q}'),'prep')"><i class="fas fa-boxes"></i> التجميع</button><button class="btn btn-success btn-sm" onclick="printRoute(decodeURIComponent('${q}'),'bundle')"><i class="fas fa-file-invoice"></i> البيان + الفواتير</button></div></div>
                         <div class="table-container"><table><thead><tr><th>الصنف</th><th>الكمية</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
                 }).join('');
         }
 
+        // تفصيل صنف في المجمّع: كل فاتورة وكميتها، عشان أي حد يراجع المجمّع على الفواتير
+        function showPrepLineDetail(groupKey, prodKey) {
+            const z = buildRoutesData().find(x => x.key === groupKey); if (!z) return;
+            const p = z.products[prodKey]; if (!p) return;
+            showReservedModal('تفصيل: ' + p.name, `<p style="margin-top:0;">المندوب/الخط: <b>${escapeHtml(z.name)}</b> — الإجمالي: <b>${escapeHtml(formatTwoUnits(p.total, p.unit, p.sec))}</b></p>` +
+                `<div class="table-container"><table><thead><tr><th>#</th><th>العميل</th><th>رقم الطلب</th><th>الكمية في الفاتورة</th></tr></thead><tbody>` +
+                p.lines.map((l, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(l.shop)}</td><td>#${escapeHtml(l.no)}</td><td style="font-weight:800;">${l.qty} ${escapeHtml(l.unit)}</td></tr>`).join('') + '</tbody></table></div>');
+        }
         function setRoutesMode(m) {
             routesMode = m === 'zone' ? 'zone' : 'rep';
             try { localStorage.setItem('routesMode', routesMode); } catch (e) {}
