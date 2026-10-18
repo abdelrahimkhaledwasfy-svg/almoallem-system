@@ -1751,6 +1751,18 @@
             <!-- الإشعارات (2026-10-13: اتهيكلت من جديد) -->
             <div class="card" id="appMgmtTab-notifications" style="display:none;">
                 <div class="card-header"><div class="card-title"><i class="fas fa-paper-plane"></i> إرسال إشعار</div></div>
+                <!-- (2026-10-18) إشعار النقاط: كل عميل عنده نقاط بيوصله إشعار برصيده هو -->
+                <div style="margin:0 20px 16px;max-width:620px;padding:14px;border-radius:12px;background:rgba(201,162,77,0.10);border:1px solid rgba(201,162,77,0.45);">
+                    <div style="font-weight:800;margin-bottom:6px;">🎁 فكّر العملاء بنقاطهم</div>
+                    <div style="font-size:12.5px;color:var(--text-light);margin-bottom:8px;">كل عميل عنده الأبليكشن وليه نقاط، بيوصله إشعار برصيده هو. الكلمات دي بتتبدل لوحدها: <b>{الاسم}</b> <b>{النقاط}</b> <b>{القيمة}</b></div>
+                    <input type="text" class="form-control" id="ptsNotifTitle" placeholder="العنوان" style="margin-bottom:6px;">
+                    <textarea class="form-control" id="ptsNotifBody" rows="2" placeholder="الرسالة"></textarea>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;">
+                        <button class="btn btn-primary btn-sm" id="ptsNotifBtn" onclick="sendPointsReminder()"><i class="fas fa-gift"></i> ابعت لكل اللي ليهم نقاط</button>
+                        <button class="btn btn-secondary btn-sm" onclick="previewPointsReminder()"><i class="fas fa-list"></i> مين هيوصله؟</button>
+                        <span id="ptsNotifInfo" style="font-size:12.5px;color:var(--text-light);"></span>
+                    </div>
+                </div>
                 <div style="padding:0 20px 20px;max-width:620px;">
                     <div class="form-group">
                         <label class="form-label">مين هيستلم؟</label>
@@ -9221,7 +9233,79 @@
             const worker = () => i >= jobs.length ? Promise.resolve() : jobs[i++]().then(n => { reached += n || 0; if (prog) prog.textContent = `جاري الإرسال... ${i} من ${jobs.length}`; }).catch(() => {}).then(worker);
             Promise.all([worker(), worker(), worker(), worker()]).then(() => done(reached, jobs.length));
         }
+        // ---------- إشعار النقاط (2026-10-18) ----------
+        const PTS_TPL_DEFAULT = { title: 'عندك {النقاط} نقطة مستنياك 🎁', body: 'يا {الاسم}، رصيدك {النقاط} نقطة = {القيمة} جنيه خصم. سارع واطلب دلوقتي واستخدمها من الأبليكشن 🛒' };
+        function ptsTpl() { const t = (notifSettingsRaw || {}).pointsTpl || {}; return { title: t.title || PTS_TPL_DEFAULT.title, body: t.body || PTS_TPL_DEFAULT.body }; }
+        function fillPointsReminderForm() {
+            const t = ptsTpl(), a = document.getElementById('ptsNotifTitle'), b = document.getElementById('ptsNotifBody');
+            if (a && !a.value) a.value = t.title; if (b && !b.value) b.value = t.body;
+        }
+        function loadLoyaltyDocsOnce() {
+            if (loyaltyDocs && Object.keys(loyaltyDocs).length) return Promise.resolve(loyaltyDocs);
+            if (!db) return Promise.resolve({});
+            return db.collection('customerLoyaltyPoints').get().then(snap => { const m = {}; snap.docs.forEach(d => { m[d.id] = d.data() || {}; }); loyaltyDocs = m; return m; });
+        }
+        // كل اللي ليهم نقاط (> 0) وعندهم حساب على الأبليكشن — واحد لكل رقم
+        function pointsReminderList() {
+            return loadLoyaltyDocsOnce().then(docs => {
+                const app = new Map();
+                (appRegistrations || []).forEach(r => { const l = notifLast10(r.phone); if (l.length === 10 && !app.has(l)) app.set(l, r); });
+                const byL = new Map();
+                Object.keys(docs).forEach(k => {
+                    const d = docs[k] || {}; if (d.mergedInto) return;
+                    const pts = Math.floor(Number(d.points) || 0); if (pts <= 0) return;
+                    let l = notifLast10(k);
+                    if (l.length !== 10) { const c = customers.find(x => x.code === k); l = c ? notifLast10(c.phone) : ''; }
+                    if (l.length !== 10 || !app.has(l)) return;
+                    const prev = byL.get(l); if (prev && prev.points >= pts) return;
+                    const r = app.get(l), c = customers.find(x => notifLast10(x.phone) === l);
+                    byL.set(l, { phone: r.phone, points: pts, name: (c && (c.shopName || c.name)) || r.shopName || r.customerName || '' });
+                });
+                return Array.from(byL.values()).sort((a, b) => b.points - a.points);
+            });
+        }
+        function previewPointsReminder() {
+            pointsReminderList().then(list => {
+                const pv = Number(loyaltySettings.pointValue) || 1;
+                showReservedModal('مين هيوصله إشعار النقاط (' + list.length + ')', list.length ? `<div class="table-container"><table><thead><tr><th>#</th><th>العميل</th><th>التليفون</th><th>النقاط</th><th>القيمة</th></tr></thead><tbody>${list.map((x, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(x.name)}</td><td>${escapeHtml(x.phone)}</td><td><b>${x.points}</b></td><td>${(x.points * pv).toFixed(2)} ج</td></tr>`).join('')}</tbody></table></div>` : '<p>مفيش عملاء على الأبليكشن ليهم نقاط دلوقتي</p>');
+            }).catch(e => showToast('تعذر تحميل النقاط: ' + (e.message || ''), 'error'));
+        }
+        let ptsSending = false;
+        function sendPointsReminder() {
+            if (ptsSending) return;
+            const title = document.getElementById('ptsNotifTitle').value.trim(), body = document.getElementById('ptsNotifBody').value.trim();
+            if (!title || !body) { showToast('اكتب العنوان والرسالة', 'error'); return; }
+            const info = document.getElementById('ptsNotifInfo'), btn = document.getElementById('ptsNotifBtn');
+            pointsReminderList().then(list => {
+                if (!list.length) { showToast('مفيش عملاء على الأبليكشن ليهم نقاط دلوقتي', 'warning'); return; }
+                const pv = Number(loyaltySettings.pointValue) || 1;
+                const ex = list[0], v0 = { 'الاسم': ex.name || 'عميلنا', 'النقاط': ex.points, 'القيمة': (ex.points * pv).toLocaleString('en-US', { maximumFractionDigits: 2 }) };
+                if (!confirm(`هيتبعت إشعار النقاط لـ ${list.length} عميل.\n\nمثال (${ex.name}):\n${nsFill(title, v0)}\n${nsFill(body, v0)}\n\nتكمل؟`)) return;
+                ptsSending = true; if (btn) btn.disabled = true;
+                // الرسالة بتتحفظ عشان المرة الجاية تلاقيها زي ما هي
+                if (db) db.collection('meta').doc('notifSettings').set({ pointsTpl: { title, body } }, { merge: true }).catch(e => console.error(e));
+                notifSettingsRaw = Object.assign({}, notifSettingsRaw || {}, { pointsTpl: { title, body } });
+                window.lastPushError = '';
+                let i = 0, reached = 0;
+                const worker = () => {
+                    if (i >= list.length) return Promise.resolve();
+                    const x = list[i++];
+                    const v = { 'الاسم': x.name || 'عميلنا', 'النقاط': x.points, 'القيمة': (x.points * pv).toLocaleString('en-US', { maximumFractionDigits: 2 }) };
+                    return notifyCustomerPhone(x.phone, nsFill(title, v), nsFill(body, v), { kind: 'points' }, x.phone)
+                        .then(n => { reached += n || 0; if (info) info.textContent = `جاري الإرسال... ${i} من ${list.length}`; }).catch(() => {}).then(worker);
+                };
+                Promise.all([worker(), worker(), worker(), worker()]).then(() => {
+                    ptsSending = false; if (btn) btn.disabled = false; if (info) info.textContent = '';
+                    const entry = { id: 'notif_' + Date.now(), title, message: body, targetLabel: 'كل اللي ليهم نقاط (رسالة لكل عميل برصيده)', reached, total: list.length, by: (currentUser && (currentUser.fullName || currentUser.username)) || '', createdAt: Date.now() };
+                    if (db) { const ref = db.collection('meta').doc('notifLog'); db.runTransaction(t => t.get(ref).then(s => { const items = (s.exists && s.data().items) || []; items.unshift(entry); t.set(ref, { items: items.slice(0, 400) }); })).then(renderNotificationsLog).catch(e => console.error(e)); }
+                    logAction('إرسال إشعار النقاط', `${list.length} عميل — وصل لـ ${reached}`);
+                    if (reached) showToast(`تم ✓ — إشعار النقاط وصل لـ ${reached} موبايل من ${list.length} عميل`, 'success', 7000);
+                    else alert('الإشعار ما وصلش لحد.' + (window.lastPushError ? '\n\nرد OneSignal: ' + window.lastPushError : '') + '\n\nصوّر الرسالة دي وابعتها لـ Claude.');
+                });
+            }).catch(e => { ptsSending = false; if (btn) btn.disabled = false; showToast('تعذر تحميل النقاط: ' + (e.message || ''), 'error'); });
+        }
         function renderNotificationsLog() {
+            try { fillPointsReminderForm(); } catch (e) {}
             const tbody = document.getElementById('appNotificationsTable');
             if (!tbody) return;
             const draw = (newer) => {
@@ -9256,6 +9340,7 @@
             document.querySelectorAll('#notifStaffToggles .ns-staff').forEach(x => { data.staff[x.dataset.k] = x.checked; });
             data.lateHours = Math.max(1, Number(document.getElementById('notifLateHours').value) || 3);
             data.bigTreasury = Math.max(0, Number(document.getElementById('notifBigTreasury').value) || 0);
+            if ((notifSettingsRaw || {}).pointsTpl) data.pointsTpl = notifSettingsRaw.pointsTpl;
             db.collection('meta').doc('notifSettings').set(data).then(() => {
                 notifSettingsRaw = data;
                 logAction('تعديل إعدادات الإشعارات', 'اتحفظت');
