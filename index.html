@@ -9246,28 +9246,48 @@
             return db.collection('customerLoyaltyPoints').get().then(snap => { const m = {}; snap.docs.forEach(d => { m[d.id] = d.data() || {}; }); loyaltyDocs = m; return m; });
         }
         // كل اللي ليهم نقاط (> 0) وعندهم حساب على الأبليكشن — واحد لكل رقم
+        // (2026-10-18) المصدر الأساسي = نقاط العميل في قاعدة العملاء (نفس الرقم اللي العميل شايفه في الأبليكشن)،
+        // وكمان دفتر النقاط. والتأكد من الأبليكشن بيتم برقم التليفون (حتى لو قايمة حسابات الأبليكشن لسه ما اتحملتش)
         function pointsReminderList() {
-            return loadLoyaltyDocsOnce().then(docs => {
-                const app = new Map();
-                (appRegistrations || []).forEach(r => { const l = notifLast10(r.phone); if (l.length === 10 && !app.has(l)) app.set(l, r); });
+            return loadLoyaltyDocsOnce().catch(() => ({})).then(docs => {
                 const byL = new Map();
-                Object.keys(docs).forEach(k => {
+                const add = (phone, pts, name) => {
+                    const l = notifLast10(phone); pts = Math.floor(Number(pts) || 0);
+                    if (l.length !== 10 || pts <= 0) return;
+                    const prev = byL.get(l);
+                    if (!prev) byL.set(l, { phone: '0' + l, points: pts, name: name || '' });
+                    else { if (pts > prev.points) prev.points = pts; if (!prev.name && name) prev.name = name; }
+                };
+                customers.forEach(c => { if (!c) return; add(c.phone || c.code, c.loyaltyPoints, c.shopName || c.name); if (notifLast10(c.code).length === 10 && notifLast10(c.code) !== notifLast10(c.phone)) add(c.code, c.loyaltyPoints, c.shopName || c.name); });
+                Object.keys(docs || {}).forEach(k => {
                     const d = docs[k] || {}; if (d.mergedInto) return;
-                    const pts = Math.floor(Number(d.points) || 0); if (pts <= 0) return;
-                    let l = notifLast10(k);
-                    if (l.length !== 10) { const c = customers.find(x => x.code === k); l = c ? notifLast10(c.phone) : ''; }
-                    if (l.length !== 10 || !app.has(l)) return;
-                    const prev = byL.get(l); if (prev && prev.points >= pts) return;
-                    const r = app.get(l), c = customers.find(x => notifLast10(x.phone) === l);
-                    byL.set(l, { phone: r.phone, points: pts, name: (c && (c.shopName || c.name)) || r.shopName || r.customerName || '' });
+                    let ph = k; if (notifLast10(k).length !== 10) { const c = customers.find(x => x.code === k); ph = c ? c.phone : ''; }
+                    const c2 = customers.find(x => notifLast10(x.phone) === notifLast10(ph));
+                    add(ph, d.points, c2 ? (c2.shopName || c2.name) : '');
                 });
-                return Array.from(byL.values()).sort((a, b) => b.points - a.points);
+                const cand = Array.from(byL.values());
+                const out = []; let i = 0;
+                const worker = () => {
+                    if (i >= cand.length) return Promise.resolve();
+                    const x = cand[i++];
+                    return resolveAppIds(x.phone).then(ids => {
+                        if (!ids.length) return;
+                        const r = (appRegistrations || []).find(q => notifLast10(q.phone) === notifLast10(x.phone));
+                        out.push(Object.assign(x, { appId: ids[0], name: x.name || (r && (r.shopName || r.customerName)) || '' }));
+                    }).catch(() => {}).then(worker);
+                };
+                const info = document.getElementById('ptsNotifInfo'); if (info) info.textContent = `بدوّر في ${cand.length} عميل ليهم نقاط...`;
+                return Promise.all([worker(), worker(), worker(), worker(), worker(), worker()]).then(() => {
+                    if (info) info.textContent = '';
+                    window._ptsCandidates = cand.length;
+                    return out.sort((a, b) => b.points - a.points);
+                });
             });
         }
         function previewPointsReminder() {
             pointsReminderList().then(list => {
                 const pv = Number(loyaltySettings.pointValue) || 1;
-                showReservedModal('مين هيوصله إشعار النقاط (' + list.length + ')', list.length ? `<div class="table-container"><table><thead><tr><th>#</th><th>العميل</th><th>التليفون</th><th>النقاط</th><th>القيمة</th></tr></thead><tbody>${list.map((x, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(x.name)}</td><td>${escapeHtml(x.phone)}</td><td><b>${x.points}</b></td><td>${(x.points * pv).toFixed(2)} ج</td></tr>`).join('')}</tbody></table></div>` : '<p>مفيش عملاء على الأبليكشن ليهم نقاط دلوقتي</p>');
+                showReservedModal('مين هيوصله إشعار النقاط (' + list.length + ')', list.length ? `<div class="table-container"><table><thead><tr><th>#</th><th>العميل</th><th>التليفون</th><th>النقاط</th><th>القيمة</th></tr></thead><tbody>${list.map((x, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(x.name)}</td><td>${escapeHtml(x.phone)}</td><td><b>${x.points}</b></td><td>${(x.points * pv).toFixed(2)} ج</td></tr>`).join('')}</tbody></table></div>` : `<p>مفيش عملاء على الأبليكشن ليهم نقاط دلوقتي (فيه ${window._ptsCandidates || 0} عميل ليهم نقاط في السيستم، بس أرقامهم مش متسجلة على الأبليكشن)</p>`);
             }).catch(e => showToast('تعذر تحميل النقاط: ' + (e.message || ''), 'error'));
         }
         let ptsSending = false;
@@ -9277,7 +9297,7 @@
             if (!title || !body) { showToast('اكتب العنوان والرسالة', 'error'); return; }
             const info = document.getElementById('ptsNotifInfo'), btn = document.getElementById('ptsNotifBtn');
             pointsReminderList().then(list => {
-                if (!list.length) { showToast('مفيش عملاء على الأبليكشن ليهم نقاط دلوقتي', 'warning'); return; }
+                if (!list.length) { showToast(`مفيش عملاء على الأبليكشن ليهم نقاط (${window._ptsCandidates || 0} عميل ليهم نقاط في السيستم من غير أبليكشن)`, 'warning', 6000); return; }
                 const pv = Number(loyaltySettings.pointValue) || 1;
                 const ex = list[0], v0 = { 'الاسم': ex.name || 'عميلنا', 'النقاط': ex.points, 'القيمة': (ex.points * pv).toLocaleString('en-US', { maximumFractionDigits: 2 }) };
                 if (!confirm(`هيتبعت إشعار النقاط لـ ${list.length} عميل.\n\nمثال (${ex.name}):\n${nsFill(title, v0)}\n${nsFill(body, v0)}\n\nتكمل؟`)) return;
@@ -9291,7 +9311,7 @@
                     if (i >= list.length) return Promise.resolve();
                     const x = list[i++];
                     const v = { 'الاسم': x.name || 'عميلنا', 'النقاط': x.points, 'القيمة': (x.points * pv).toLocaleString('en-US', { maximumFractionDigits: 2 }) };
-                    return notifyCustomerPhone(x.phone, nsFill(title, v), nsFill(body, v), { kind: 'points' }, x.phone)
+                    return notifyCustomerPhone(x.phone, nsFill(title, v), nsFill(body, v), { kind: 'points' }, x.appId)
                         .then(n => { reached += n || 0; if (info) info.textContent = `جاري الإرسال... ${i} من ${list.length}`; }).catch(() => {}).then(worker);
                 };
                 Promise.all([worker(), worker(), worker(), worker()]).then(() => {
