@@ -1763,6 +1763,27 @@
                         <span id="ptsNotifInfo" style="font-size:12.5px;color:var(--text-light);"></span>
                     </div>
                 </div>
+                <!-- (2026-10-18) أدوات التسويق -->
+                <div style="margin:0 20px 16px;max-width:620px;padding:14px;border-radius:12px;background:rgba(52,152,219,0.06);border:1px solid rgba(52,152,219,0.35);">
+                    <div style="font-weight:800;margin-bottom:8px;">🎯 أدوات التسويق</div>
+                    <div style="display:grid;gap:8px;font-size:13px;">
+                        <label style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><input type="checkbox" id="promoRefOn"> <b>هات صاحبك:</b> لما صاحبه يطلب أول طلب، الاتنين ياخدوا <input type="number" id="promoRefPts" class="form-control" style="width:80px;display:inline-block;" min="1" value="50"> نقطة</label>
+                        <label style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><input type="checkbox" id="promoChOn"> <b>تحدي الشهر:</b> اللي يكمّل <input type="number" id="promoChOrders" class="form-control" style="width:70px;display:inline-block;" min="2" value="4"> طلبات في الشهر ياخد <input type="number" id="promoChPts" class="form-control" style="width:80px;display:inline-block;" min="1" value="100"> نقطة</label>
+                        <div><button class="btn btn-success btn-sm admin-only" onclick="savePromoSettings()"><i class="fas fa-save"></i> حفظ (بيظهر للعملاء في الأبليكشن)</button></div>
+                    </div>
+                    <div style="border-top:1px dashed var(--border);margin:12px 0 8px;"></div>
+                    <div style="font-size:12.5px;color:var(--text-light);margin-bottom:6px;">إشعارات بضغطة (كل واحد برسالته بالاسم — ✏️ لتعديل الرسالة):</div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                        <span><button class="btn btn-primary btn-sm" onclick="sendAbandonedCartReminders()"><i class="fas fa-shopping-cart"></i> السلة المنسية</button><button class="btn btn-secondary btn-sm" title="تعديل الرسالة" onclick="editPromoTpl('cart')">✏️</button></span>
+                        <span><button class="btn btn-primary btn-sm" onclick="sendUsualOrderReminders()"><i class="fas fa-calendar-check"></i> تذكير طلب بكرة المعتاد</button><button class="btn btn-secondary btn-sm" title="تعديل الرسالة" onclick="editPromoTpl('usual')">✏️</button></span>
+                        <span><button class="btn btn-primary btn-sm" onclick="sendBackInStockNotices()"><i class="fas fa-box"></i> رجع للمخزن</button><button class="btn btn-secondary btn-sm" title="تعديل الرسالة" onclick="editPromoTpl('back')">✏️</button></span>
+                    </div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+                        <button class="btn btn-info btn-sm" onclick="showOpenedNoOrderReport()"><i class="fas fa-eye"></i> فتحوا الأبليكشن وما طلبوش</button>
+                        <button class="btn btn-info btn-sm" onclick="showNotifPerformance()"><i class="fas fa-chart-line"></i> أداء الإشعارات</button>
+                        <span id="promoInfo" style="font-size:12.5px;color:var(--text-light);"></span>
+                    </div>
+                </div>
                 <div style="padding:0 20px 20px;max-width:620px;">
                     <div class="form-group">
                         <label class="form-label">مين هيستلم؟</label>
@@ -3451,6 +3472,7 @@
                     try { startRepReturnsListenerSys(); } catch (e) { console.error(e); }
                     try { startNotifSettingsListener(); } catch (e) { console.error(e); }
                     try { startCashCloseListener(); } catch (e) { console.error(e); }
+                    try { startPromoListener(); } catch (e) { console.error(e); }
                     setTimeout(function() { try { renderStaffBell(); } catch (e) {} }, 5000);
                     setTimeout(function() { try { startLoyaltyListener(); } catch (e) { console.error(e); } }, 4000);
                     try { activateMoneySplit(); } catch (e) { console.error(e); }
@@ -4158,6 +4180,7 @@
             db.collection('stockMovementRecords').orderBy('date', 'desc').limit(2000).onSnapshot(function(snap) {
                 stockMovements = snap.docs.map(function(d) { return d.data(); });
                 localStorage.setItem('stockMovements', JSON.stringify(stockMovements));
+                try { schedulePublishProductBadges(); } catch (e) {}
                 try { renderMovements(); } catch (e) { console.error('refresh after stock movement update failed:', e); }
             }, function(err) { console.error('Stock movement records listener error:', err); });
         }
@@ -5293,7 +5316,9 @@
                 order.status = 'delivered';
                 localStorage.setItem('customerOrders', JSON.stringify(customerOrders));
                 if (!opts.silent) showToast('تم تسجيل تسليم الطلب وإصدار الفاتورة بنجاح');
-                notifyOrderEvent(order, 'delivered');
+                const _dInv = invoices.find(i => i.sourceOrderId === order.id);
+                notifyOrderEvent(order, 'delivered', deliveredPointsVars(_dInv));
+                try { promoAfterDelivery(order, _dInv); } catch (e) { console.error(e); }
                 updateDashboardStats(); renderInvoices(); renderRecentInvoices(); renderInventory(); renderMovements(); renderLowStock(); renderCustomers();
                 return true;
             }).catch(function(err) {
@@ -9066,7 +9091,7 @@
                 const e = s.events[ev];
                 if (e && e.on) {
                     const pi = orderPhoneInfo(order);
-                    if (pi.phone) notifyCustomerPhone(pi.phone, nsFill(e.title, v), nsFill(e.body, v), { kind: 'order', orderId: order.id }, pi.knownId);
+                    if (pi.phone) notifyCustomerPhone(pi.phone, nsFill(e.title, v), nsFill(e.body, v) + (v._ptsLine || ''), { kind: 'order', orderId: order.id }, pi.knownId);
                 }
                 if (order.repCode && ev !== 'ready' && s.rep[ev]) {
                     const t = { rejected: 'طلب اترفض ❌', returned: 'طلب ماتسلمش ↩️', edited: 'طلب اتعدل ✏️' }[ev];
@@ -9209,6 +9234,7 @@
             const done = (reached, total) => {
                 notifSending = false; if (btn) btn.disabled = false; if (prog) prog.textContent = '';
                 const entry = { id: 'notif_' + Date.now(), title, message, targetLabel: r.label, reached, total, by: (currentUser && (currentUser.fullName || currentUser.username)) || '', createdAt: Date.now(), image: extra.image || '', productCode: extra.productCode || '' };
+                if (!r.reps) saveNotifRecipients(entry.id, r.all ? ((appRegistrations || []).length ? appRegistrations.map(x => x.phone) : customers.map(c => c.phone)) : r.list.map(x => x.phone));
                 if (db) { const ref = db.collection('meta').doc('notifLog'); db.runTransaction(t => t.get(ref).then(s => { const items = (s.exists && s.data().items) || []; items.unshift(entry); t.set(ref, { items: items.slice(0, 400) }); })).then(renderNotificationsLog).catch(e => console.error(e)); }
                 logAction('إرسال إشعار', `العنوان: ${title} - المستلم: ${r.label} - وصل لـ ${reached}`);
                 document.getElementById('notificationTitle').value = ''; document.getElementById('notificationMessage').value = '';
@@ -9232,6 +9258,281 @@
             let i = 0, reached = 0;
             const worker = () => i >= jobs.length ? Promise.resolve() : jobs[i++]().then(n => { reached += n || 0; if (prog) prog.textContent = `جاري الإرسال... ${i} من ${jobs.length}`; }).catch(() => {}).then(worker);
             Promise.all([worker(), worker(), worker(), worker()]).then(() => done(reached, jobs.length));
+        }
+        // ==================== أدوات التسويق (2026-10-18) ====================
+        // هات صاحبك + تحدي الشهر (نقاط بتتضاف تلقائي وقت التسليم) + تذكير السلة المنسية + تذكير الطلب المعتاد
+        // + "رجع للمخزن" لعملاء الصنف + "وصل جديد/رجع تاني" في الأبليكشن + تقرير فتحوا وما طلبوش + أداء الإشعارات
+        // الإعدادات: appMeta/promoSettings (الأبليكشن بيقراها) — العلامات: meta/promoAwards — مستلمين كل إشعار: meta/notifRcpt_<id>
+        let promoSettings = { referral: { on: false, points: 50 }, challenge: { on: false, orders: 4, points: 100 } };
+        let promoListenerStarted = false;
+        function startPromoListener() {
+            if (!db || promoListenerStarted) return;
+            promoListenerStarted = true;
+            db.collection('appMeta').doc('promoSettings').onSnapshot(s => {
+                const d = (s.exists && s.data()) || {};
+                promoSettings = { referral: Object.assign({ on: false, points: 50 }, d.referral || {}), challenge: Object.assign({ on: false, orders: 4, points: 100 }, d.challenge || {}) };
+                try { renderPromoForm(); } catch (e) {}
+            }, e => console.error('promo settings', e));
+        }
+        function renderPromoForm() {
+            const g = id => document.getElementById(id); if (!g('promoRefOn')) return;
+            g('promoRefOn').checked = !!promoSettings.referral.on; g('promoRefPts').value = promoSettings.referral.points;
+            g('promoChOn').checked = !!promoSettings.challenge.on; g('promoChOrders').value = promoSettings.challenge.orders; g('promoChPts').value = promoSettings.challenge.points;
+        }
+        function savePromoSettings() {
+            if (!nacIsAdmin()) { showToast('للمدير بس', 'error'); return; }
+            if (!db) { showToast('لازم يكون فيه إنترنت', 'error'); return; }
+            const g = id => document.getElementById(id);
+            const data = { referral: { on: g('promoRefOn').checked, points: Math.max(1, Math.floor(Number(g('promoRefPts').value) || 50)) },
+                challenge: { on: g('promoChOn').checked, orders: Math.max(2, Math.floor(Number(g('promoChOrders').value) || 4)), points: Math.max(1, Math.floor(Number(g('promoChPts').value) || 100)) },
+                updatedAt: Date.now(), updatedBy: (currentUser && (currentUser.fullName || currentUser.username)) || '' };
+            db.collection('appMeta').doc('promoSettings').set(data).then(() => {
+                promoSettings = data; logAction('إعدادات التسويق', `هات صاحبك: ${data.referral.on ? data.referral.points + ' نقطة' : 'مقفول'} — تحدي الشهر: ${data.challenge.on ? data.challenge.orders + ' طلبات = ' + data.challenge.points + ' نقطة' : 'مقفول'}`);
+                showToast('اتحفظ ✓ والأبليكشن هيعرضها للعملاء', 'success');
+            }).catch(e => showToast('تعذر الحفظ: ' + (e.message || ''), 'error'));
+        }
+        // نقاط هدية لعميل برقمه، مرة واحدة بس لكل "علامة" (markKey) — جوه معاملة واحدة عشان ماتتكررش لو جهازين فاتحين
+        function promoAwardPoints(phone, delta, type, note, markKey) {
+            const l = notifLast10(phone); if (!db || l.length !== 10 || !(delta > 0)) return Promise.resolve(null);
+            const c = customers.find(x => notifLast10(x.phone) === l || notifLast10(x.code) === l);
+            const grp = loyaltyGroupFor(c ? c.code : '0' + l, c ? c.phone : '0' + l);
+            const markRef = db.collection('meta').doc('promoAwards');
+            let newPts = null;
+            return db.runTransaction(t => t.get(markRef).then(ms => {
+                const marks = (ms.exists && ms.data().marks) || {};
+                if (marks[markKey]) { newPts = null; return; }
+                return readLoyaltyInTx(t, grp).then(rd => {
+                    const before = rd.found ? rd.points : (Number(c && c.loyaltyPoints) || 0);
+                    newPts = before + delta;
+                    writeLoyaltyInTx(t, grp, rd, newPts, { at: Date.now(), by: 'النظام', type, delta, balance: newPts, note });
+                    t.set(markRef, { marks: { [markKey]: { at: Date.now(), phone: '0' + l, delta } } }, { merge: true });
+                });
+            })).then(() => {
+                if (newPts == null) return null;
+                applyLoyaltyLocally(grp, newPts);
+                logAction('نقاط هدية', `${note} — ${'0' + l}: +${delta} (الرصيد ${newPts})`);
+                return newPts;
+            }).catch(e => { console.error('promo award failed', e); return null; });
+        }
+        function salesInvoicesOfPhone(l) {
+            const codes = new Set(customers.filter(c => notifLast10(c.phone) === l || notifLast10(c.code) === l).map(c => c.code));
+            return invoices.filter(i => (!i.type || i.type === 'sale') && (codes.has(i.customerCode) || notifLast10(i.customerPhone) === l || notifLast10(i.customerCode) === l));
+        }
+        function deliveredPointsVars(inv) {
+            if (!inv || !(Number(inv.pointsEarned) > 0)) return {};
+            return { _ptsLine: ` ✨ كسبت ${inv.pointsEarned} نقطة` + (inv.pointsBalanceAfter != null ? `، ورصيدك بقى ${inv.pointsBalanceAfter} نقطة` : '') };
+        }
+        // بعد تسليم أي طلب: هات صاحبك (أول طلب للعميل الجديد) + تحدي الشهر
+        function promoAfterDelivery(order, inv) {
+            if (!db || !order) return;
+            const pi = orderPhoneInfo(order); const l = notifLast10(pi.phone); if (l.length !== 10) return;
+            const mine = salesInvoicesOfPhone(l);
+            const ps = promoSettings;
+            if (ps.challenge.on) {
+                const d = new Date(), ym = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+                const n = mine.filter(i => { const t = new Date(i.date); return t.getFullYear() === d.getFullYear() && t.getMonth() === d.getMonth(); }).length;
+                if (n >= ps.challenge.orders) promoAwardPoints(l, ps.challenge.points, 'challenge', `تحدي الشهر ${ym} (${n} طلبات)`, 'ch_' + ym + '_' + l).then(np => {
+                    if (np != null) notifyCustomerPhone(pi.phone, 'كسبت تحدي الشهر 🏆', `مبروك! خلّصت ${ps.challenge.orders} طلبات الشهر ده وكسبت ${ps.challenge.points} نقطة هدية — رصيدك بقى ${np} نقطة`, { kind: 'points' }, pi.knownId);
+                });
+            }
+            if (ps.referral.on && mine.length === 1) {
+                resolveAppIds(pi.phone).then(ids => ids.length ? db.collection('appCustomers').doc(ids[0]).get() : null).then(snap => {
+                    const ref = snap && snap.exists ? notifLast10((snap.data() || {}).referredBy) : '';
+                    if (ref.length !== 10 || ref === l) return;
+                    const pts = ps.referral.points, newName = order.shopName || order.customerName || ('0' + l);
+                    return promoAwardPoints(l, pts, 'referral', 'هات صاحبك: أول طلب (جه من طرف 0' + ref + ')', 'ref_new_' + l).then(np => {
+                        if (np == null) return;
+                        notifyCustomerPhone(pi.phone, 'هدية أول طلب 🎁', `أهلاً بيك في المعلم! كسبت ${pts} نقطة هدية عشان صاحبك عزمك — رصيدك ${np} نقطة`, { kind: 'points' }, pi.knownId);
+                        return promoAwardPoints(ref, pts, 'referral', 'هات صاحبك: ' + newName + ' (0' + l + ') طلب أول طلب', 'ref_by_' + l).then(np2 => {
+                            if (np2 != null) notifyCustomerPhone('0' + ref, 'صاحبك طلب أول طلب 🎉', `${newName} طلب أول طلب من المعلم، وكسبت ${pts} نقطة هدية — رصيدك بقى ${np2} نقطة. هات كمان صحاب وخد نقاط أكتر!`, { kind: 'points' });
+                        });
+                    });
+                }).catch(e => console.error('referral check', e));
+            }
+        }
+        // ---------- مستلمين كل إشعار (عشان تقرير الأداء) ----------
+        function saveNotifRecipients(entryId, phones) {
+            if (!db || !entryId) return;
+            const list = Array.from(new Set((phones || []).map(notifLast10).filter(x => x.length === 10))).slice(0, 5000);
+            db.collection('meta').doc('notifRcpt_' + entryId).set({ phones: list, at: Date.now() }).catch(e => console.error(e));
+        }
+        function fetchOrdersSince(ms) {
+            if (!db) return Promise.resolve(customerOrders.slice());
+            return db.collection('customerOrders').where('createdAt', '>=', ms).get().then(s => s.docs.map(d => Object.assign({ id: d.id }, d.data()))).catch(() => customerOrders.filter(o => (o.createdAt || 0) >= ms));
+        }
+        function orderL10(o) { const c = customers.find(x => x.code === o.customerCode); return notifLast10(o.phone || (c && c.phone) || o.customerCode); }
+        // ---------- إرسال لقايمة (مشترك) ----------
+        const PROMO_TPL = {
+            cart: { title: 'سلتك مستنياك 🛒', body: 'يا {الاسم}، سبت {العدد} صنف في السلة ومكملتش الطلب. كمّل دلوقتي قبل ما الكميات تخلص!' },
+            usual: { title: 'متنساش طلب بكرة 📅', body: 'يا {الاسم}، بكرة يوم طلبك المعتاد. اطلب من دلوقتي وطلبك يوصلك بدري 🚚' },
+            back: { title: 'رجع تاني ✅ {الصنف}', body: 'يا {الاسم}، {الأصناف} رجع متوفر عند المعلم. الحق اطلب قبل ما يخلص!' }
+        };
+        function promoTpl(k) { const t = ((notifSettingsRaw || {}).promoTpl || {})[k] || {}; return { title: t.title || PROMO_TPL[k].title, body: t.body || PROMO_TPL[k].body }; }
+        function editPromoTpl(k) {
+            const cur = promoTpl(k);
+            const title = prompt('عنوان الإشعار (الكلمات اللي بين {} بتتبدل لوحدها):', cur.title); if (title === null) return;
+            const body = prompt('نص الإشعار:', cur.body); if (body === null) return;
+            const pt = Object.assign({}, (notifSettingsRaw || {}).promoTpl || {}, { [k]: { title: title.trim() || PROMO_TPL[k].title, body: body.trim() || PROMO_TPL[k].body } });
+            notifSettingsRaw = Object.assign({}, notifSettingsRaw || {}, { promoTpl: pt });
+            if (db) db.collection('meta').doc('notifSettings').set({ promoTpl: pt }, { merge: true }).then(() => showToast('اتحفظت الرسالة ✓')).catch(e => showToast('تعذر الحفظ', 'error'));
+        }
+        function promoSendList(kind, label, list, after) {
+            // list: [{phone, name, vars, appId?}]
+            if (!list.length) { showToast('مفيش حد ينطبق عليه دلوقتي', 'warning'); return Promise.resolve(0); }
+            const t = promoTpl(kind), ex = list[0], v0 = Object.assign({ 'الاسم': ex.name || 'عميلنا' }, ex.vars || {});
+            if (!confirm(`${label}\nهيتبعت لـ ${list.length} عميل.\n\nمثال (${ex.name || ex.phone}):\n${nsFill(t.title, v0)}\n${nsFill(t.body, v0)}\n\nتكمل؟`)) return Promise.resolve(0);
+            const info = document.getElementById('promoInfo');
+            let i = 0, reached = 0; window.lastPushError = '';
+            const worker = () => {
+                if (i >= list.length) return Promise.resolve();
+                const x = list[i++], v = Object.assign({ 'الاسم': x.name || 'عميلنا' }, x.vars || {});
+                return notifyCustomerPhone(x.phone, nsFill(t.title, v), nsFill(t.body, v), Object.assign({ kind: 'manual' }, x.extra || {}), x.appId || null)
+                    .then(n => { reached += n || 0; if (n && after) after(x); if (info) info.textContent = `جاري الإرسال... ${i} من ${list.length}`; }).catch(() => {}).then(worker);
+            };
+            return Promise.all([worker(), worker(), worker(), worker()]).then(() => {
+                if (info) info.textContent = '';
+                const entry = { id: 'notif_' + Date.now(), title: t.title, message: t.body, targetLabel: label, reached, total: list.length, by: (currentUser && (currentUser.fullName || currentUser.username)) || '', createdAt: Date.now() };
+                saveNotifRecipients(entry.id, list.map(x => x.phone));
+                if (db) { const ref = db.collection('meta').doc('notifLog'); db.runTransaction(tx => tx.get(ref).then(s => { const items = (s.exists && s.data().items) || []; items.unshift(entry); tx.set(ref, { items: items.slice(0, 400) }); })).then(renderNotificationsLog).catch(e => console.error(e)); }
+                logAction('إرسال إشعار', `${label} — وصل لـ ${reached} من ${list.length}`);
+                if (reached) showToast(`تم ✓ — وصل لـ ${reached} موبايل من ${list.length}`, 'success', 6000);
+                else alert('الإشعار ما وصلش لحد.' + (window.lastPushError ? '\n\nرد OneSignal: ' + window.lastPushError : ''));
+                return reached;
+            });
+        }
+        function custNameByL10(l) { const c = customers.find(x => notifLast10(x.phone) === l || notifLast10(x.code) === l); const r = (appRegistrations || []).find(x => notifLast10(x.phone) === l); return (c && (c.shopName || c.name)) || (r && (r.shopName || r.customerName)) || ''; }
+        // ---------- 1) السلة المنسية ----------
+        function sendAbandonedCartReminders() {
+            if (!db) { showToast('لازم يكون فيه إنترنت', 'error'); return; }
+            const now = Date.now(), from = now - 3 * 86400000, to = now - 2 * 3600000;
+            const info = document.getElementById('promoInfo'); if (info) info.textContent = 'بدوّر على السلات...';
+            Promise.all([db.collection('customerCarts').get(), fetchOrdersSince(from)]).then(([snap, orders]) => {
+                if (info) info.textContent = '';
+                const lastOrder = {}; orders.forEach(o => { const l = orderL10(o); if (l && (o.createdAt || 0) > (lastOrder[l] || 0)) lastOrder[l] = o.createdAt || 0; });
+                const list = [];
+                snap.docs.forEach(d => {
+                    if (d.id.indexOf('seen_') === 0) return;
+                    const x = d.data() || {}, cart = x.cart || {}, n = Object.keys(cart).filter(k => cart[k] && Number(cart[k].qty) > 0).length;
+                    const at = Number(x.updatedAt) || 0, l = notifLast10(d.id);
+                    if (!n || l.length !== 10 || at < from || at > to) return;
+                    if ((lastOrder[l] || 0) >= at) return;              // طلب بعد ما ساب السلة
+                    if ((Number(x.remindedAt) || 0) >= at) return;      // اتفكّر بالسلة دي قبل كده
+                    list.push({ phone: d.id, appId: d.id, name: custNameByL10(l), vars: { 'العدد': n }, cartId: d.id });
+                });
+                promoSendList('cart', 'تذكير السلة المنسية', list, x => db.collection('customerCarts').doc(x.cartId).set({ remindedAt: Date.now() }, { merge: true }).catch(() => {}));
+            }).catch(e => { if (info) info.textContent = ''; showToast('تعذر: ' + (e.message || ''), 'error'); });
+        }
+        // ---------- 2) الطلب المعتاد (اللي يوم طلبه بكرة) ----------
+        function salesWeekday(ms) { return new Date(ms - 9 * 3600000).getDay(); }
+        function sendUsualOrderReminders() {
+            const now = Date.now(), since = now - 56 * 86400000;
+            const tomorrowStart = svSalesDayStart().getTime() + 86400000, tw = new Date(tomorrowStart).getDay();
+            const dayNames = ['الحد', 'الاتنين', 'التلات', 'الأربع', 'الخميس', 'الجمعة', 'السبت'];
+            const byL = {};
+            const bump = (l, ms) => { if (l.length !== 10 || ms < since) return; const dk = new Date(ms - 9 * 3600000).toDateString(); const e = byL[l] || (byL[l] = { days: {}, w: [0, 0, 0, 0, 0, 0, 0] }); if (e.days[dk]) return; e.days[dk] = 1; e.w[salesWeekday(ms)]++; };
+            invoices.forEach(i => { if (i.type && i.type !== 'sale') return; const ms = Number(i.orderCreatedAt) || new Date(i.date).getTime(); const c = customers.find(x => x.code === i.customerCode); bump(notifLast10((c && c.phone) || i.customerPhone || i.customerCode), ms); });
+            fetchOrdersSince(svSalesDayStart().getTime()).then(todayOrders => {
+                const orderedSince = new Set(todayOrders.map(orderL10));
+                const list = [];
+                Object.keys(byL).forEach(l => {
+                    const w = byL[l].w, top = Math.max.apply(null, w);
+                    if (top < 3 || w[tw] !== top || orderedSince.has(l)) return;
+                    list.push({ phone: '0' + l, name: custNameByL10(l), vars: { 'اليوم': dayNames[tw] } });
+                });
+                promoSendList('usual', `تذكير الطلب المعتاد (اللي بيطلبوا يوم ${dayNames[tw]})`, list);
+            });
+        }
+        // ---------- 3) رجع للمخزن ----------
+        function backInStockProducts(days) {
+            const since = Date.now() - (days || 3) * 86400000, out = {};
+            stockMovements.forEach(m => {
+                if (m.type !== 'in' && m.type !== 'purchase' && m.type !== 'initial' && !(m.type === 'adjustment' && Number(m.qty) > 0)) return;
+                const t = new Date(m.date).getTime(); if (!(t >= since)) return;
+                const before = (Number(m.balanceAfter) || 0) - (Number(m.qty) || 0);
+                if (before <= 0 && (Number(m.balanceAfter) || 0) > 0 && (!out[m.productCode] || out[m.productCode] < t)) out[m.productCode] = t;
+            });
+            return Object.keys(out).filter(c => { const p = products.find(x => x.code === c); return p && p.showInApp !== false && (Number((inventory[c] || {}).qty) || 0) > 0; }).map(c => ({ code: c, at: out[c] }));
+        }
+        function sendBackInStockNotices() {
+            const back = backInStockProducts(3);
+            if (!back.length) { showToast('مفيش أصناف رجعت المخزن في آخر 3 أيام', 'warning'); return; }
+            const codes = new Set(back.map(b => b.code)), since = Date.now() - 90 * 86400000, byL = {};
+            invoices.forEach(i => {
+                if ((i.type && i.type !== 'sale') || new Date(i.date).getTime() < since) return;
+                const c = customers.find(x => x.code === i.customerCode), l = notifLast10((c && c.phone) || i.customerPhone || i.customerCode); if (l.length !== 10) return;
+                (i.items || []).forEach(it => { if (codes.has(it.productCode)) (byL[l] = byL[l] || new Set()).add(it.productCode); });
+            });
+            const pname = c => (products.find(p => p.code === c) || {}).name || c;
+            const list = Object.keys(byL).map(l => { const cs = Array.from(byL[l]); return { phone: '0' + l, name: custNameByL10(l), extra: { productCode: cs[0] }, vars: { 'الصنف': pname(cs[0]), 'الأصناف': cs.slice(0, 3).map(pname).join(' و') + (cs.length > 3 ? ' وغيرهم' : '') } }; });
+            promoSendList('back', `رجع للمخزن (${back.length} صنف: ${back.slice(0, 4).map(b => pname(b.code)).join('، ')}${back.length > 4 ? '...' : ''}) — للي اشتروه قبل كده`, list);
+        }
+        // ---------- "وصل جديد / رجع تاني" للأبليكشن ----------
+        let _badgesLast = '', _badgesTimer = null;
+        function schedulePublishProductBadges() {
+            if (!db || !currentUser || !['admin', 'accountant', 'warehouse_keeper'].includes(xlRole())) return;
+            clearTimeout(_badgesTimer);
+            _badgesTimer = setTimeout(publishProductBadges, 20000);
+        }
+        function publishProductBadges() {
+            if (!db || !isCloudReady()) return;
+            const nw = products.filter(p => p.showInApp !== false && p.addedAt && Date.now() - Number(p.addedAt) < 14 * 86400000).map(p => p.code);
+            const back = backInStockProducts(5).map(b => b.code).filter(c => nw.indexOf(c) === -1);
+            const sig = JSON.stringify([nw, back]);
+            if (sig === _badgesLast) return;
+            const ref = db.collection('appMeta').doc('productBadges');
+            ref.get().then(s => {
+                const d = (s.exists && s.data()) || {};
+                _badgesLast = sig;
+                if (JSON.stringify([d.newCodes || [], d.backCodes || []]) === sig) return;
+                return ref.set({ newCodes: nw, backCodes: back, updatedAt: Date.now() });
+            }).catch(e => console.error('badges publish', e));
+        }
+        // ---------- 4) تقرير: فتحوا الأبليكشن وما طلبوش ----------
+        function showOpenedNoOrderReport() {
+            if (!db) return;
+            const days = Math.max(1, Number(prompt('فتحوا الأبليكشن في آخر كام يوم؟', '7')) || 7), since = Date.now() - days * 86400000;
+            Promise.all([db.collection('customerCarts').get(), fetchOrdersSince(since)]).then(([snap, orders]) => {
+                const ordered = new Set(orders.map(orderL10));
+                const rows = [];
+                snap.docs.forEach(d => {
+                    if (d.id.indexOf('seen_') !== 0) return;
+                    const x = d.data() || {}, l = notifLast10(x.phone || d.id.slice(5));
+                    if (l.length !== 10 || (Number(x.lastSeenAt) || 0) < since || ordered.has(l)) return;
+                    const c = customers.find(q => notifLast10(q.phone) === l || notifLast10(q.code) === l);
+                    const last = salesInvoicesOfPhone(l).reduce((m, i) => Math.max(m, new Date(i.date).getTime() || 0), 0);
+                    rows.push({ name: custNameByL10(l) || x.name || '', phone: '0' + l, seen: Number(x.lastSeenAt), opens: Number(x.opens) || 0, last, rep: c && c.salesmanCode ? repName(c.salesmanCode) : '' });
+                });
+                rows.sort((a, b) => b.seen - a.seen);
+                window._openedNoOrderRows = rows;
+                const f = t => t ? new Date(t).toLocaleString('ar-EG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-';
+                showReservedModal(`فتحوا الأبليكشن في آخر ${days} يوم وما طلبوش (${rows.length})`, `<p style="margin-top:0;font-size:13px;color:var(--text-light);">دول عملاء دخلوا وبصّوا ومطلبوش — مكالمة من المندوب بتفرق جدًا. (التسجيل ده شغال من تحديث الأبليكشن الجديد)</p><button class="btn btn-info btn-sm" style="margin-bottom:8px;" onclick="exportOpenedNoOrder()"><i class="fas fa-file-export"></i> Excel</button>` +
+                    (rows.length ? `<div class="table-container"><table><thead><tr><th>#</th><th>العميل</th><th>التليفون</th><th>المندوب</th><th>آخر فتح</th><th>آخر شراء</th></tr></thead><tbody>${rows.map((r, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.phone)}</td><td>${escapeHtml(r.rep)}</td><td>${f(r.seen)}</td><td>${r.last ? new Date(r.last).toLocaleDateString('ar-EG') : 'عمره ما اشترى'}</td></tr>`).join('')}</tbody></table></div>` : '<p>مفيش حد لسه</p>'));
+            }).catch(e => showToast('تعذر: ' + (e.message || ''), 'error'));
+        }
+        function exportOpenedNoOrder() {
+            const rows = window._openedNoOrderRows || [];
+            xlWrite('فتحوا_وما_طلبوش', [{ name: 'العملاء', rows: [['العميل', 'التليفون', 'المندوب', 'آخر فتح', 'آخر شراء']].concat(rows.map(r => [r.name, r.phone, r.rep, new Date(r.seen).toLocaleString('ar-EG'), r.last ? new Date(r.last).toLocaleDateString('ar-EG') : 'عمره ما اشترى'])), widths: [28, 14, 16, 20, 14] }]);
+        }
+        // ---------- 5) أداء الإشعارات ----------
+        function showNotifPerformance() {
+            if (!db) return;
+            db.collection('meta').doc('notifLog').get().then(s => {
+                const items = ((s.exists && s.data().items) || []).filter(x => x.createdAt > Date.now() - 30 * 86400000).slice(0, 25);
+                if (!items.length) { showReservedModal('أداء الإشعارات', '<p>مفيش إشعارات اتبعتت في آخر 30 يوم</p>'); return; }
+                const minAt = Math.min.apply(null, items.map(x => x.createdAt));
+                return Promise.all([fetchOrdersSince(minAt), Promise.all(items.map(x => db.collection('meta').doc('notifRcpt_' + x.id).get().then(r => r.exists ? (r.data().phones || []) : null).catch(() => null)))]).then(([orders, rcpts]) => {
+                    const rows = items.map((x, i) => {
+                        const set = rcpts[i] ? new Set(rcpts[i]) : null;
+                        const win = orders.filter(o => (o.createdAt || 0) >= x.createdAt && (o.createdAt || 0) < x.createdAt + 86400000 && o.status !== 'rejected');
+                        const mine = set ? win.filter(o => set.has(orderL10(o))) : null;
+                        const buyers = mine ? new Set(mine.map(orderL10)).size : null;
+                        const value = (mine || []).reduce((a, o) => a + (Number(o.total) || 0), 0);
+                        return `<tr><td>${new Date(x.createdAt).toLocaleString('ar-EG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</td><td><b>${escapeHtml(x.title || '')}</b><div style="font-size:11px;color:var(--text-light);">${escapeHtml(x.targetLabel || '')}</div></td><td>${x.reached != null ? x.reached : '-'}${x.total ? ' من ' + x.total : ''}</td>` +
+                            (set ? `<td><b>${buyers}</b> عميل (${set.size ? Math.round(buyers / set.size * 100) : 0}%)</td><td>${value.toLocaleString('en-US', { maximumFractionDigits: 0 })} ج</td>` : `<td colspan="2" style="color:var(--text-light);font-size:12px;">كل الطلبات في الـ24 ساعة: ${win.length} (الإشعار ده قبل ما نسجل المستلمين)</td>`) + '</tr>';
+                    });
+                    showReservedModal('أداء الإشعارات (آخر 30 يوم)', `<p style="margin-top:0;font-size:13px;color:var(--text-light);">"طلبوا بعده" = من اللي وصلهم الإشعار، كام واحد عمل طلب خلال 24 ساعة بعده، وقيمة طلباتهم.</p><div class="table-container"><table><thead><tr><th>إمتى</th><th>الإشعار</th><th>وصل</th><th>طلبوا بعده</th><th>قيمة طلباتهم</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`);
+                });
+            }).catch(e => showToast('تعذر: ' + (e.message || ''), 'error'));
         }
         // ---------- إشعار النقاط (2026-10-18) ----------
         const PTS_TPL_DEFAULT = { title: 'عندك {النقاط} نقطة مستنياك 🎁', body: 'يا {الاسم}، رصيدك {النقاط} نقطة = {القيمة} جنيه خصم. سارع واطلب دلوقتي واستخدمها من الأبليكشن 🛒' };
@@ -9317,6 +9618,7 @@
                 Promise.all([worker(), worker(), worker(), worker()]).then(() => {
                     ptsSending = false; if (btn) btn.disabled = false; if (info) info.textContent = '';
                     const entry = { id: 'notif_' + Date.now(), title, message: body, targetLabel: 'كل اللي ليهم نقاط (رسالة لكل عميل برصيده)', reached, total: list.length, by: (currentUser && (currentUser.fullName || currentUser.username)) || '', createdAt: Date.now() };
+                    saveNotifRecipients(entry.id, list.map(x => x.phone));
                     if (db) { const ref = db.collection('meta').doc('notifLog'); db.runTransaction(t => t.get(ref).then(s => { const items = (s.exists && s.data().items) || []; items.unshift(entry); t.set(ref, { items: items.slice(0, 400) }); })).then(renderNotificationsLog).catch(e => console.error(e)); }
                     logAction('إرسال إشعار النقاط', `${list.length} عميل — وصل لـ ${reached}`);
                     if (reached) showToast(`تم ✓ — إشعار النقاط وصل لـ ${reached} موبايل من ${list.length} عميل`, 'success', 7000);
@@ -9326,6 +9628,7 @@
         }
         function renderNotificationsLog() {
             try { fillPointsReminderForm(); } catch (e) {}
+            try { startPromoListener(); renderPromoForm(); } catch (e) {}
             const tbody = document.getElementById('appNotificationsTable');
             if (!tbody) return;
             const draw = (newer) => {
@@ -9513,7 +9816,9 @@
                 const idx = products.findIndex(p => p.code === editingProduct.code);
                 if (idx !== -1) {
                     const oldCode = editingProduct.code;
+                    const _prevAdded = products[idx].addedAt;
                     products[idx] = { code, name, unit, category, price, cost, minStock, maxOrderQty, secondaryUnit, imageUrl, brand, showInApp, bestSeller, bestSellerOrder };
+                    if (_prevAdded) products[idx].addedAt = _prevAdded;
                     if (oldCode !== code && inventory[oldCode]) {
                         inventory[code] = { ...inventory[oldCode], code };
                         delete inventory[oldCode];
@@ -9527,7 +9832,7 @@
                 }
             } else {
                 if (products.find(p => p.code === code)) { showToast('كود الصنف موجود مسبقاً', 'error'); return; }
-                products.push({ code, name, unit, category, price, cost, minStock, maxOrderQty, secondaryUnit, imageUrl, brand, showInApp, bestSeller, bestSellerOrder });
+                products.push({ code, name, unit, category, price, cost, minStock, maxOrderQty, secondaryUnit, imageUrl, brand, showInApp, bestSeller, bestSellerOrder, addedAt: Date.now() });
                 inventory[code] = { code, qty: initialStock, cost, minStock };
                 if (initialStock > 0) addStockMovement(code, name, 'initial', initialStock, initialStock, 'إضافة صنف', 'رصيد أولي');
             }
