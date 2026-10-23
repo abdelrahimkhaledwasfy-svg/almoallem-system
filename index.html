@@ -3478,6 +3478,7 @@
                     try { startCashCloseListener(); } catch (e) { console.error(e); }
                     try { startPromoListener(); } catch (e) { console.error(e); }
                     try { startRepPrivateListener(); } catch (e) { console.error(e); }
+                    setTimeout(function() { try { syncRepRoles(); schedulePublishCustomerPublic(); } catch (e) {} }, 12000);
                     setTimeout(function() { try { renderStaffBell(); } catch (e) {} }, 5000);
                     setTimeout(function() { try { startLoyaltyListener(); } catch (e) { console.error(e); } }, 4000);
                     try { activateMoneySplit(); } catch (e) { console.error(e); }
@@ -4271,6 +4272,7 @@
             db.collection('customerRecords').onSnapshot(function(snap) {
                 customers = mergeSplitIncoming('customers', snap.docs.map(function(d) { return d.data(); }), 'code');
                 _origLocalStorageSetItem('customers', JSON.stringify(customers));
+                try { schedulePublishCustomerPublic(); } catch (e) {}
                 _origLocalStorageSetItem('_lastSyncedCustomers', JSON.stringify(lastSyncedSplit.customers));
                 markCloudLoaded('customers');
                 try { if (document.getElementById('customers-section') && document.getElementById('customers-section').classList.contains('active')) renderCustomers(); } catch (e) {}
@@ -10881,6 +10883,68 @@
             box.style.display = pending.length ? '' : 'none';
             box.innerHTML = pending.length ? `<b>🔒 تأمين دخول المناديب (مرة واحدة):</b> ${pending.length} مندوب لسه دخولهم بالطريقة القديمة: ${pending.map(s => escapeHtml(s.name)).join('، ')}.<br>افتح كل واحد ✏️ واكتب كلمة السر بتاعته في خانة "كلمة السر" (ممكن نفس القديمة) واحفظ. بعدها يسجّل دخول تاني على الأبليكشن مرة واحدة.` : '';
         }
+        // ==================== قفل قايمة العملاء (2026-10-23) ====================
+        // العميل على الأبليكشن مبقاش بيقرا customerRecords (اللي هتتقفل للموظفين والمناديب بس)، بيقرا نسخة صغيرة
+        // لملفه هو بس: customerPublic/<آخر 10 أرقام من تليفونه> — وده مستند بيتجاب بالرقم بس، مفيش "قايمة".
+        // أي جهاز موظف فاتح السيستم بيحدّث النسخ دي لوحده لما بيانات أو نقاط عميل تتغير.
+        const CP_FIELDS = ['code', 'name', 'shopName', 'phone', 'neighborhood', 'address', 'city', 'governorate', 'loyaltyPoints'];
+        let _cpSig = null, _cpTimer = null, _cpRunning = false;
+        function schedulePublishCustomerPublic() {
+            if (!db || !currentUser || !['admin', 'accountant', 'warehouse_keeper'].includes(xlRole())) return;
+            clearTimeout(_cpTimer); _cpTimer = setTimeout(publishCustomerPublic, 8000);
+        }
+        function buildCustomerPublicDocs() {
+            const out = {};
+            customers.forEach(c => {
+                if (!c) return;
+                const rec = {}; CP_FIELDS.forEach(f => { if (c[f] != null && c[f] !== '') rec[f] = c[f]; });
+                const ks = new Set([notifLast10(c.phone), notifLast10(c.code)].filter(k => k.length === 10));
+                ks.forEach(k => { (out[k] = out[k] || []).push(rec); });
+            });
+            return out;
+        }
+        async function publishCustomerPublic() {
+            if (_cpRunning || !db || !isCloudReady()) return;
+            _cpRunning = true;
+            try {
+                const sigRef = db.collection('meta').doc('customerPublicSig');
+                if (_cpSig === null) { const s = await sigRef.get(); _cpSig = (s.exists && s.data().sig) || {}; }
+                const docs = buildCustomerPublicDocs(), next = {}, writes = [];
+                for (const k of Object.keys(docs)) {
+                    const list = docs[k].sort((a, b) => String(a.code).localeCompare(String(b.code)));
+                    const h = (await hashRepPassword(JSON.stringify(list))).slice(0, 16);
+                    next[k] = h;
+                    if (_cpSig[k] !== h) writes.push(['set', k, list]);
+                }
+                Object.keys(_cpSig).forEach(k => { if (!next[k]) writes.push(['del', k]); });
+                for (let i = 0; i < writes.length; i += 400) {
+                    const b = db.batch();
+                    writes.slice(i, i + 400).forEach(w => { const ref = db.collection('customerPublic').doc(w[1]); if (w[0] === 'set') b.set(ref, { list: w[2], updatedAt: Date.now() }); else b.delete(ref); });
+                    await b.commit();
+                }
+                if (writes.length) await sigRef.set({ sig: next, updatedAt: Date.now() });
+                _cpSig = next;
+            } catch (e) { console.error('customerPublic publish failed', e); _cpSig = null; }
+            _cpRunning = false;
+        }
+        // صلاحية المندوب في قواعد الحماية: مدخل في systemRoles بعلامة rep (و active:false عشان مايبقاش "موظف")
+        let _repRolesRunning = false;
+        async function syncRepRoles() {
+            if (_repRolesRunning || !db || !nacIsAdmin() || !isCloudReady()) return;
+            _repRolesRunning = true;
+            try {
+                const ref = db.collection('systemRoles').doc('main');
+                const cur = ((await ref.get()).data()) || {};
+                const want = {};
+                salesmen.forEach(s => { if (s.repAuthV) want[repAuthEmail(s.code, s.repAuthV)] = { rep: true, repActive: !s.status || s.status === 'نشط', repCode: String(s.code), repType: s.repType === 'delivery' ? 'delivery' : 'sales', role: 'rep', active: false }; });
+                const upd = {}; let n = 0;
+                Object.keys(want).forEach(k => { const c = cur[k] || {}; if (c.rep !== true || c.repActive !== want[k].repActive || c.repType !== want[k].repType || c.active !== false) { upd[k] = want[k]; n++; } });
+                Object.keys(cur).forEach(k => { if (/^rep-.*@almoallem-rep\.local$/.test(k) && !want[k]) { upd[k] = firebase.firestore.FieldValue.delete(); n++; } });
+                if (n) await ref.update(upd);
+            } catch (e) { console.error('rep roles sync failed', e); }
+            _repRolesRunning = false;
+        }
+        setInterval(function() { try { syncRepRoles(); } catch (e) {} }, 120000);
         async function hashRepPassword(pw) {
             const enc = new TextEncoder().encode(pw);
             const buf = await crypto.subtle.digest('SHA-256', enc);
@@ -11013,6 +11077,7 @@
             }
             localStorage.setItem('salesmen', JSON.stringify(salesmen));
             renderSalesmen(); renderRepAuthBanner(); updateInvoiceDropdowns(); updateDashboardStats(); closeModal('salesmanModal');
+            setTimeout(function() { try { syncRepRoles(); } catch (e) {} }, 1500);
             showToast((editingSalesman ? 'تم تحديث المندوب' : 'تم إضافة المندوب') + (repPasswordInput && record.repAuthV ? ' — ودخوله اتأمّن 🔒' : ''));
         }
 
@@ -11021,7 +11086,7 @@
             if (confirm('هل أنت متأكد من حذف هذا المندوب؟' + (own ? `\n\nتنبيه: عليه ${own} عميل. هيفضلوا متسجلين على كوده، ومش هيظهروا عند أي مندوب لحد ما تنقلهم (من "وزّع حسب المنطقة" أو تعديل العميل).` : ''))) {
                 salesmen = salesmen.filter(s => s.code !== code);
                 localStorage.setItem('salesmen', JSON.stringify(salesmen));
-                try { rebuildRepLoginMap().catch(e => console.error(e)); } catch (e) {}
+                try { rebuildRepLoginMap().catch(e => console.error(e)); setTimeout(syncRepRoles, 1500); } catch (e) {}
                 renderSalesmen(); updateInvoiceDropdowns(); updateDashboardStats(); showToast('تم حذف المندوب');
             }
         }
