@@ -1954,6 +1954,7 @@
         <section id="salesmen-section" class="section">
             <div class="card">
                 <div class="card-header"><div class="card-title"><i class="fas fa-user-tie"></i> قاعدة بيانات المناديب</div><div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn btn-success btn-sm" onclick="openSalesmanModal()"><i class="fas fa-plus"></i> إضافة مندوب</button><button class="btn btn-warning btn-sm" onclick="openSalesZonesModal()"><i class="fas fa-map-marked-alt"></i> مناطق البيع</button><button class="btn btn-info btn-sm" onclick="exportSalesmenExcel()"><i class="fas fa-file-export"></i> تصدير Excel</button><button class="btn btn-primary btn-sm" onclick="document.getElementById('salesmenFileInput').click()"><i class="fas fa-file-excel"></i> رفع Excel</button><input type="file" id="salesmenFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importSalesmenExcel(event)"></div></div>
+                <div id="repAuthBanner" style="display:none;background:#FFF4E5;border:1px solid #F0B429;border-radius:10px;padding:10px 14px;margin:0 0 12px;font-size:13px;line-height:1.8;"></div>
                 <div class="search-box"><i class="fas fa-search"></i><input type="text" id="salesmanSearch" placeholder="بحث في المناديب..." oninput="filterSalesmen()"></div>
                 <div class="table-container">
                     <table><thead><tr><th>الكود</th><th>اسم المندوب</th><th>النوع</th><th>رقم الهاتف</th><th>المنطقة</th><th>الحالة</th><th>الإجراءات</th></tr></thead><tbody id="salesmenTable"></tbody></table>
@@ -3476,6 +3477,7 @@
                     try { startNotifSettingsListener(); } catch (e) { console.error(e); }
                     try { startCashCloseListener(); } catch (e) { console.error(e); }
                     try { startPromoListener(); } catch (e) { console.error(e); }
+                    try { startRepPrivateListener(); } catch (e) { console.error(e); }
                     setTimeout(function() { try { renderStaffBell(); } catch (e) {} }, 5000);
                     setTimeout(function() { try { startLoyaltyListener(); } catch (e) { console.error(e); } }, 4000);
                     try { activateMoneySplit(); } catch (e) { console.error(e); }
@@ -10817,6 +10819,68 @@
         }
 
         // ==================== SALESMEN ====================
+        // ==================== دخول المناديب الآمن (2026-10-23) ====================
+        // قبل كده: يوزر وتليفون وبصمة باسورد كل مندوب كانوا في بيانات المحل العامة (أي حد يقدر يقراها).
+        // دلوقتي: لكل مندوب حساب دخول حقيقي في Firebase Auth (rep-<كود>-v<رقم>@almoallem-rep.local)، والأبليكشن
+        // بيتأكد من الباسورد عن طريق Firebase نفسه. اليوزر والتليفون بيتنقلوا لمكان الموظفين بس (meta/repPrivate)،
+        // وفي العام بيفضل: الكود والاسم والنوع والحالة ومناطق التسليم + repAuthV (رقم نسخة الباسورد).
+        // الأبليكشن بيلاقي المندوب من appMeta/repLogin: مفاتيحه بصمة (SHA-256) لليوزر/التليفون، مش اليوزر نفسه.
+        const REP_AUTH_PEPPER = '#almoallem-rep-2026';
+        let repPrivate = {}, repPrivateLoaded = false, repPrivateStarted = false;
+        function repNormDigits(v) { return String(v || '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)); }
+        function repNormUser(v) { return repNormDigits(v).trim().toLowerCase(); }
+        function repNormPhone(v) { return repNormDigits(v).replace(/[^0-9]/g, '').replace(/^20(?=1)/, '0'); }
+        function repAuthEmail(code, v) { const c = String(code || '').toLowerCase().replace(/[^a-z0-9]/g, '') || 'x'; return 'rep-' + c + '-v' + v + '@almoallem-rep.local'; }
+        function repAuthPassword(pw) { return repNormDigits(pw).trim() + REP_AUTH_PEPPER; }
+        async function repKeyHash(prefix, v) { return hashRepPassword(prefix + v); }
+        function repPriv(s) { const p = (s && repPrivate[s.code]) || {}; return { phone: p.phone != null ? p.phone : (s && s.phone) || '', repUsername: p.repUsername != null ? p.repUsername : (s && s.repUsername) || '' }; }
+        function startRepPrivateListener() {
+            if (!db || repPrivateStarted) return;
+            repPrivateStarted = true;
+            db.collection('meta').doc('repPrivate').onSnapshot(s => {
+                repPrivate = ((s.exists && s.data()) || {}).codes || {}; repPrivateLoaded = true;
+                try { if (document.getElementById('salesmenTable')) { renderSalesmen(); renderRepAuthBanner(); } } catch (e) {}
+            }, e => console.error('repPrivate', e));
+        }
+        // بيبني خريطة الدخول من جديد (لكل المناديب المأمّنين)
+        async function rebuildRepLoginMap() {
+            if (!db) return;
+            const map = {};
+            for (const s of salesmen) {
+                if (!s.repAuthV) continue;
+                const p = repPriv(s), entry = { c: s.code, v: s.repAuthV };
+                if (p.repUsername) map[await repKeyHash('u:', repNormUser(p.repUsername))] = entry;
+                if (repNormPhone(p.phone).length >= 10) map[await repKeyHash('p:', repNormPhone(p.phone))] = entry;
+            }
+            await db.collection('appMeta').doc('repLogin').set({ keys: map, updatedAt: Date.now() });
+        }
+        // تأمين مندوب: حساب Firebase جديد بالباسورد ده + نقل اليوزر والتليفون للمكان الخاص + مسح البصمة من العام
+        async function secureRepLogin(s, plainPw) {
+            if (!db) throw new Error('لازم يكون فيه إنترنت');
+            const pw = repAuthPassword(plainPw);
+            const secAuth = getSecondaryAuth();
+            let v = (Number(s.repAuthV) || 0) + 1;
+            for (let tries = 0; tries < 5; tries++, v++) {
+                try { await secAuth.createUserWithEmailAndPassword(repAuthEmail(s.code, v), pw); break; }
+                catch (e) { if (!(e && e.code === 'auth/email-already-in-use') || tries === 4) throw e; }
+            }
+            try { await secAuth.signOut(); } catch (e) {}
+            const p = repPriv(s);
+            const upd = {}; upd[s.code] = { phone: p.phone || '', repUsername: p.repUsername || '', securedAt: Date.now() };
+            await db.collection('meta').doc('repPrivate').set({ codes: upd }, { merge: true });   // الأول نحفظ الخاص، وبعدين نشيله من العام
+            repPrivate[s.code] = upd[s.code];
+            s.repAuthV = v; s.repPasswordHash = ''; delete s.phone; delete s.repUsername;
+            localStorage.setItem('salesmen', JSON.stringify(salesmen));
+            await rebuildRepLoginMap();
+            logAction('تأمين دخول مندوب', `${s.name} (${s.code}) — نسخة ${v}`);
+            return v;
+        }
+        function renderRepAuthBanner() {
+            const box = document.getElementById('repAuthBanner'); if (!box) return;
+            const pending = salesmen.filter(s => !s.repAuthV && (s.repPasswordHash || s.repUsername));
+            box.style.display = pending.length ? '' : 'none';
+            box.innerHTML = pending.length ? `<b>🔒 تأمين دخول المناديب (مرة واحدة):</b> ${pending.length} مندوب لسه دخولهم بالطريقة القديمة: ${pending.map(s => escapeHtml(s.name)).join('، ')}.<br>افتح كل واحد ✏️ واكتب كلمة السر بتاعته في خانة "كلمة السر" (ممكن نفس القديمة) واحفظ. بعدها يسجّل دخول تاني على الأبليكشن مرة واحدة.` : '';
+        }
         async function hashRepPassword(pw) {
             const enc = new TextEncoder().encode(pw);
             const buf = await crypto.subtle.digest('SHA-256', enc);
@@ -10900,7 +10964,8 @@
             const toggleZones = () => { document.getElementById('salesmanZonesGroup').style.display = document.getElementById('salesmanRepType').value === 'delivery' ? '' : 'none'; };
             document.getElementById('salesmanRepType').onchange = toggleZones;
             toggleZones();
-            document.getElementById('salesmanRepUsername').value = salesman ? (salesman.repUsername || '') : '';
+            document.getElementById('salesmanRepUsername').value = salesman ? (repPriv(salesman).repUsername || '') : '';
+            document.getElementById('salesmanPhone').value = salesman ? (repPriv(salesman).phone || '') : '';
             document.getElementById('salesmanRepPassword').value = '';
             openModal('salesmanModal');
         }
@@ -10916,13 +10981,14 @@
             const repUsername = normDigits(document.getElementById('salesmanRepUsername').value).trim().toLowerCase();
             const repPasswordInput = normDigits(document.getElementById('salesmanRepPassword').value).trim();
             if (!code || !name) { showToast('الرجاء ملء الحقول الإلزامية', 'error'); return; }
-            if (repUsername && salesmen.find(s => String(s.repUsername || '').trim().toLowerCase() === repUsername && (!editingSalesman || s.code !== editingSalesman.code))) {
+            if (repUsername && salesmen.find(s => String(repPriv(s).repUsername || '').trim().toLowerCase() === repUsername && (!editingSalesman || s.code !== editingSalesman.code))) {
                 showToast('يوزر الدخول ده مستخدم بالفعل لمندوب تاني', 'error'); return;
             }
-            let repPasswordHash = editingSalesman ? editingSalesman.repPasswordHash : undefined;
-            if (repPasswordInput) repPasswordHash = await hashRepPassword(repPasswordInput);
             const deliveryZoneIds = repType === 'delivery' ? Array.from(document.querySelectorAll('#salesmanZonesList .salesman-zone-cb:checked')).map(cb => cb.value) : [];
-            const record = { code, name, phone, area, status, repType, repUsername: repUsername || '', repPasswordHash: repPasswordHash || '', deliveryZoneIds };
+            if (repPasswordInput && !db) { showToast('تغيير كلمة سر المندوب محتاج إنترنت', 'error'); return; }
+            const prev = editingSalesman ? salesmen.find(s => s.code === editingSalesman.code) : null;
+            const record = { code, name, area, status, repType, deliveryZoneIds, phone, repUsername: repUsername || '', repPasswordHash: prev ? (prev.repPasswordHash || '') : '' };
+            if (prev && prev.repAuthV) record.repAuthV = prev.repAuthV;
             if (editingSalesman) {
                 const idx = salesmen.findIndex(s => s.code === editingSalesman.code);
                 if (idx !== -1) salesmen[idx] = record;
@@ -10930,9 +10996,24 @@
                 if (salesmen.find(s => s.code === code)) { showToast('كود المندوب موجود مسبقاً', 'error'); return; }
                 salesmen.push(record);
             }
+            const wasSecured = !!record.repAuthV;
+            if (wasSecured) { repPrivate[code] = Object.assign({}, repPrivate[code] || {}, { phone, repUsername: repUsername || '' }); }
+            try {
+                if (repPasswordInput) await secureRepLogin(record, repPasswordInput);
+                else if (wasSecured) {
+                    // المندوب مأمّن: التليفون واليوزر بيتحفظوا في المكان الخاص بس
+                    const upd = {}; upd[code] = { phone, repUsername: repUsername || '' };
+                    await db.collection('meta').doc('repPrivate').set({ codes: upd }, { merge: true });
+                    delete record.phone; delete record.repUsername; record.repPasswordHash = '';
+                    await rebuildRepLoginMap();
+                }
+            } catch (e) {
+                console.error('secure rep failed', e);
+                showToast('اتحفظ المندوب، بس تعذر تأمين الدخول: ' + (e && (e.code || e.message) || ''), 'error', 8000);
+            }
             localStorage.setItem('salesmen', JSON.stringify(salesmen));
-            renderSalesmen(); updateInvoiceDropdowns(); updateDashboardStats(); closeModal('salesmanModal');
-            showToast(editingSalesman ? 'تم تحديث المندوب' : 'تم إضافة المندوب');
+            renderSalesmen(); renderRepAuthBanner(); updateInvoiceDropdowns(); updateDashboardStats(); closeModal('salesmanModal');
+            showToast((editingSalesman ? 'تم تحديث المندوب' : 'تم إضافة المندوب') + (repPasswordInput && record.repAuthV ? ' — ودخوله اتأمّن 🔒' : ''));
         }
 
         function deleteSalesman(code) {
@@ -10940,12 +11021,14 @@
             if (confirm('هل أنت متأكد من حذف هذا المندوب؟' + (own ? `\n\nتنبيه: عليه ${own} عميل. هيفضلوا متسجلين على كوده، ومش هيظهروا عند أي مندوب لحد ما تنقلهم (من "وزّع حسب المنطقة" أو تعديل العميل).` : ''))) {
                 salesmen = salesmen.filter(s => s.code !== code);
                 localStorage.setItem('salesmen', JSON.stringify(salesmen));
+                try { rebuildRepLoginMap().catch(e => console.error(e)); } catch (e) {}
                 renderSalesmen(); updateInvoiceDropdowns(); updateDashboardStats(); showToast('تم حذف المندوب');
             }
         }
 
         function renderSalesmen() {
             const tbody = document.getElementById('salesmenTable');
+            try { renderRepAuthBanner(); } catch (e) {}
             if (salesmen.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;"><div style="color:var(--text-light);"><i class="fas fa-user-tie" style="font-size:48px;margin-bottom:15px;display:block;opacity:0.4;"></i><h3 style="color:var(--text);margin-bottom:8px;">قاعدة المناديب فارغة</h3><p style="margin-bottom:15px;">لم يتم إضافة أي مناديب بعد</p><button class="btn btn-success btn-sm" onclick="openSalesmanModal()"><i class="fas fa-plus"></i> إضافة مندوب جديد</button></div></td></tr>`;
                 return;
@@ -10953,8 +11036,8 @@
             tbody.innerHTML = salesmen.map(s => `
                 <tr><td><span class="badge badge-primary">${s.code}</span></td><td><strong>${s.name}</strong></td>
                 <td><span class="badge ${s.repType === 'delivery' ? 'badge-info' : 'badge-primary'}">${s.repType === 'delivery' ? 'تسليم' : 'مبيعات'}</span></td>
-                <td>${s.phone || '-'}</td><td>${s.area || '-'}</td>
-                <td><span class="badge ${s.status === 'نشط' ? 'badge-success' : 'badge-danger'}">${s.status}</span></td>
+                <td>${escapeHtml(repPriv(s).phone || '-')}</td><td>${s.area || '-'}</td>
+                <td><span class="badge ${s.status === 'نشط' ? 'badge-success' : 'badge-danger'}">${s.status}</span>${s.repAuthV ? ' <span title="دخوله مأمّن" style="font-size:12px;">🔒</span>' : ''}</td>
                 <td><button class="btn btn-primary btn-icon btn-sm" onclick='openSalesmanModal(${JSON.stringify(s).replace(/'/g, "&#39;")})'><i class="fas fa-edit"></i></button>
                 <button class="btn btn-danger btn-icon btn-sm" onclick="deleteSalesman('${s.code}')"><i class="fas fa-trash"></i></button></td></tr>
             `).join('');
@@ -13312,7 +13395,7 @@
         const repTypeLabel = t => t === 'delivery' ? 'تسليم' : 'مبيعات';
         function exportSalesmenExcel() {
             const rows = [['كود المندوب', 'الاسم', 'التليفون', 'المنطقة', 'النوع (مبيعات/تسليم)', 'الحالة (نشط/غير نشط)', 'مناطق التسليم (لمندوب التسليم)']];
-            salesmen.forEach(s => rows.push([s.code, s.name, s.phone || '', s.area || '', repTypeLabel(s.repType), s.status || 'نشط',
+            salesmen.forEach(s => rows.push([s.code, s.name, repPriv(s).phone || '', s.area || '', repTypeLabel(s.repType), s.status || 'نشط',
                 (s.deliveryZoneIds || []).map(id => (deliveryZones.find(z => z.id === id) || {}).name).filter(Boolean).join('، ')]));
             xlWrite('مناديب', [{ name: 'المناديب', rows, widths: [12, 26, 16, 18, 18, 18, 34] }]);
         }
