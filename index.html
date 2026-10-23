@@ -441,10 +441,13 @@
             </div>
             <h2 style="color:var(--brand-red);margin-bottom:5px;">المعلم</h2>
             <p style="color:var(--text-light);font-size:13px;margin-bottom:25px;">لتجارة وتوزيع المواد الغذائية - تسجيل الدخول</p>
-            <div class="form-group" style="text-align:right;"><label class="form-label">اسم المستخدم</label><input type="text" class="form-control" id="loginUsername" placeholder="اسم المستخدم" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')document.getElementById('loginPassword').focus()"></div>
-            <div class="form-group" style="text-align:right;"><label class="form-label">كلمة المرور</label><input type="password" class="form-control" id="loginPassword" placeholder="كلمة المرور" onkeydown="if(event.key==='Enter')attemptLogin()"></div>
+            <!-- (2026-10-23) جوه form حقيقية + autocomplete عشان المتصفح يعرض يحفظ اسم المستخدم والباسورد ويملاهم لوحده -->
+            <form id="loginForm" method="post" action="#" autocomplete="on" onsubmit="event.preventDefault(); attemptLogin(); return false;">
+            <div class="form-group" style="text-align:right;"><label class="form-label" for="loginUsername">اسم المستخدم</label><input type="text" class="form-control" id="loginUsername" name="username" placeholder="اسم المستخدم" autocapitalize="off" autocorrect="off" autocomplete="username" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('loginPassword').focus();}"></div>
+            <div class="form-group" style="text-align:right;"><label class="form-label" for="loginPassword">كلمة المرور</label><input type="password" class="form-control" id="loginPassword" name="password" placeholder="كلمة المرور" autocomplete="current-password"></div>
             <div id="loginError" style="color:var(--danger);font-size:13px;margin-bottom:10px;display:none;"></div>
-            <button class="btn btn-primary" id="loginSubmitBtn" style="width:100%;padding:12px;" onclick="attemptLogin()"><i class="fas fa-sign-in-alt"></i> دخول</button>
+            <button type="submit" class="btn btn-primary" id="loginSubmitBtn" style="width:100%;padding:12px;"><i class="fas fa-sign-in-alt"></i> دخول</button>
+            </form>
             <p style="font-size:11px;color:var(--text-light);margin-top:20px;">بيانات الدخول الافتراضية: admin / admin123</p>
             <a href="javascript:void(0)" onclick="debugShowLoginState()" style="font-size:11px;color:var(--info);display:block;margin-top:8px;">تعذّر الدخول؟ اضغط هنا لعرض تفاصيل تشخيصية</a>
         </div>
@@ -5944,7 +5947,7 @@
                     currentUser = { id: null, username: entry.username || username, fullName: entry.fullName || username, role: entry.role };
                     saveCurrentUser();
                     document.getElementById('loginOverlay').style.display = 'none';
-                    document.getElementById('loginUsername').value = ''; document.getElementById('loginPassword').value = '';
+                    setTimeout(function() { document.getElementById('loginUsername').value = ''; document.getElementById('loginPassword').value = ''; }, 2000);
                     if (btn0) btn0.disabled = false;
                     applyRolePermissions(); updateUserBar();
                     logAction('تسجيل دخول', `قام المستخدم ${currentUser.fullName} بتسجيل الدخول`);
@@ -5977,8 +5980,7 @@
                 currentUser = { id: user.id, username: user.username, fullName: user.fullName, role: user.role };
                 saveCurrentUser();
                 document.getElementById('loginOverlay').style.display = 'none';
-                document.getElementById('loginUsername').value = '';
-                document.getElementById('loginPassword').value = '';
+                setTimeout(function() { document.getElementById('loginUsername').value = ''; document.getElementById('loginPassword').value = ''; }, 2000);
                 if (loginBtn) loginBtn.disabled = false;
                 applyRolePermissions();
                 updateUserBar();
