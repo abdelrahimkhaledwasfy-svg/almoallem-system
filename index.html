@@ -3397,10 +3397,17 @@
             const update = {}; update[pseudoEmail] = data;
             return db.collection('systemRoles').doc('main').set(update, { merge: true });
         }
+        // (2026-10-23) مهم: update() بيفهم النقطة اللي في الإيميل (.local) كمسار جوه بعض، فكان المسح مبيمسحش المفتاح الحقيقي.
+        // FieldPath بيخلي الإيميل مفتاح واحد زي ما هو.
+        function rolesDeleteKeys(keys) {
+            if (!db || !keys.length) return Promise.resolve();
+            const FP = firebase.firestore.FieldPath, args = [];
+            keys.forEach(k => { args.push(new FP(k), firebase.firestore.FieldValue.delete()); });
+            const ref = db.collection('systemRoles').doc('main');
+            return ref.update.apply(ref, args);
+        }
         function removeSystemRole(pseudoEmail) {
-            if (!db) return Promise.resolve();
-            const update = {}; update[pseudoEmail] = firebase.firestore.FieldValue.delete();
-            return db.collection('systemRoles').doc('main').update(update).catch(function(e) { console.error('role revoke failed:', e); });
+            return rolesDeleteKeys([pseudoEmail]).catch(function(e) { console.error('role revoke failed:', e); });
         }
 
         let cloudSyncTimer = null;
@@ -11040,10 +11047,15 @@
                 const cur = ((await ref.get()).data()) || {};
                 const want = {};
                 salesmen.forEach(s => { if (s.repAuthV) want[repAuthEmail(s.code, s.repAuthV)] = { rep: true, repActive: !s.status || s.status === 'نشط', repCode: String(s.code), repType: s.repType === 'delivery' ? 'delivery' : 'sales', role: 'rep', active: false }; });
-                const upd = {}; let n = 0;
-                Object.keys(want).forEach(k => { const c = cur[k] || {}; if (c.rep !== true || c.repActive !== want[k].repActive || c.repType !== want[k].repType || c.active !== false) { upd[k] = want[k]; n++; } });
-                Object.keys(cur).forEach(k => { if (/^rep-.*@almoallem-rep\.local$/.test(k) && !want[k]) { upd[k] = firebase.firestore.FieldValue.delete(); n++; } });
-                if (n) await ref.update(upd);
+                const ups = {}, dels = [];
+                Object.keys(want).forEach(k => { const c = cur[k] || {}; if (c.rep !== true || c.repActive !== want[k].repActive || c.repType !== want[k].repType || c.active !== false) ups[k] = want[k]; });
+                Object.keys(cur).forEach(k => {
+                    if (/^rep-.*@almoallem-rep\.local$/.test(k) && !want[k]) dels.push(k);
+                    // بقايا الغلطة القديمة: "rep-..@almoallem-rep" → { local: ... }
+                    if (/@almoallem-rep$/.test(k)) dels.push(k);
+                });
+                if (Object.keys(ups).length) await ref.set(ups, { merge: true });   // set بيكتب الإيميل كمفتاح واحد
+                if (dels.length) await rolesDeleteKeys(dels);
             } catch (e) { console.error('rep roles sync failed', e); }
             _repRolesRunning = false;
         }
