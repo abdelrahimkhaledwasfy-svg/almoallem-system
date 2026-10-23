@@ -2302,6 +2302,7 @@
                     <input type="hidden" id="productImageUrl">
                 </div>
                 <div class="form-group"><label class="form-label">اسم الصنف</label><input type="text" class="form-control" id="productName" placeholder="اسم الصنف"></div>
+                <div class="form-group"><label class="form-label">وصف الصنف (اختياري — بيظهر للعميل لما يفتح المنتج في الأبليكشن)</label><textarea class="form-control" id="productDescription" rows="3" placeholder="مثال: عبوة 250 جرام × 27 علبة في الكرتونة — صلاحية 6 شهور"></textarea></div>
                 <div class="form-group"><label class="form-label">الوحدة</label><input type="text" class="form-control" id="productUnit" placeholder="مثال: قطعة، كرتونة، كيلو"></div>
                 <div class="form-group"><label class="form-label">الشركة / الماركة</label>
                     <select class="form-control" id="productBrand" onchange="onProductBrandChange()"><option value="">بدون تحديد</option></select>
@@ -7667,6 +7668,7 @@
             document.getElementById('productCode').value = product ? product.code : makeAutoCoder(products.map(p => p.code), 'P')();
             lockCodeField('productCode', !!product);
             document.getElementById('productName').value = product ? product.name : '';
+            document.getElementById('productDescription').value = product ? (product.description || '') : '';
             document.getElementById('productUnit').value = product ? product.unit : '';
             document.getElementById('productPrice').value = product ? product.price : '';
             document.getElementById('productCost').value = product ? (product.cost || '') : '';
@@ -9929,6 +9931,7 @@
                     const oldCode = editingProduct.code;
                     const _prev = products[idx];
                     products[idx] = { code, name, unit, category, price, cost, minStock, maxOrderQty, secondaryUnit, imageUrl, brand, showInApp, bestSeller, bestSellerOrder };
+                    const _desc = document.getElementById('productDescription').value.trim(); if (_desc) products[idx].description = _desc;
                     if (_prev.addedAt) products[idx].addedAt = _prev.addedAt;
                     if (window._lastImgStd) { products[idx].imgStd = 1; if (_prev.imageUrl && _prev.imageUrl !== imageUrl) products[idx].imageUrlOrig = _prev.imageUrlOrig || _prev.imageUrl; }
                     else if (_prev.imageUrl === imageUrl) { if (_prev.imgStd) products[idx].imgStd = _prev.imgStd; if (_prev.imageUrlOrig) products[idx].imageUrlOrig = _prev.imageUrlOrig; }
@@ -9945,7 +9948,7 @@
                 }
             } else {
                 if (products.find(p => p.code === code)) { showToast('كود الصنف موجود مسبقاً', 'error'); return; }
-                products.push(Object.assign({ code, name, unit, category, price, cost, minStock, maxOrderQty, secondaryUnit, imageUrl, brand, showInApp, bestSeller, bestSellerOrder, addedAt: Date.now() }, window._lastImgStd ? { imgStd: 1 } : {}));
+                products.push(Object.assign({ code, name, unit, category, price, cost, minStock, maxOrderQty, secondaryUnit, imageUrl, brand, showInApp, bestSeller, bestSellerOrder, addedAt: Date.now() }, window._lastImgStd ? { imgStd: 1 } : {}, document.getElementById('productDescription').value.trim() ? { description: document.getElementById('productDescription').value.trim() } : {}));
                 inventory[code] = { code, qty: initialStock, cost, minStock };
                 if (initialStock > 0) addStockMovement(code, name, 'initial', initialStock, initialStock, 'إضافة صنف', 'رصيد أولي');
             }
