@@ -1955,6 +1955,7 @@
         <section id="salesmen-section" class="section">
             <div class="card">
                 <div class="card-header"><div class="card-title"><i class="fas fa-user-tie"></i> قاعدة بيانات المناديب</div><div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn btn-success btn-sm" onclick="openSalesmanModal()"><i class="fas fa-plus"></i> إضافة مندوب</button><button class="btn btn-warning btn-sm" onclick="openSalesZonesModal()"><i class="fas fa-map-marked-alt"></i> مناطق البيع</button><button class="btn btn-info btn-sm" onclick="exportSalesmenExcel()"><i class="fas fa-file-export"></i> تصدير Excel</button><button class="btn btn-primary btn-sm" onclick="document.getElementById('salesmenFileInput').click()"><i class="fas fa-file-excel"></i> رفع Excel</button><input type="file" id="salesmenFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importSalesmenExcel(event)"></div></div>
+                <div style="margin:0 0 10px;"><button class="btn btn-secondary btn-sm admin-only" onclick="openRepAuthCheck()"><i class="fas fa-user-shield"></i> فحص دخول المناديب</button></div>
                 <div id="repAuthBanner" style="display:none;background:#FFF4E5;border:1px solid #F0B429;border-radius:10px;padding:10px 14px;margin:0 0 12px;font-size:13px;line-height:1.8;"></div>
                 <div class="search-box"><i class="fas fa-search"></i><input type="text" id="salesmanSearch" placeholder="بحث في المناديب..." oninput="filterSalesmen()"></div>
                 <div class="table-container">
@@ -11056,8 +11057,26 @@
                 });
                 if (Object.keys(ups).length) await ref.set(ups, { merge: true });   // set بيكتب الإيميل كمفتاح واحد
                 if (dels.length) await rolesDeleteKeys(dels);
-            } catch (e) { console.error('rep roles sync failed', e); }
-            _repRolesRunning = false;
+            } catch (e) { console.error('rep roles sync failed', e); window._repRolesErr = (e && (e.code || e.message)) || String(e); _repRolesRunning = false; return false; }
+            window._repRolesErr = ''; _repRolesRunning = false; return true;
+        }
+        // (2026-10-23) فحص دخول المناديب: لكل مندوب — متأمّن؟ صلاحيته متسجلة صح في الحماية؟
+        async function openRepAuthCheck() {
+            if (!db) return;
+            await syncRepRoles();
+            let roles = {};
+            try { roles = ((await db.collection('systemRoles').doc('main').get()).data()) || {}; } catch (e) { showToast('تعذر قراية الصلاحيات: ' + (e.code || e.message), 'error'); }
+            const rows = salesmen.map(s => {
+                const k = s.repAuthV ? repAuthEmail(s.code, s.repAuthV) : '';
+                const r = k ? roles[k] : null;
+                const okRole = r && r.rep === true && r.repActive === true;
+                const st = !s.repAuthV ? '<span style="color:#b26b00;">❌ لسه متأمّنش — افتح ✏️ واكتب كلمة السر</span>'
+                    : (s.status && s.status !== 'نشط') ? '<span style="color:var(--text-light);">موقوف</span>'
+                    : okRole ? '<span style="color:#1e7a3d;">✅ تمام</span>' : '<span style="color:#b42318;">❌ الصلاحية مش متسجلة</span>';
+                return `<tr><td>${escapeHtml(s.name)} (${escapeHtml(s.code)})</td><td>${s.repType === 'delivery' ? 'تسليم' : 'مبيعات'}</td><td>${s.repAuthV ? '🔒 ' + s.repAuthV : '-'}</td><td style="font-size:11px;direction:ltr;">${escapeHtml(k || '-')}</td><td>${st}</td></tr>`;
+            }).join('');
+            showReservedModal('فحص دخول المناديب', (window._repRolesErr ? `<div style="background:#fde8e8;padding:8px 12px;border-radius:8px;margin-bottom:10px;color:#8a1c1c;">تعذر تسجيل الصلاحيات: ${escapeHtml(window._repRolesErr)} — صوّر الرسالة دي وابعتها لـ Claude</div>` : '') +
+                `<div class="table-container"><table><thead><tr><th>المندوب</th><th>النوع</th><th>الدخول</th><th>حساب الحماية</th><th>الحالة</th></tr></thead><tbody>${rows}</tbody></table></div>`);
         }
         setInterval(function() { try { syncRepRoles(); } catch (e) {} }, 120000);
         async function hashRepPassword(pw) {
