@@ -3300,7 +3300,8 @@
             // قديمة/اتمسحت — مش إن حد مسحهم. فبناخد نسخة السحابة زي ما هي ومش بنعتبرهم "اتمسحوا من الجهاز".
             const conf0 = SPLIT_COLLECTION_KEYS[key] || {};
             const missingLocally = serverArr.filter(it => prevMap[it[idField]] !== undefined && !localMap[it[idField]]).length;
-            const trustServer = conf0.money && missingLocally > 5;
+            // (2026-10-25) نفس الحماية لكل القوايم (عملاء/أصناف/موردين): الجهاز اللي ناقصه كتير = نسخته قديمة، مش حد مسح
+            const trustServer = missingLocally > 5;
             if (trustServer) { try { console.warn('money guard: ' + key + ' — kept ' + missingLocally + ' cloud records the device was missing'); logAction('تنبيه أمان', 'الجهاز ده كان ناقصه ' + missingLocally + ' سجل (' + key + ') — اترجعوا من السحابة ومامسحناش حاجة'); } catch (e) {} }
             let out = serverArr.filter(it => { const id = it[idField]; if (!trustServer && prevMap[id] !== undefined && !localMap[id]) { pending = true; return false; } return true; });
             // لو فيه تعديل محلي لسه ما اترفعش، ناخد الخانات اللي اتعدلت محليًا بس فوق نسخة السحابة (مش الكارت القديم كله)
@@ -3419,12 +3420,23 @@
         // (2026-10-10) التخزين على الجهاز مجرد نسخة احتياطية سريعة. لو امتلى (QuotaExceeded) كان بيرمي خطأ يوقف
         // العملية كلها في النص (زي اعتماد جرد اتسجل "اتعتمد" ومااتطبقش). دلوقتي الخطأ بيتسجل وبس والعملية تكمل.
         let _lsQuotaWarned = false;
+        // (2026-10-25) لما مساحة الجهاز تتملى: بنفضّي الأول النسخ اللي ممكن تتجاب تاني من السحابة في أي وقت
+        // (حركات المخزن، السجل، الطلبات، الزيارات...) ونجرب تاني. ولو قايمة أساسية (عملاء/أصناف/...) مااتحفظتش،
+        // بنمسح نسختها ونسخة "آخر مزامنة" بتاعتها مع بعض، عشان المرة الجاية تتجاب نضيفة من السحابة ومتتقارنش بنسخة قديمة.
+        const LS_EVICTABLE = ['stockMovements', 'auditLog', 'customerOrders', 'customerVisits', 'deliveryCollections', 'purchaseInvoices', 'appNotifications'];
+        function _lsPairKey(k) { return k.indexOf('_lastSynced') === 0 ? (k.charAt(11).toLowerCase() + k.slice(12)) : ('_lastSynced' + k.charAt(0).toUpperCase() + k.slice(1)); }
         function _origLocalStorageSetItem(key, value) {
-            try { _rawLocalStorageSetItem(key, value); }
-            catch (e) {
-                console.warn('localStorage write skipped for', key, e && e.name);
-                if (!_lsQuotaWarned) { _lsQuotaWarned = true; try { setTimeout(function() { showToast('مساحة التخزين على الجهاز ده امتلت — الشغل كمّل عادي والبيانات محفوظة على السحابة', 'warning', 6000); }, 0); } catch (e2) {} }
+            try { _rawLocalStorageSetItem(key, value); return; } catch (e) { console.warn('localStorage write failed for', key, e && e.name); }
+            for (const k of LS_EVICTABLE) {
+                if (k === key) continue;
+                try { if (localStorage.getItem(k) != null) { localStorage.removeItem(k); try { _rawLocalStorageSetItem(key, value); console.warn('freed', k, 'to save', key); return; } catch (e2) {} } } catch (e3) {}
             }
+            try {
+                localStorage.removeItem(key);
+                const pair = _lsPairKey(key);
+                if (typeof SPLIT_COLLECTION_KEYS !== 'undefined' && (SPLIT_COLLECTION_KEYS[key] || SPLIT_COLLECTION_KEYS[pair] || key === 'inventory' || pair === 'inventory')) localStorage.removeItem(pair);
+            } catch (e4) {}
+            if (!_lsQuotaWarned && LS_EVICTABLE.indexOf(key) === -1) { _lsQuotaWarned = true; console.warn('device storage full; cache for', key, 'skipped (cloud is the source)'); }
         }
         // لو عندنا تعديل محلي (زي تنفيذ طلب أبليكشن) لسه ما اترفعش للسحابة، بنأجل أي تحديث وارد من جهاز
         // تاني لحد ما رفعنا تعديلنا إحنا الأول، عشان تحديث الجهاز التاني ميمسحش تعديلنا اللي لسه معلق
@@ -3721,6 +3733,8 @@
         function mergeArrayThreeWay(key, serverList, localList) {
             const base = lastSyncedMain[key] || {};
             const localMap = {}; (localList || []).forEach(it => { const ik = itemKey(it); if (ik) localMap[ik] = it; });
+            // (2026-10-25) لو الجهاز ناقصه أكتر من 5 عناصر كانت موجودة = نسخته المحلية اتمسحت/اتغيرت، مش حد مسحهم: السحابة تكسب
+            if ((serverList || []).filter(it => { const ik = itemKey(it); return ik && base[ik] !== undefined && !localMap[ik]; }).length > 5) return (serverList || []).slice();
             const serverKeys = new Set();
             let out = (serverList || []).filter(it => { const ik = itemKey(it); serverKeys.add(ik); return !(ik && base[ik] !== undefined && !localMap[ik]); });
             out = out.map(it => { const ik = itemKey(it), loc = localMap[ik]; return (loc && base[ik] !== undefined && JSON.stringify(loc) !== base[ik]) ? loc : it; });
