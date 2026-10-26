@@ -5232,6 +5232,7 @@
                 order.items.forEach(item => {
                     if (inventory[item.productCode]) {
                         const unitCost = inventory[item.productCode].cost || (products.find(p => p.code === item.productCode) || {}).cost || 0;
+                        if (!(unitCost > 0)) { try { if (!window._zeroCostWarned) { window._zeroCostWarned = true; showToast('⚠️ صنف "' + item.productName + '" تكلفته صفر — ربحه هيتحسب 100%. صلّحه من التقارير ← فحص الربحية', 'error', 9000); } } catch (e) {} }
                         if (!alreadyReserved) {
                             inventory[item.productCode].qty -= item.stockDeductQty;
                             addStockMovement(item.productCode, item.productName, 'out', -item.stockDeductQty, inventory[item.productCode].qty, 'طلب أبليكشن #' + order.id.slice(-6), 'خصم تلقائي من طلب عميل عبر الأبليكشن');
@@ -7693,7 +7694,7 @@
             document.getElementById('productDescription').value = product ? (product.description || '') : '';
             document.getElementById('productUnit').value = product ? product.unit : '';
             document.getElementById('productPrice').value = product ? product.price : '';
-            document.getElementById('productCost').value = product ? (product.cost || '') : '';
+            document.getElementById('productCost').value = product ? (costOfNow(product.code) || product.cost || '') : '';
             document.getElementById('productInitialStock').value = product ? (inventory[product.code]?.qty || 0) : 0;
             document.getElementById('productMinStock').value = product ? (product.minStock || 0) : 0;
             document.getElementById('productMaxOrderQty').value = product ? (product.maxOrderQty || '') : '';
@@ -9956,6 +9957,7 @@
                     products[idx] = { code, name, unit, category, price, cost, minStock, maxOrderQty, secondaryUnit, imageUrl, brand, showInApp, bestSeller, bestSellerOrder };
                     const _desc = document.getElementById('productDescription').value.trim(); if (_desc) products[idx].description = _desc;
                     if (_prev.addedAt) products[idx].addedAt = _prev.addedAt;
+                    if (!(cost > 0) && Number(_prev.cost) > 0) products[idx].cost = _prev.cost;
                     if (window._lastImgStd) { products[idx].imgStd = 1; if (_prev.imageUrl && _prev.imageUrl !== imageUrl) products[idx].imageUrlOrig = _prev.imageUrlOrig || _prev.imageUrl; }
                     else if (_prev.imageUrl === imageUrl) { if (_prev.imgStd) products[idx].imgStd = _prev.imgStd; if (_prev.imageUrlOrig) products[idx].imageUrlOrig = _prev.imageUrlOrig; }
                     if (oldCode !== code && inventory[oldCode]) {
@@ -9966,7 +9968,7 @@
                         inventory[code] = { code, qty: initialStock, cost, minStock };
                         if (initialStock > 0) addStockMovement(code, name, 'initial', initialStock, initialStock, 'تعديل صنف', 'رصيد أولي عند التعديل');
                     } else {
-                        inventory[code].cost = cost; inventory[code].minStock = minStock;
+                        if (cost > 0) inventory[code].cost = cost; inventory[code].minStock = minStock;
                     }
                 }
             } else {
@@ -14247,6 +14249,94 @@
                 }).catch(function(e) { console.error(e); showToast('تعذر الحفظ: ' + (e.message || ''), 'error'); })
                 .then(function() { btn.disabled = false; });
         }
+        // ==================== إصلاح التكلفة الصفر (2026-10-26) ====================
+        // أصناف تكلفتها اتصفرت (غالبًا من رفع Excel من غير عمود تكلفة) → كل بيعها اتحسب ربح 100%.
+        // هنا: نقترح التكلفة الحقيقية من آخر فاتورة شراء أو من سجل حركات المخزن، المدير يراجع ويعتمد،
+        // وبعدين الفواتير اللي اتسجلت بتكلفة صفر لنفس الأصناف تتحسب بالتكلفة الصح (المبالغ نفسها مابتتغيرش).
+        function costOfNow(code) { const p = products.find(x => x.code === code) || {}; return Number((inventory[code] || {}).cost) || Number(p.cost) || 0; }
+        function suggestCostFor(code) {
+            let best = null;
+            purchaseInvoices.forEach(pi => (pi.items || []).forEach(it => {
+                if (it.productCode !== code || !(Number(it.cost) > 0)) return;
+                const t = new Date(pi.date).getTime() || 0;
+                if (!best || t > best.t) best = { cost: Number(it.cost), t, src: 'آخر فاتورة شراء #' + (pi.number || '') + ' (' + new Date(t).toLocaleDateString('ar-EG') + ')' };
+            }));
+            if (best) return best;
+            stockMovements.forEach(m => {
+                if (m.productCode !== code || !(Number(m.unitCost) > 0)) return;
+                const t = new Date(m.date).getTime() || 0;
+                if (!best || t > best.t) best = { cost: Number(m.unitCost), t, src: 'سجل المخزن (' + new Date(t).toLocaleDateString('ar-EG') + ')' };
+            });
+            if (best) return best;
+            invoices.forEach(inv => (inv.items || []).forEach(it => {
+                if (it.productCode !== code || !(Number(it.cost) > 0)) return;
+                const t = new Date(inv.date).getTime() || 0;
+                if (!best || t > best.t) best = { cost: Number(it.cost), t, src: 'تكلفة متسجلة في فاتورة بيع #' + (inv.number || '') };
+            }));
+            const p = products.find(x => x.code === code);
+            if (!best && p && Number(p.cost) > 0) best = { cost: Number(p.cost), t: 0, src: 'تكلفة الصنف في قاعدة الأصناف' };
+            return best;
+        }
+        function zeroCostProducts() {
+            const since = Date.now() - 180 * 86400000, sold = new Set();
+            invoices.forEach(i => { if (i.type === 'sale' && new Date(i.date).getTime() >= since) (i.items || []).forEach(it => sold.add(it.productCode)); });
+            return products.filter(p => costOfNow(p.code) <= 0 && (sold.has(p.code) || (Number((inventory[p.code] || {}).qty) || 0) > 0));
+        }
+        function openZeroCostFix() {
+            if (!nacIsAdmin()) { showToast('للمدير بس', 'error'); return; }
+            const list = zeroCostProducts();
+            if (!list.length) { showToast('مفيش أصناف تكلفتها صفر ✓', 'success'); return; }
+            const rows = list.map(p => {
+                const s = suggestCostFor(p.code);
+                const zeroInv = invoices.filter(i => i.type === 'sale' && (i.items || []).some(it => it.productCode === p.code && !(Number(it.cost) > 0))).length;
+                return `<tr><td>${escapeHtml(p.name)}<div style="font-size:11px;color:var(--text-light);">${escapeHtml(p.code)} · بيع ${Number(p.price || 0).toFixed(2)} / ${escapeHtml(p.unit || '')}</div></td>
+                    <td><input type="number" step="0.01" min="0" class="form-control zc-in" data-code="${escapeHtml(p.code)}" value="${s ? Math.round(s.cost * 100) / 100 : ''}" style="width:110px;"></td>
+                    <td style="font-size:12px;">${s ? escapeHtml(s.src) : '<span style="color:var(--danger);">مفيش تكلفة قديمة — اكتبها بإيدك</span>'}</td><td>${zeroInv}</td></tr>`;
+            }).join('');
+            showReservedModal('إصلاح أصناف تكلفتها صفر (' + list.length + ')', `<p style="margin-top:0;font-size:13px;line-height:1.8;">التكلفة المقترحة جاية من آخر فاتورة شراء أو من سجل المخزن. راجعها وعدّل أي رقم (تكلفة <b>الوحدة الكبيرة</b> زي الكرتونة)، وسيب الخانة فاضية للصنف اللي مش متأكد منه.<br>بعد الاعتماد: التكلفة بتتحط للصنف، والفواتير اللي اتسجلت بتكلفة صفر للأصناف دي بيتعاد حساب ربحها. <b>مبالغ الفواتير والخزنة والعملاء مش بتتغير.</b></p>
+                <div class="table-container" style="max-height:50vh;overflow:auto;"><table><thead><tr><th>الصنف</th><th>التكلفة</th><th>المصدر</th><th>فواتير بتكلفة صفر</th></tr></thead><tbody>${rows}</tbody></table></div>
+                <button class="btn btn-success" style="margin-top:12px;" onclick="applyZeroCostFix()"><i class="fas fa-check"></i> اعتماد التكاليف وإعادة حساب الربح</button> <span id="zcStatus" style="font-size:13px;color:var(--text-light);"></span>`);
+        }
+        async function applyZeroCostFix() {
+            if (!nacIsAdmin() || !db) return;
+            const set = {};
+            document.querySelectorAll('.zc-in').forEach(i => { const v = parseFloat(i.value); if (v > 0) set[i.dataset.code] = v; });
+            const codes = Object.keys(set);
+            if (!codes.length) { showToast('اكتب تكلفة لصنف واحد على الأقل', 'warning'); return; }
+            if (!confirm(`اعتماد التكلفة لـ ${codes.length} صنف وإعادة حساب ربح الفواتير اللي اتسجلت بتكلفة صفر؟`)) return;
+            const st = document.getElementById('zcStatus'); if (st) st.textContent = 'جاري الحفظ...';
+            codes.forEach(code => {
+                const p = products.find(x => x.code === code);
+                if (p) p.cost = set[code];
+                if (inventory[code]) inventory[code].cost = set[code]; else inventory[code] = { code, qty: 0, cost: set[code], minStock: 0 };
+            });
+            localStorage.setItem('products', JSON.stringify(products));
+            try { saveInventory(); } catch (e) { localStorage.setItem('inventory', JSON.stringify(inventory)); }
+            const touched = [];
+            invoices.forEach(inv => {
+                if (inv.type !== 'sale') return;
+                let ch = false;
+                (inv.items || []).forEach(it => {
+                    if (!set[it.productCode] || Number(it.cost) > 0) return;
+                    it.costBeforeFix = it.cost == null ? null : Number(it.cost); it.cost = set[it.productCode]; it.costFixedAt = Date.now(); ch = true;
+                    delete it._costEstimated;
+                });
+                if (ch) { normalizeDocProfit(inv); touched.push(inv); }
+            });
+            localStorage.setItem('invoices', JSON.stringify(invoices));
+            try {
+                for (let i = 0; i < touched.length; i += 300) {
+                    const b = db.batch();
+                    touched.slice(i, i + 300).forEach(inv => b.set(db.collection('invoiceRecords').doc(String(inv.id)), { items: JSON.parse(JSON.stringify(inv.items)), totalCost: inv.totalCost, totalProfit: inv.totalProfit, costFixedAt: Date.now() }, { merge: true }));
+                    await b.commit();
+                }
+            } catch (e) { console.error('cost fix invoices sync', e); showToast('التكاليف اتحفظت، بس تعذر رفع بعض الفواتير: ' + (e.code || e.message), 'error', 8000); }
+            logAction('إصلاح تكلفة أصناف', `${codes.length} صنف اتحطلهم تكلفة — واتعاد حساب ربح ${touched.length} فاتورة كانت بتكلفة صفر`);
+            if (st) st.textContent = '';
+            showToast(`تم ✓ — ${codes.length} صنف، و${touched.length} فاتورة اتعاد حساب ربحها`, 'success', 7000);
+            try { renderProfitAudit(); updateDashboardStats(); } catch (e) {}
+            openZeroCostFix();
+        }
         function renderProfitAudit() {
             const el = document.getElementById('profitAudit');
             if (!el) return;
@@ -14263,7 +14353,7 @@
             const block = (title, color, list, fmt, hint) => `<div style="margin-bottom:12px;padding:12px;border-radius:10px;background:${list.length ? color : 'rgba(46,204,113,0.06)'};">
                 <div style="font-weight:700;">${list.length ? '⚠️' : '✅'} ${title}: <span>${list.length}</span></div>
                 ${list.length ? `<div style="font-size:12.5px;margin-top:6px;line-height:1.9;">${list.slice(0, 25).map(fmt).join('، ')}${list.length > 25 ? ` ... و${list.length - 25} كمان` : ''}</div><div style="font-size:12px;color:var(--text-light);margin-top:4px;">${hint}</div>` : ''}</div>`;
-            el.innerHTML =
+            el.innerHTML = (zeroCost.length && nacIsAdmin() ? `<button class="btn btn-danger btn-sm" style="margin-bottom:10px;" onclick="openZeroCostFix()"><i class="fas fa-wrench"></i> إصلاح الأصناف اللي تكلفتها صفر (${zeroCost.length})</button>` : '') +
                 block('أصناف اتباعت آخر 90 يوم وتكلفتها صفر (ربحها بيطلع 100%)', 'rgba(231,76,60,0.08)', zeroCost, p => escapeHtml(p.name), 'الحل: سجّل لها فاتورة شراء بسعرها الحقيقي، أو حط سعر التكلفة في الصنف.') +
                 block('أصناف سعر بيعها أقل من تكلفتها', 'rgba(231,76,60,0.08)', belowCost, p => `${escapeHtml(p.name)} (بيع ${Number(p.price).toFixed(2)} / تكلفة ${costOf(p).toFixed(2)})`, 'راجع السعر في قاعدة الأصناف.') +
                 block('أصناف رصيدها بالسالب', 'rgba(243,156,18,0.1)', negative, p => `${escapeHtml(p.name)} (${(inventory[p.code] || {}).qty})`, 'معناها إن فيه بيع اتسجل قبل فاتورة الشراء بتاعته. اعتمد فواتير الشراء المستنية أو اعمل جرد.') +
@@ -18062,9 +18152,12 @@
                     if (p.brand) products[idx].brand = p.brand;
                     if (p.category) products[idx].category = p.category;
                     products[idx].price = p.price;
-                    products[idx].cost = p.cost;
-                    if (!inventory[p.code]) inventory[p.code] = { code: p.code, qty: p.qty, cost: p.cost, minStock: 0 };
-                    else inventory[p.code].cost = p.cost;
+                    // (2026-10-26) التكلفة بتتغير بس لو الشيت فيه تكلفة فعلًا (> 0) — خانة فاضية أو عمود ناقص مايصفّرش التكلفة
+                    if (Number(p.cost) > 0) {
+                        products[idx].cost = p.cost;
+                        if (!inventory[p.code]) inventory[p.code] = { code: p.code, qty: p.qty, cost: p.cost, minStock: 0 };
+                        else inventory[p.code].cost = p.cost;
+                    } else if (!inventory[p.code]) inventory[p.code] = { code: p.code, qty: p.qty, cost: Number(products[idx].cost) || 0, minStock: 0 };
                     updated++;
                 } else {
                     products.push({ code: p.code, name: p.name, unit: p.unit, category: p.category, price: p.price, cost: p.cost, minStock: 0, maxOrderQty: null, secondaryUnit: null, imageUrl: null, brand: p.brand || null, showInApp: true, bestSeller: false, bestSellerOrder: 0 });
