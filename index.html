@@ -9513,8 +9513,9 @@
         }
         function publishProductBadges() {
             if (!db || !isCloudReady()) return;
-            const nw = products.filter(p => p.showInApp !== false && p.addedAt && Date.now() - Number(p.addedAt) < 14 * 86400000).map(p => p.code);
-            const back = backInStockProducts(5).map(b => b.code).filter(c => nw.indexOf(c) === -1);
+            // (2026-10-26) الأجدد الأول
+            const nw = products.filter(p => p.showInApp !== false && p.addedAt && Date.now() - Number(p.addedAt) < 14 * 86400000).sort((x, y) => Number(y.addedAt) - Number(x.addedAt)).map(p => p.code);
+            const back = backInStockProducts(5).sort((x, y) => y.at - x.at).map(b => b.code).filter(c => nw.indexOf(c) === -1);
             const sig = JSON.stringify([nw, back]);
             if (sig === _badgesLast) return;
             const ref = db.collection('appMeta').doc('productBadges');
