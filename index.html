@@ -1216,7 +1216,7 @@
                     <div style="display:flex;gap:10px;">
                         <button class="btn btn-success btn-sm" onclick="openTreasuryInModal()"><i class="fas fa-arrow-down"></i> سند قبض</button>
                         <button class="btn btn-danger btn-sm" onclick="openTreasuryOutModal()"><i class="fas fa-arrow-up"></i> سند صرف</button>
-                        <button class="btn btn-warning btn-sm" onclick="openTreasuryOpeningModal()"><i class="fas fa-cog"></i> رصيد افتتاحي</button>
+                        <button class="btn btn-warning btn-sm" onclick="openTreasuryOpeningModal()"><i class="fas fa-cog"></i> رصيد افتتاحي / تسوية</button>
                         <button class="btn btn-info btn-sm" onclick="exportTreasuryExcel()"><i class="fas fa-file-export"></i> تصدير Excel</button>
                         <button class="btn btn-secondary btn-sm" onclick="undoLastTreasuryEntry()"><i class="fas fa-undo"></i> تراجع عن آخر حركة</button>
                     </div>
@@ -2992,11 +2992,12 @@
     <!-- Treasury Opening Balance Modal -->
     <div class="modal-overlay" id="treasuryOpeningModal">
         <div class="modal">
-            <div class="modal-header"><h3 class="modal-title"><i class="fas fa-cog" style="color:var(--warning);"></i> رصيد افتتاحي للخزنة</h3><button class="modal-close" onclick="closeModal('treasuryOpeningModal')">&times;</button></div>
+            <div class="modal-header"><h3 class="modal-title"><i class="fas fa-cog" style="color:var(--warning);"></i> <span id="treasuryOpeningTitle">رصيد افتتاحي للخزنة</span></h3><button class="modal-close" onclick="closeModal('treasuryOpeningModal')">&times;</button></div>
             <div class="modal-body">
                 <div class="form-group"><label class="form-label">المبلغ</label><input type="number" class="form-control" id="treasuryOpeningAmount" placeholder="0.00"></div>
-                <div class="form-group"><label class="form-label">التاريخ</label><input type="date" class="form-control" id="treasuryOpeningDate"></div>
-                <div class="form-group"><label class="form-label">ملاحظات</label><input type="text" class="form-control" id="treasuryOpeningNotes" placeholder="ملاحظات..."></div>
+                <div class="form-group" id="treasuryOpeningDateRow"><label class="form-label">التاريخ</label><input type="date" class="form-control" id="treasuryOpeningDate"></div>
+                <div id="treasuryOpeningCurrent" style="display:none;background:var(--bg,#f5f5f5);padding:8px 12px;border-radius:8px;font-size:13px;margin-bottom:10px;"></div>
+                <div class="form-group"><label class="form-label" id="treasuryOpeningNotesLabel">ملاحظات</label><input type="text" class="form-control" id="treasuryOpeningNotes" placeholder="ملاحظات..."></div>
                 <p style="color:var(--text-light);font-size:13px;margin-top:10px;"><i class="fas fa-info-circle"></i> لو الخزنة فاضية، المبلغ ده بيبقى أول رصيد. ولو فيها حركات، بتتضاف حركة تسوية بالفرق عشان الرصيد يبقى المبلغ ده، ومفيش أي حركة قديمة بتتمسح (للمدير فقط).</p>
             </div>
             <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('treasuryOpeningModal')">إلغاء</button><button class="btn btn-warning" onclick="saveTreasuryOpening()"><i class="fas fa-save"></i> تعيين</button></div>
@@ -11431,6 +11432,15 @@
             document.getElementById('treasuryOpeningAmount').value = '';
             document.getElementById('treasuryOpeningDate').value = new Date().toISOString().split('T')[0];
             document.getElementById('treasuryOpeningNotes').value = '';
+            // لو الخزنة فيها حركات يبقى ده تسوية: التاريخ بيتسجل بوقت دلوقتي، والسبب إجباري
+            const isAdj = treasury.length > 0;
+            document.getElementById('treasuryOpeningTitle').textContent = isAdj ? 'تسوية رصيد الخزنة' : 'رصيد افتتاحي للخزنة';
+            document.getElementById('treasuryOpeningDateRow').style.display = isAdj ? 'none' : '';
+            const cur = document.getElementById('treasuryOpeningCurrent');
+            cur.style.display = isAdj ? '' : 'none';
+            if (isAdj) cur.innerHTML = 'الرصيد الحالي: <strong>' + getTreasuryBalance().toFixed(2) + ' ج.م</strong> — اكتب الرصيد الفعلي اللي المفروض يبقى. الحركة هتتسجل بتاريخ ووقت دلوقتي.';
+            document.getElementById('treasuryOpeningNotesLabel').textContent = isAdj ? 'سبب التسوية (إجباري)' : 'ملاحظات';
+            document.getElementById('treasuryOpeningNotes').placeholder = isAdj ? 'مثلاً: تسوية بعد جرد الخزنة الفعلي' : 'ملاحظات...';
             openModal('treasuryOpeningModal');
         }
 
@@ -11471,7 +11481,8 @@
             const date = document.getElementById('treasuryOpeningDate').value;
             const notes = document.getElementById('treasuryOpeningNotes').value.trim();
             if (isNaN(amount) || amount < 0) { showToast('الرجاء إدخال مبلغ صحيح', 'error'); return; }
-            if (!date) { showToast('الرجاء اختيار التاريخ', 'error'); return; }
+            if (treasury.length === 0 && !date) { showToast('الرجاء اختيار التاريخ', 'error'); return; }
+            if (treasury.length > 0 && !notes) { showToast('اكتب سبب التسوية — إجباري', 'error'); document.getElementById('treasuryOpeningNotes').focus(); return; }
 
             if (treasury.length === 0) {
                 // خزنة فاضية: الرصيد الافتتاحي بيبقى أول حركة
@@ -11495,7 +11506,7 @@
             const diff = amount - current;
             if (Math.abs(diff) < 0.005) { showToast('رصيد الخزنة الحالي بالفعل ' + current.toFixed(2) + ' ج.م', 'warning'); return; }
             if (!confirm(`رصيد الخزنة الحالي: ${current.toFixed(2)} ج.م\nالرصيد الجديد: ${amount.toFixed(2)} ج.م\n\nهتتضاف حركة تسوية ${diff > 0 ? 'قبض' : 'صرف'} بمبلغ ${Math.abs(diff).toFixed(2)} ج.م\nوكل الحركات القديمة (والتحصيلات) هتفضل زي ما هي.\n\nتكمل؟`)) return;
-            addTreasuryEntry(diff > 0 ? 'in' : 'out', Math.abs(diff), 'تسوية رصيد', 'system', notes || 'تسوية رصيد الخزنة', 'تسوية رصيد', false);
+            addTreasuryEntry(diff > 0 ? 'in' : 'out', Math.abs(diff), 'تسوية رصيد', 'system', notes, 'تسوية رصيد', false);
             renderTreasury(); updateDashboardStats();
             closeModal('treasuryOpeningModal');
             showToast('تم تسوية رصيد الخزنة');
