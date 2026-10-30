@@ -3056,7 +3056,9 @@
         const ROLES = {
             admin: { label: 'مدير النظام', sections: ['*'] },
             // المحاسب: من غير الربحية خالص، وبيشوف المخزون (وأي تعديل مخزون منه بيحتاج اعتماد المدير)
-            accountant: { label: 'محاسب', sections: ['dashboard', 'invoices', 'purchase-invoice', 'purchase-approvals', 'purchase-returns', 'collections', 'treasury', 'expenses', 'rep-custody', 'inventory', 'products', 'suppliers', 'daily-sales', 'reports'] },
+            // (2026-10-30) المحاسب بقى شايل شغل أمين المخزن كمان: طلبات العملاء والتجهيز واستلام المرتجعات وتنبيهات المخزن.
+            // اعتماد فواتير الشراء والجرد بقى للمدير بس (مايعتمدش شغله بنفسه).
+            accountant: { label: 'محاسب', sections: ['dashboard', 'customer-orders', 'invoices', 'purchase-invoice', 'purchase-approvals', 'purchase-returns', 'collections', 'treasury', 'expenses', 'rep-custody', 'inventory', 'products', 'suppliers', 'daily-sales', 'reports'] },
             warehouse_keeper: { label: 'أمين مخزن', sections: ['dashboard', 'customer-orders', 'purchase-invoice', 'purchase-returns', 'inventory', 'products', 'suppliers'] },
             // مشرف المبيعات: بيشوف داشبورد المتابعة بس (عرض فقط)، والحاجة الوحيدة اللي بيسجلها هي التارجت
             sales_supervisor: { label: 'مشرف مبيعات', sections: ['sales-supervisor'], home: 'sales-supervisor' }
@@ -9039,15 +9041,17 @@
             edited: 'مندوب البيع: طلبه اتعدل'
         };
         const NOTIF_STAFF = {
-            newOrder: { label: 'طلب جديد', roles: ['admin', 'warehouse_keeper'], icon: 'fa-shopping-basket', section: 'customer-orders' },
-            late: { label: 'طلب متأخر', roles: ['admin', 'warehouse_keeper'], icon: 'fa-clock', section: 'customer-orders' },
-            approval: { label: 'طلب اعتماد (شراء / جرد)', roles: ['admin', 'accountant'], icon: 'fa-clipboard-check', section: 'purchase-approvals' },
-            repReturn: { label: 'مرتجع مندوب مستني استلام', roles: ['admin', 'warehouse_keeper'], icon: 'fa-undo', section: 'inventory' },
-            stock: { label: 'أصناف خلصت أو قربت تخلص', roles: ['admin', 'warehouse_keeper'], icon: 'fa-box-open', section: 'inventory' },
+            newOrder: { label: 'طلب جديد', roles: ['admin', 'accountant', 'warehouse_keeper'], icon: 'fa-shopping-basket', section: 'customer-orders' },
+            late: { label: 'طلب متأخر', roles: ['admin', 'accountant', 'warehouse_keeper'], icon: 'fa-clock', section: 'customer-orders' },
+            approval: { label: 'طلب اعتماد (شراء / جرد)', roles: ['admin'], icon: 'fa-clipboard-check', section: 'purchase-approvals' },
+            repReturn: { label: 'مرتجع مندوب مستني استلام', roles: ['admin', 'accountant', 'warehouse_keeper'], icon: 'fa-undo', section: 'inventory' },
+            stock: { label: 'أصناف خلصت أو قربت تخلص', roles: ['admin', 'accountant', 'warehouse_keeper'], icon: 'fa-box-open', section: 'inventory' },
             treasury: { label: 'حركة خزنة كبيرة', roles: ['admin', 'accountant'], icon: 'fa-coins', section: 'treasury' },
             security: { label: 'تنبيه أمان (محاولة مسح جماعي)', roles: ['admin'], icon: 'fa-shield-alt', section: 'audit-log' },
             cashClose: { label: 'الخزنة ما اتقفلتش', roles: ['admin', 'accountant'], icon: 'fa-cash-register', section: 'treasury' },
-            reserved: { label: 'طلبات قديمة حاجزة بضاعة', roles: ['admin', 'warehouse_keeper'], icon: 'fa-lock', section: 'inventory' }
+            reserved: { label: 'طلبات قديمة حاجزة بضاعة', roles: ['admin', 'accountant', 'warehouse_keeper'], icon: 'fa-lock', section: 'inventory' },
+            // (2026-10-30) رقابة للمدير: عجز في مرتجع مندوب، فرق بين التحصيل والفاتورة، فرق في قفل الخزنة
+            control: { label: 'عجز أو فرق في الفلوس/المرتجعات', roles: ['admin'], icon: 'fa-user-shield', section: 'rep-custody' }
         };
         let notifSettingsRaw = (function() { try { return JSON.parse(localStorage.getItem('notifSettings') || '{}') || {}; } catch (e) { return {}; } })();
         let notifSettingsListenerStarted = false;
@@ -9740,6 +9744,15 @@
             }
             if (staffAlertAllowed('treasury') && s.bigTreasury > 0) (treasury || []).filter(t => (Number(t.amount) || 0) >= s.bigTreasury && now - new Date(t.date).getTime() < 48 * 3600000 && t.partyType !== 'transfer').forEach(t => add('treasury', 'trs_' + t.id, `${t.type === 'in' ? 'قبض' : 'صرف'} ${(Number(t.amount) || 0).toLocaleString('en-US')} ج.م`, `${t.reference || ''} — ${t.notes || ''}`, new Date(t.date).getTime()));
             if (staffAlertAllowed('security')) (auditLog || []).filter(a => a.type === 'تنبيه أمان' && now - new Date(a.date).getTime() < 7 * 86400000).forEach(a => add('security', 'sec_' + a.id, 'تنبيه أمان', `${a.details || ''} — ${a.fullName || a.username || ''}`, new Date(a.date).getTime()));
+            if (staffAlertAllowed('control')) {
+                const since3 = now - 3 * 86400000;
+                (typeof repReturnOrders !== 'undefined' ? repReturnOrders : []).filter(o => o.repReturnReceived && Number(o.repReturnReceived.shortageValue) > 0.005 && (o.repReturnReceived.at || 0) > since3)
+                    .forEach(o => add('control', 'rrs_' + o.id, 'عجز في مرتجع مندوب', `${o.repReturnRepName || ''} — ${oname(o)}: عجز ${Number(o.repReturnReceived.shortageValue).toFixed(2)} ج — استلمه ${(o.repReturnReceived.by || '')}`, o.repReturnReceived.at));
+                (auditLog || []).filter(a => /فرق بين التحصيل والفاتورة/.test(a.type || '') && new Date(a.date).getTime() > since3)
+                    .forEach(a => add('control', 'cd_' + a.id, 'فرق بين التحصيل والفاتورة', a.details || '', new Date(a.date).getTime()));
+                (typeof cashCloses !== 'undefined' ? cashCloses : []).filter(c => Math.abs(Number(c.diff) || 0) >= 0.005 && (c.at || 0) > since3)
+                    .forEach(c => add('control', 'cc_' + c.id, (c.diff < 0 ? 'عجز' : 'زيادة') + ' في قفل الخزنة', `${Math.abs(c.diff).toFixed(2)} ج — قفلها ${(c.by && c.by.name) || ''}${c.note ? ' — ' + c.note : ''}`, c.at));
+            }
             if (staffAlertAllowed('cashClose') && typeof cashCloseListenerStarted !== 'undefined' && cashCloseListenerStarted) {
                 const today0 = new Date(); today0.setHours(0, 0, 0, 0);
                 const lc = lastCashCloseAt();
@@ -10293,7 +10306,7 @@
             xlWrite('مرتجعات_المناديب', [{ name: 'المرتجعات', rows, widths: [16, 24, 10, 10, 30, 8, 8, 10, 18, 20, 12, 12, 16] }]);
         }
         let receivingReturnId = null;
-        const canReceiveRepReturns = () => ['admin', 'warehouse_keeper'].includes(xlRole());
+        const canReceiveRepReturns = () => ['admin', 'accountant', 'warehouse_keeper'].includes(xlRole());
         // (2026-10-17) زرار "قفل (اتعدّ في الجرد)" للمدير بس — أمين المخزن عنده "استلام المرتجع" بس
         const canCloseRepReturnCounted = () => xlRole() === 'admin';
         function openRepReturnReceive(id) {
@@ -12660,7 +12673,8 @@
         let purchaseDraftsListenerStarted = false;
         const pdUser = () => ({ username: currentUser ? (currentUser.username || '') : '', name: currentUser ? (currentUser.fullName || currentUser.username || '') : '', role: currentUser ? currentUser.role : '' });
         const pdRole = () => String((currentUser && currentUser.role) || '').trim().toLowerCase();
-        function canApprovePurchases() { return pdRole() === 'admin' || pdRole() === 'accountant'; }
+        // (2026-10-30) الاعتماد للمدير بس — المحاسب بقى هو اللي بيسجل فواتير الشراء، فمايعتمدش شغله بنفسه
+        function canApprovePurchases() { return pdRole() === 'admin'; }
         function isOwnPurchaseDraft(d) { return d && d.createdBy && currentUser && d.createdBy.username === currentUser.username; }
         function pdAgo(ms) { const m = Math.max(0, Math.round((Date.now() - ms) / 60000)); return m < 60 ? `${m} دقيقة` : (m < 1440 ? `${Math.floor(m / 60)} ساعة` : `${Math.floor(m / 1440)} يوم`); }
 
@@ -12802,7 +12816,7 @@
             const id = document.getElementById('purchaseReviewId').value;
             const d = purchaseDrafts.find(x => x.id === id);
             if (!d || !db) return;
-            if (!canApprovePurchases()) { showToast('الاعتماد للمحاسب أو المدير بس', 'error'); return; }
+            if (!canApprovePurchases()) { showToast('الاعتماد للمدير بس', 'error'); return; }
             if (isOwnPurchaseDraft(d) && pdRole() !== 'admin') { showToast('مينفعش تعتمد فاتورة إنت اللي عاملها', 'error'); return; }
             const costs = Array.from(document.querySelectorAll('#purchaseReviewItems .pr-cost')).map(inp => parseFloat(inp.value));
             if (costs.some(c => isNaN(c) || c < 0)) { showToast('فيه سعر مش مظبوط', 'error'); return; }
@@ -13007,7 +13021,7 @@
             const id = document.getElementById('approvalReviewId').value;
             const d = purchaseDrafts.find(x => x.id === id);
             if (!d || !db) return;
-            if (!canApprovePurchases()) { showToast('الاعتماد للمحاسب أو المدير بس', 'error'); return; }
+            if (!canApprovePurchases()) { showToast('الاعتماد للمدير بس', 'error'); return; }
             if (isOwnPurchaseDraft(d) && pdRole() !== 'admin') { showToast('مينفعش تعتمد حاجة إنت اللي عاملها', 'error'); return; }
             const kind = draftKind(d);
             // نتأكد قبل الاعتماد إن المخزون يسمح
@@ -13481,7 +13495,7 @@
         }
         function applyUnappliedCount(id) {
             const x = unappliedCounts.find(u => u.id === id); if (!x || !db) return;
-            if (!canApprovePurchases()) { showToast('للمحاسب أو المدير بس', 'error'); return; }
+            if (!canApprovePurchases()) { showToast('للمدير بس', 'error'); return; }
             const impacts = (x.items || []).map((it, idx) => (document.getElementById('ucImpact_' + idx) || {}).value || defaultImpactFor(it.delta));
             const bad = (x.items || []).find((it, idx) => impacts[idx] === 'damage' && Number(it.delta) > 0);
             if (bad) { showToast(bad.productName + ': "تالف" مينفعش مع زيادة — اختار نوع تاني', 'error'); return; }
