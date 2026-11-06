@@ -1784,6 +1784,8 @@
                     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
                         <button class="btn btn-info btn-sm" onclick="showOpenedNoOrderReport()"><i class="fas fa-eye"></i> فتحوا الأبليكشن وما طلبوش</button>
                         <button class="btn btn-info btn-sm" onclick="showNotifPerformance()"><i class="fas fa-chart-line"></i> أداء الإشعارات</button>
+                        <button class="btn btn-info btn-sm" onclick="showVisitFailReasons()"><i class="fas fa-circle-question"></i> ليه الزيارات ما جابتش طلب</button>
+                        <button class="btn btn-primary btn-sm" onclick="if(confirm('تبعت لكل مندوب بيع ملخص بعملاءه النايمين واللي فتحوا الأبليكشن وما طلبوش؟ (بيتبعت لوحده كل يوم 9:30 الصبح)'))sendRepDailyDigest(true)"><i class="fas fa-sun"></i> ملخص المناديب</button>
                         <span id="promoInfo" style="font-size:12.5px;color:var(--text-light);"></span>
                     </div>
                 </div>
@@ -1877,6 +1879,7 @@
                     <div class="card-title"><i class="fas fa-users"></i> قاعدة بيانات العملاء</div>
                     <div style="display:flex;gap:10px;flex-wrap:wrap;">
                         <button class="btn btn-success btn-sm" onclick="openCustomerModal()"><i class="fas fa-plus"></i> إضافة عميل</button>
+                        <button class="btn btn-primary btn-sm" id="newCustReqBtn" onclick="showNewCustomerRequests()"><i class="fas fa-user-plus"></i> عملاء جداد من المناديب</button>
                         <button class="btn btn-warning btn-sm" onclick="openAppPasswordResetModal()"><i class="fas fa-key"></i> إعادة ضبط رقم سري (أبليكيشن)</button>
                         <button class="btn btn-info btn-sm" onclick="exportCustomersToExcel()"><i class="fas fa-file-export"></i> تصدير العملاء الحاليين</button>
                         <button class="btn btn-primary btn-sm" onclick="document.getElementById('excelFileInput').click()"><i class="fas fa-file-excel"></i> رفع ملف Excel</button>
@@ -4248,8 +4251,9 @@
             if (!db || customerVisitRecordsListenerStarted) return;
             customerVisitRecordsListenerStarted = true;
             db.collection('customerVisitRecords').orderBy('date', 'desc').limit(2000).onSnapshot(function(snap) {
-                customerVisits = snap.docs.map(function(d) { return d.data(); });
-                localStorage.setItem('customerVisits', JSON.stringify(customerVisits));
+                customerVisits = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+                repVisitsStoreLocal();
+                try { updateNewCustBadge(); } catch (e) {}
             }, function(err) { console.error('Customer visit records listener error:', err); });
         }
 
@@ -8564,6 +8568,7 @@
                 if (idx !== -1) appOffers[idx] = { ...appOffers[idx], ...offerData };
             } else {
                 appOffers.push({ id: 'offer_' + Date.now(), ...offerData });
+                if (offerData.active) notifyRepsNewOffer(offerData);
             }
             localStorage.setItem('appOffers', JSON.stringify(appOffers));
             logAction(editingAppOffer ? 'تعديل عرض' : 'إضافة عرض', `العرض: ${title}`);
@@ -12086,6 +12091,145 @@
 
         // (2026-10-08) هدف ومحقق كل مندوب بيع بيتبعت للأبليكشن (meta/repProgress) عشان المندوب يشوفهم من الماستر بتاعه
         // بنفس حساب لوحة مشرف المبيعات بالظبط. أي جهاز فاتح السيستم (مدير/محاسب/مشرف) بيحدّثه كل 10 دقايق
+        // ==================== (2026-11-06) تطويرات المناديب: عملاء جداد من الشارع، أسباب الزيارات، ملخص الصبح ====================
+        function custLastSaleMap() {
+            const m = {};
+            invoices.forEach(i => { if (i.type !== 'sale' || !i.customerCode) return; const t = saleTimeOf(i); if (!m[i.customerCode] || t > m[i.customerCode]) m[i.customerCode] = t; });
+            return m;
+        }
+        // إحصائيات العملاء اللي بتروح للمندوب (آخر شراء + يومه المعتاد) — بتتبعت مع repProgress
+        function repCustStatsPayload() {
+            const since = Date.now() - 70 * 86400000, by = {};
+            invoices.forEach(i => {
+                if (i.type !== 'sale' || !i.customerCode) return;
+                const t = saleTimeOf(i); if (!t) return;
+                const r = by[i.customerCode] || (by[i.customerCode] = { l: 0, n: 0, wd: {} });
+                if (t > r.l) r.l = t;
+                if (t >= since) { r.n++; const d = svSalesDayStart(new Date(t)).toDateString(); r.wd[d] = 1; }
+            });
+            const out = {};
+            customers.forEach(c => {
+                if (!c.salesmanCode) return;
+                const r = by[c.code]; if (!r) return;
+                const cnt = [0, 0, 0, 0, 0, 0, 0]; let days = 0;
+                Object.keys(r.wd).forEach(d => { cnt[new Date(d).getDay()]++; days++; });
+                let u = -1, best = 0; cnt.forEach((v, k) => { if (v > best) { best = v; u = k; } });
+                if (best < 3 || best / Math.max(1, days) < 0.4) u = -1;
+                out[c.code] = { l: Math.floor(r.l / 1000), u, n: r.n };
+            });
+            return out;
+        }
+        function repVisitsStoreLocal() {
+            try { localStorage.setItem('customerVisits', JSON.stringify(customerVisits.map(v => { if (!v.photo && !v.newCustomer) return v; const o = Object.assign({}, v); delete o.photo; if (o.newCustomer) o.newCustomer = Object.assign({}, o.newCustomer, { photo: '' }); return o; }))); } catch (e) {}
+        }
+        function pendingNewCustomers() { return customerVisits.filter(v => v.kind === 'newCustomer' && v.status === 'pending'); }
+        function updateNewCustBadge() {
+            const b = document.getElementById('newCustReqBtn'); if (!b) return;
+            const n = pendingNewCustomers().length;
+            b.innerHTML = `<i class="fas fa-user-plus"></i> عملاء جداد من المناديب${n ? ` <span style="background:#c0392b;color:#fff;border-radius:99px;padding:0 7px;margin-right:4px;">${n}</span>` : ''}`;
+        }
+        function showNewCustomerRequests() {
+            const list = customerVisits.filter(v => v.kind === 'newCustomer').slice(0, 60);
+            const st = { pending: '<span class="badge badge-warning">مستني</span>', approved: '<span class="badge badge-success">اتضاف</span>', rejected: '<span class="badge badge-danger">اترفض</span>' };
+            showReservedModal('عملاء جداد من المناديب', '<p style="margin-top:0;font-size:13px;color:var(--text-light);">المندوب سجّلهم من الشارع. "إضافة" بتعمل العميل وتديه للمندوب ده، وبيوصله إشعار.</p>' + (list.length ? `<div class="table-container"><table><thead><tr><th>إمتى</th><th>المندوب</th><th>المحل</th><th>التليفون</th><th>الحي / العنوان</th><th>صورة/موقع</th><th></th></tr></thead><tbody>${list.map(v => { const n = v.newCustomer || {}; return `<tr><td>${new Date(v.date).toLocaleString('ar-EG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</td><td>${escapeHtml(v.repFullName || repName(v.repUsername))}</td><td><b>${escapeHtml(n.shopName || '')}</b><div style="font-size:11px;">${escapeHtml(n.name || '')}</div></td><td>${escapeHtml(n.phone || '')}</td><td>${escapeHtml(n.neighborhood || '')}<div style="font-size:11px;">${escapeHtml(n.address || '')}</div></td><td>${n.photo ? `<img src="${n.photo}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;cursor:pointer;" onclick="window.open().document.write('<img src=&quot;'+this.src+'&quot; style=&quot;max-width:100%&quot;>')">` : ''} ${n.location ? `<a href="https://www.google.com/maps?q=${n.location.lat},${n.location.lng}" target="_blank">📍</a>` : ''}</td><td>${v.status === 'pending' ? `<button class="btn btn-success btn-sm" onclick="approveNewCustomer('${escapeHtml(v.id)}')">إضافة</button> <button class="btn btn-danger btn-sm" onclick="rejectNewCustomer('${escapeHtml(v.id)}')">رفض</button>` : (st[v.status] || '') + (v.customerCode ? ' ' + escapeHtml(v.customerCode) : '')}</td></tr>`; }).join('')}</tbody></table></div>` : '<p>مفيش طلبات لسه</p>'));
+        }
+        function approveNewCustomer(id) {
+            if (!requireCloudReady()) return;
+            const v = customerVisits.find(x => x.id === id); if (!v || v.status !== 'pending') return;
+            const n = v.newCustomer || {};
+            const l10 = String(n.phone || '').replace(/\D/g, '').slice(-10);
+            const dup = l10.length === 10 ? customers.find(c => String(c.phone || '').replace(/\D/g, '').slice(-10) === l10) : null;
+            if (dup && !confirm(`الرقم ده متسجل لعميل: ${dup.name} (${dup.code})\nتضيفه برضه كعميل جديد؟`)) return;
+            const code = makeAutoCoder(customers.map(c => c.code), 'C')();
+            const nc = { code, name: n.name || n.shopName || 'عميل جديد', shopName: n.shopName || '', phone: n.phone || '', address: n.address || '', neighborhood: n.neighborhood || '', salesmanCode: '', creditLimit: null, repLocked: false };
+            if (n.location) nc.location = n.location;
+            const zr = zoneRepForNeighborhood(nc.neighborhood);
+            if (zr.code && zr.code !== v.repUsername) nc.repLocked = true;   // المندوب اللي جابه هو اللي ماسكه
+            setCustomerRep(nc, v.repUsername, 'عميل جديد من المندوب', { silentLog: true });
+            customers.push(nc);
+            localStorage.setItem('customers', JSON.stringify(customers));
+            logAction('إضافة عميل', `العميل "${nc.name}" (${code}) — جاي من المندوب ${repName(v.repUsername)}`);
+            db.collection('customerVisitRecords').doc(id).update({ status: 'approved', customerCode: code, decidedAt: Date.now(), decidedBy: currentUser.username || '' }).catch(e => console.error(e));
+            v.status = 'approved'; v.customerCode = code;
+            notifyRep(v.repUsername, 'اتضاف عميلك الجديد ✅', `${nc.shopName || nc.name} بقى من عملاءك — كوده ${code}`);
+            renderCustomers(); updateInvoiceDropdowns(); updateNewCustBadge(); showNewCustomerRequests();
+            showToast('اتضاف العميل ' + code);
+        }
+        function rejectNewCustomer(id) {
+            const v = customerVisits.find(x => x.id === id); if (!v) return;
+            const why = prompt('سبب الرفض (بيوصل للمندوب):', 'متسجل قبل كده'); if (why === null) return;
+            db.collection('customerVisitRecords').doc(id).update({ status: 'rejected', rejectReason: why, decidedAt: Date.now() }).catch(e => console.error(e));
+            v.status = 'rejected';
+            notifyRep(v.repUsername, 'طلب عميل جديد اترفض', `${(v.newCustomer || {}).shopName || v.customerName || ''}: ${why}`);
+            updateNewCustBadge(); showNewCustomerRequests();
+        }
+        // أسباب الزيارات اللي ما جابتش طلب
+        function showVisitFailReasons() {
+            const days = Math.max(1, Number(prompt('آخر كام يوم؟', '30')) || 30), since = Date.now() - days * 86400000;
+            const fails = customerVisits.filter(v => v.kind !== 'newCustomer' && v.status === 'غير ناجحة' && new Date(v.date).getTime() >= since);
+            const by = {}, byRep = {}, comp = {};
+            fails.forEach(v => {
+                const r = v.failReason || 'مش متسجل'; by[r] = (by[r] || 0) + 1;
+                const k = v.repFullName || repName(v.repUsername) || '-'; (byRep[k] = byRep[k] || {})[r] = (byRep[k][r] || 0) + 1;
+                if (v.competitor) comp[v.competitor] = (comp[v.competitor] || 0) + 1;
+            });
+            const reasons = Object.keys(by).sort((a, b) => by[b] - by[a]);
+            const total = fails.length;
+            const withPhoto = fails.filter(v => v.photo).slice(0, 24);
+            showReservedModal(`ليه الزيارات ما جابتش طلب — آخر ${days} يوم (${total})`,
+                (total ? `<div class="table-container"><table><thead><tr><th>السبب</th><th>العدد</th><th>%</th></tr></thead><tbody>${reasons.map(r => `<tr><td><b>${escapeHtml(r)}</b></td><td>${by[r]}</td><td>${Math.round(by[r] / total * 100)}%</td></tr>`).join('')}</tbody></table></div>` +
+                (Object.keys(comp).length ? `<h4 style="margin:14px 0 6px;">المنافسين اللي اتذكروا</h4><div>${Object.keys(comp).sort((a, b) => comp[b] - comp[a]).map(c => `<span class="badge badge-warning" style="margin:2px;">${escapeHtml(c)} (${comp[c]})</span>`).join('')}</div>` : '') +
+                `<h4 style="margin:14px 0 6px;">لكل مندوب</h4><div class="table-container"><table><thead><tr><th>المندوب</th>${reasons.map(r => `<th>${escapeHtml(r)}</th>`).join('')}</tr></thead><tbody>${Object.keys(byRep).map(k => `<tr><td>${escapeHtml(k)}</td>${reasons.map(r => `<td>${byRep[k][r] || ''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` +
+                (withPhoto.length ? `<h4 style="margin:14px 0 6px;">صور من الزيارات</h4><div style="display:flex;flex-wrap:wrap;gap:6px;">${withPhoto.map(v => `<div style="text-align:center;font-size:10.5px;width:84px;"><img src="${v.photo}" style="width:84px;height:84px;object-fit:cover;border-radius:8px;cursor:pointer;" onclick="window.open().document.write('<img src=&quot;'+this.src+'&quot; style=&quot;max-width:100%&quot;>')"><div>${escapeHtml(v.customerName || '')}</div></div>`).join('')}</div>` : '')
+                : '<p>مفيش زيارات فاشلة في المدة دي (أو المناديب لسه ما حدّثوش الأبليكشن)</p>'));
+        }
+        // ملخص الصبح لكل مندوب بيع: عملاء نايمين + فتحوا الأبليكشن وما طلبوش
+        function buildRepDigests() {
+            const last = custLastSaleMap(), now = Date.now();
+            return (db ? db.collection('customerCarts').get() : Promise.resolve({ docs: [] })).then(snap => {
+                const seen = {};
+                snap.docs.forEach(d => { if (d.id.indexOf('seen_') !== 0) return; const x = d.data() || {}; if ((Number(x.lastSeenAt) || 0) >= now - 2 * 86400000) seen[notifLast10(x.phone || d.id.slice(5))] = Number(x.lastSeenAt); });
+                const out = {};
+                salesmen.filter(s => s.repType !== 'delivery' && (!s.status || s.status === 'نشط')).forEach(s => {
+                    const mine = customers.filter(c => c.salesmanCode === s.code);
+                    const dormant = mine.filter(c => last[c.code] && now - last[c.code] >= 10 * 86400000).sort((a, b) => last[a.code] - last[b.code]);
+                    const opened = mine.filter(c => { const l = notifLast10(c.phone); const t = seen[l]; return t && !(last[c.code] && last[c.code] >= t - 86400000); });
+                    if (dormant.length || opened.length) out[s.code] = { dormant, opened, name: s.name };
+                });
+                return out;
+            });
+        }
+        function sendRepDailyDigest(manual) {
+            if (!db || !currentUser || !['admin', 'accountant'].includes(xlRole()) || !isCloudReady()) return Promise.resolve();
+            const day = svSalesDayStart(new Date()).toDateString();
+            const ref = db.collection('meta').doc('repDigest');
+            const go = () => buildRepDigests().then(map => {
+                const nm = c => c.shopName || c.name;
+                let sent = 0;
+                Object.keys(map).forEach(code => {
+                    const d = map[code], parts = [];
+                    if (d.opened.length) parts.push(`👀 ${d.opened.length} فتحوا الأبليكشن ومطلبوش: ${d.opened.slice(0, 3).map(nm).join('، ')}`);
+                    if (d.dormant.length) parts.push(`😴 ${d.dormant.length} مطلبوش من 10 أيام أو أكتر: ${d.dormant.slice(0, 3).map(nm).join('، ')}${d.dormant.length > 3 ? '...' : ''}`);
+                    notifyRep(code, 'صباح الخير يا ' + String(d.name || '').split(' ')[0] + ' ☀️ عملاء محتاجين زيارتك', parts.join('\n')); sent++;
+                });
+                if (manual) showToast(sent ? `اتبعت ملخص لـ ${sent} مندوب` : 'مفيش مناديب عندهم عملاء محتاجين متابعة النهارده');
+            });
+            if (manual) return go();
+            return db.runTransaction(tx => tx.get(ref).then(s => { if (s.exists && s.data().day === day) return false; tx.set(ref, { day, at: Date.now(), by: currentUser.username || '' }); return true; }))
+                .then(ok => ok ? go() : null).catch(e => console.error('rep digest', e));
+        }
+        setInterval(function() {
+            try {
+                const n = new Date(); if (n.getHours() * 60 + n.getMinutes() < 9 * 60 + 30) return;
+                if (window._repDigestDay === n.toDateString()) return; window._repDigestDay = n.toDateString();
+                sendRepDailyDigest(false);
+            } catch (e) { console.error(e); }
+        }, 5 * 60000);
+        function notifyRepsNewOffer(o) {
+            try {
+                salesmen.filter(s => s.repType !== 'delivery' && (!s.status || s.status === 'نشط')).forEach(s => notifyRep(s.code, '🔥 عرض جديد: ' + o.title, `${o.productName || ''} بـ ${o.newPrice} ج بدل ${o.oldPrice} ج — قول لعملاءك`));
+            } catch (e) { console.error(e); }
+        }
         let repProgressLastJson = '';
         function publishRepProgress() {
             if (!db || !currentUser || !isCloudReady()) return;
@@ -12105,7 +12249,8 @@
                 r.month += v; if (t >= dayStart && t < dayEnd) r.today += v;
             });
             Object.keys(reps).forEach(k => { reps[k].month = Math.round(reps[k].month); reps[k].today = Math.round(reps[k].today); });
-            const payload = { monthKey: svMonthKey(now), reps };
+            let cust = {}; try { cust = repCustStatsPayload(); } catch (e) { console.error(e); }
+            const payload = { monthKey: svMonthKey(now), reps, cust };
             const js = JSON.stringify(payload);
             if (js === repProgressLastJson) return;
             repProgressLastJson = js;
