@@ -5264,7 +5264,8 @@
                     responsibleRepCode: order.repCode || (cust && cust.salesmanCode) || '',
                     responsibleRepName: order.repName || ((cust && cust.salesmanCode && (salesmen.find(s => s.code === cust.salesmanCode) || {}).name) || ''),
                     paymentMethod: 'دفع عند الاستلام',
-                    notes: 'طلب وارد من أبليكشن العملاء #' + order.id.slice(-6) + (appliedDiscount > 0 ? ` (خصم نقاط ولاء: ${appliedDiscount.toFixed(2)} ج.م)` : '') + (order.repReturns && order.repReturns.length ? ' — مرتجع عند التسليم: ' + order.repReturns.map(r => r.productName + ' × ' + r.qty + ' (' + r.reason + ')').join('، ') : ''),
+                    notes: 'طلب وارد من أبليكشن العملاء #' + order.id.slice(-6) + (appliedDiscount > 0 ? ` (خصم نقاط ولاء: ${appliedDiscount.toFixed(2)} ج.م)` : '') + (order.repReturns && order.repReturns.length ? ' — مرتجع عند التسليم: ' + order.repReturns.map(r => r.productName + ' × ' + r.qty + ' (' + r.reason + ')').join('، ') : '') + (order.prevReturns && order.prevReturns.length ? ' — مرتجع من طلب قديم (اترجع للعميل ' + (Number(order.prevReturnValue) || 0).toFixed(2) + ' ج): ' + order.prevReturns.map(r => r.productName + ' × ' + r.qty).join('، ') : ''),
+                    prevReturnValue: Number(order.prevReturnValue) || 0,
                     deliveryReturns: order.repReturns || null,
                     items: order.items, grandTotal: grandTotal,
                     discount: appliedDiscount,
@@ -5282,6 +5283,7 @@
                 invoices.push(invoice);
                 localStorage.setItem('invoices', JSON.stringify(invoices));
                 if (db) db.collection('invoiceRecords').doc(String(invoice.id)).set(invoice).catch(function(e) { console.error('app-order invoice sync failed:', e); });
+                try { createPrevReturnSalesReturns(order); } catch (e) { console.error('prev returns', e); }
                 logAction('تجهيز طلب أبليكشن', `تم تجهيز الطلب #${order.id.slice(-6)} للعميل ${invoice.customerName} وتحويله لفاتورة بيع #${invoice.number}`);
 
                 // العميل اللي طلب من الأبليكشن قد يكون أول مرة يتعامل معانا (سجّل برقمه بس، مش مضاف يدويًا في نظام المعلم).
@@ -6966,9 +6968,11 @@
                 add(e.date, 'exp', e.type || '', (e.description || e.type || '') + (e.costCenter && e.costCenter !== 'عام' ? ' — ' + e.costCenter : ''), [{ acc: '5301:' + (e.type || 'أخرى'), dr: Number(e.amount) || 0 }, { acc: '2102', cr: Number(e.amount) || 0 }], e.id);
             });
             (accExtra.collections || []).forEach(r => {
-                const a = Number(r.amount) || 0; if (a <= 0) return;
+                const a = Number(r.amount) || 0; if (!a) return;
                 const inv = (r.invoiceId != null ? invById[String(r.invoiceId)] : null) || (r.orderId ? invoices.find(i => i.type === 'sale' && i.sourceOrderId === r.orderId) : null);
                 const rep = '1103:' + (r.repUsername || accRepCodeByName(r.repFullName));
+                // (2026-11-06) فلوس رجعت للعميل من عهدة المندوب (مرتجع من طلب قديم): العكس
+                if (a < 0) { if (inR(r.date)) add(r.date, 'dlvref', inv ? '#' + inv.number : '', 'رد فلوس مرتجع للعميل من عهدة ' + (r.repFullName || '') + ' — ' + (r.customerName || ''), [{ acc: '1105:' + accCustKey(inv ? inv.customerCode : resolveCustomerCode(r.customerCode || '')), dr: -a }, { acc: rep, cr: -a }], r.id); return; }
                 if (inR(r.date)) add(r.date, 'dlv', inv ? '#' + inv.number : (r.invoiceNumber ? '#' + r.invoiceNumber : ''), 'فلوس طلب مع المندوب ' + (r.repFullName || '') + ' — ' + (r.customerName || ''), [{ acc: rep, dr: a }, { acc: '1105:' + accCustKey(inv ? inv.customerCode : ''), cr: a }], r.id);
                 if (r.settlementId === 'legacy' && r.settledAt && accMs(r.settledAt) >= cms) add(r.settledAt, 'dlvlegacy', '', 'قفل عهدة قديمة من غير فلوس — ' + (r.repFullName || ''), [{ acc: '3301', dr: a }, { acc: rep, cr: a }], r.id);
             });
@@ -6976,7 +6980,7 @@
                 const rr = o.repReturnReceived; if (!rr || accMs(rr.at) < cms) return;
                 // تكلفة البضاعة اللي ناقصة من المرتجع (اتخصمت من المخزن وماتباعتش ولا رجعت)
                 const missCost = (rr.items || []).reduce((t, x) => { const exp = Number(x.expected) || 0, got = Number(x.received) || 0; const per = exp ? (Number(x.deductQty) || 0) / (got || 1) : 0;
-                    const r0 = (o.repReturns || []).find(y => y.productCode === x.productCode); const perUnit = r0 && Number(r0.qty) ? (Number(r0.deductQty) || 0) / Number(r0.qty) : (got ? per : 1);
+                    const r0 = repRetLines(o).find(y => y.productCode === x.productCode); const perUnit = r0 && Number(r0.qty) ? (Number(r0.deductQty) || 0) / Number(r0.qty) : (got ? per : 1);
                     return t + Math.max(0, exp - got) * perUnit * accCostOf(x.productCode); }, 0);
                 const sv = Number(rr.shortageValue) || 0;
                 if (!(sv > 0) && !(missCost > 0)) return;
@@ -7285,7 +7289,7 @@
             const costOf = code => Number((inventory[code] || {}).cost) || Number((products.find(p => p.code === code) || {}).cost) || 0;
             let onHand = 0; Object.keys(inventory).forEach(k => { onHand += (Number(inventory[k].qty) || 0) * costOf(k); });
             let reserved = 0; customerOrders.forEach(o => { if (['delivered', 'merged', 'cancelled', 'rejected'].includes(o.status)) return; const v = reservedStockLedger[o.id]; if (v) Object.keys(v).forEach(k => { reserved += (Number(v[k]) || 0) * costOf(k); }); });
-            let retPending = 0; (typeof repReturnOrders !== 'undefined' ? repReturnOrders : []).forEach(o => { if (o.repReturnPending && !o.repReturnReceived) (o.repReturns || []).forEach(x => { retPending += (Number(x.deductQty != null ? x.deductQty : x.qty) || 0) * costOf(x.productCode); }); });
+            let retPending = 0; (typeof repReturnOrders !== 'undefined' ? repReturnOrders : []).forEach(o => { if (o.repReturnPending && !o.repReturnReceived) repRetLines(o).forEach(x => { retPending += (Number(x.deductQty != null ? x.deductQty : x.qty) || 0) * costOf(x.productCode); }); });
             r('المخزون', 'المخزون بالتكلفة', bal('1104'), onHand + reserved + retPending, `السيستم = الموجود ${accF(onHand)} + محجوز لطلبات ${accF(reserved)} + مرتجعات مع المناديب ${accF(retPending)}. فرق صغير طبيعي من تغيّر متوسط التكلفة؛ فرق كبير = حركة مخزون من غير مستند أو رصيد أول مدة مش مظبوط.`, '1104');
             r('حسابات وسيطة (لازم تبقى صفر)', 'مصروفات تحت السداد', bal('2102'), 0, 'لو مش صفر: مصروف اتسجل من غير ما يطلع من الخزنة أو العكس، أو تاريخ المصروف غير تاريخ الصرف.', '2102');
             r('حسابات وسيطة (لازم تبقى صفر)', 'تحويلات داخلية', bal('2103'), 0, 'لو مش صفر: تحويل بين الخزنة والبنك ليه طرف واحد بس.', '2103');
@@ -7408,7 +7412,7 @@
             const costOf = code => Number((inventory[code] || {}).cost) || Number((products.find(p => p.code === code) || {}).cost) || 0;
             let onHand = 0; Object.keys(inventory).forEach(k => { onHand += (Number(inventory[k].qty) || 0) * costOf(k); });
             let reservedNow = 0; customerOrders.forEach(o => { if (['delivered', 'merged', 'cancelled', 'rejected'].includes(o.status)) return; const v = reservedStockLedger[o.id]; if (v) Object.keys(v).forEach(k => { reservedNow += (Number(v[k]) || 0) * costOf(k); }); });
-            let retPendingNow = 0; (typeof repReturnOrders !== 'undefined' ? repReturnOrders : []).forEach(o => { if (o.repReturnPending && !o.repReturnReceived) (o.repReturns || []).forEach(x => { retPendingNow += (Number(x.deductQty != null ? x.deductQty : x.qty) || 0) * costOf(x.productCode); }); });
+            let retPendingNow = 0; (typeof repReturnOrders !== 'undefined' ? repReturnOrders : []).forEach(o => { if (o.repReturnPending && !o.repReturnReceived) repRetLines(o).forEach(x => { retPendingNow += (Number(x.deductQty != null ? x.deductQty : x.qty) || 0) * costOf(x.productCode); }); });
             L.push({ acc: '1104', v: onHand + reservedNow + retPendingNow, note: 'قيمة المخزون الحالية بالتكلفة (شاملة المحجوز لطلبات والمرتجعات اللي مع المناديب). لو التاريخ مش النهارده أو يوم جرد، اكتب قيمة الجرد الفعلي يوم البداية' });
             // الموردين: نفس حساب شاشة المورد بس لحد التاريخ ده
             suppliers.forEach(s => {
@@ -7424,7 +7428,7 @@
             const repCodes = new Set(salesmen.filter(s => s.repType === 'delivery').map(s => s.code));
             repCodes.forEach(c => {
                 const collSrc = {}; deliveryCollections.concat(accSetupExtra.cutoff === cutoffStr ? accSetupExtra.collections : []).forEach(r => { if (r && r.id) collSrc[r.id] = r; });
-                const coll = Object.values(collSrc).filter(r => r.repUsername === c && before(r.date) && Number(r.amount) > 0 && (!r.settledAt || r.settledAt >= cms)).reduce((t, r) => t + (Number(r.amount) || 0), 0);
+                const coll = Object.values(collSrc).filter(r => r.repUsername === c && before(r.date) && (Number(r.amount) || 0) !== 0 && (!r.settledAt || r.settledAt >= cms)).reduce((t, r) => t + (Number(r.amount) || 0), 0);
                 const later = Array.from((typeof repSettlementsAll !== 'undefined' ? repSettlementsAll : new Map()).values()).filter(s => s.repCode === c && !s.legacy && accMs(s.date) >= cms).reduce((t, s) => t + (Number(s.ordersAmount) || 0) - (Number(s.received) || 0), 0);
                 const rrs = (typeof repReturnOrders !== 'undefined' ? repReturnOrders : []).filter(o => o.repReturnRepCode === c && o.repReturnReceived && o.repReturnReceived.shortageApplied && accMs(o.repReturnReceived.at) >= cms).reduce((t, o) => t + (Number(o.repReturnReceived.shortageValue) || 0), 0);
                 const short = (typeof repShortage === 'function' ? repShortage(c) : 0) - later - rrs;
@@ -10269,6 +10273,46 @@
         // ==================== مرتجعات مناديب التسليم (2026-10-06) ====================
         // المندوب بيسجل المرتجع عند العميل من الأبليكشن (صنف أو الطلب كله). البضاعة دي بتفضل "مع المندوب" ومش بتزود المخزون
         // لحد ما أمين المخزن يستلمها هنا. لو فيه ناقص، بيتسجل عجز على المندوب بقيمته.
+        // (2026-11-06) كل سطور المرتجع اللي مع المندوب: مرتجع من نفس الطلب + مرتجع من طلب قديم
+        function repRetLines(o) { return (o.repReturns || []).concat((o.prevReturns || []).map(x => Object.assign({ prev: true }, x))); }
+        // مرتجع من طلب قديم سلّمه مندوب التسليم: بيتعمل مرتجع مبيعات على الفاتورة القديمة (من غير ما المخزون يزيد —
+        // المخزون بيزيد لما أمين المخزن يستلم المرتجع من المندوب). الفلوس اترجعت للعميل من عهدة المندوب (سجل DLV-RET بالسالب)
+        function createPrevReturnSalesReturns(order) {
+            const list = order.prevReturns || []; if (!list.length) return 0;
+            if (salesReturns.some(r => r.sourceOrderId === order.id && r.prevReturn)) return 0;
+            const groups = {}; list.forEach(r => (groups[r.fromOrderId] = groups[r.fromOrderId] || []).push(r));
+            let n = 0;
+            Object.keys(groups).forEach(fromId => {
+                const inv = invoices.find(i => i.type === 'sale' && i.sourceOrderId === fromId);
+                const items = groups[fromId].map(r => {
+                    const it0 = inv ? (inv.items || []).find(x => x.productCode === r.productCode && (x.unit || '') === (r.unit || '')) || (inv.items || []).find(x => x.productCode === r.productCode) : null;
+                    const per = it0 && Number(it0.qty) ? (Number(it0.stockDeductQty != null ? it0.stockDeductQty : it0.qty) / Number(it0.qty)) : ((Number(r.deductQty) || 0) / (Number(r.qty) || 1));
+                    const cost = it0 && it0.cost != null ? Number(it0.cost) || 0 : (Number((inventory[r.productCode] || {}).cost) || Number((products.find(p => p.code === r.productCode) || {}).cost) || 0);
+                    const stockDeductQty = per * (Number(r.qty) || 0);
+                    const total = Math.round((Number(r.price) || 0) * (Number(r.qty) || 0) * 100) / 100;
+                    return { productCode: r.productCode, productName: r.productName, unit: r.unit, qty: Number(r.qty) || 0, price: Number(r.price) || 0, cost, stockDeductQty, total, profit: total - cost * stockDeductQty, reason: r.reason || '' };
+                });
+                const grandTotal = Math.round(items.reduce((s, it) => s + it.total, 0) * 100) / 100;
+                const ret = {
+                    id: newRecordId(), number: getNextDocNumber(salesReturns).toString().padStart(4, '0'),
+                    date: new Date((order.repDelivery && order.repDelivery.at) || Date.now()).toISOString(),
+                    originalInvoiceId: inv ? inv.id : null, originalInvoiceNumber: inv ? inv.number : (groups[fromId][0].fromInvoiceNumber || ''),
+                    customerCode: inv ? inv.customerCode : (resolveCustomerCode(order.customerCode) || ''), customerName: inv ? inv.customerName : (order.customerName || ''),
+                    items, grandTotal, affectsBalance: false, prevReturn: true, sourceOrderId: order.id, fromOrderId: fromId, stockPendingFromRep: true,
+                    repCode: order.repDelivery ? order.repDelivery.code : '', repName: order.repDelivery ? order.repDelivery.name : '',
+                    notes: 'مرتجع من طلب قديم استلمه مندوب التسليم ' + ((order.repDelivery && order.repDelivery.name) || '') + ' وقت تسليم طلب #' + order.id.slice(-6) + ' — الفلوس اترجعت للعميل من عهدة المندوب، والمخزون بيزيد لما المرتجع يتسلّم'
+                };
+                normalizeDocProfit(ret);
+                salesReturns.push(ret); n++;
+                reserveDocNumber('salesReturn', salesReturns.filter(r => r.id !== ret.id)).then(function(nn) {
+                    const num = String(nn).padStart(4, '0');
+                    if (num !== ret.number) { ret.number = num; saveSalesReturns(); try { renderSalesReturns && renderSalesReturns(); } catch (e) {} }
+                });
+                logAction('مرتجع بيع (طلب قديم)', `مرتجع #${ret.number} على فاتورة #${ret.originalInvoiceNumber || '-'} — ${ret.customerName} بـ ${grandTotal.toFixed(2)} ج.م — استلمه ${ret.repName} وقت تسليم #${order.id.slice(-6)}`);
+            });
+            if (n) { saveSalesReturns(); try { renderSalesReturns(); renderProfitData(); } catch (e) {} }
+            return n;
+        }
         let repReturnOrders = [], repReturnsListenerStarted = false;
         function startRepReturnsListenerSys() {
             if (!db || repReturnsListenerStarted) return;
@@ -10297,7 +10341,7 @@
             card.style.display = (pending.length || received.length || repReturnOrders.length) ? '' : 'none';
             const byRep = {};
             pending.forEach(o => { const k = o.repReturnRepCode || '-'; (byRep[k] = byRep[k] || { name: o.repReturnRepName || k, list: [], value: 0 }).list.push(o); byRep[k].value += Number(o.repReturnValue) || 0; });
-            const itemsTxt = o => (o.repReturns || []).map(r => `${escapeHtml(r.productName)} × ${r.qty} ${escapeHtml(r.unit || '')} <span style="color:var(--text-light);">(${escapeHtml(r.reason || '')})</span>`).join('<br>');
+            const itemsTxt = o => repRetLines(o).map(r => `${escapeHtml(r.productName)} × ${r.qty} ${escapeHtml(r.unit || '')} <span style="color:var(--text-light);">(${escapeHtml(r.reason || '')}${r.prev ? ' — <b style="color:var(--primary);">من طلب قديم</b>' : ''})</span>`).join('<br>');
             document.getElementById('repReturnsBody').innerHTML =
                 (pending.length ? Object.keys(byRep).map(k => `<div style="margin-bottom:12px;"><div style="font-weight:800;margin-bottom:6px;"><i class="fas fa-user"></i> ${escapeHtml(byRep[k].name)} — <span style="color:var(--danger);">${byRep[k].list.length} طلب بـ ${byRep[k].value.toFixed(2)} ج مستني استلام</span></div>
                     <div class="table-container"><table><thead><tr><th>العميل</th><th>المرتجع</th><th>القيمة</th><th>إمتى</th><th></th></tr></thead><tbody>` +
@@ -10309,9 +10353,9 @@
         }
         function exportRepReturns() {
             const rows = [['المندوب', 'العميل', 'رقم الطلب', 'نوع', 'الصنف', 'الكمية', 'الوحدة', 'القيمة', 'السبب', 'وقت المرتجع', 'الحالة', 'المستلم فعلاً', 'استلمه']];
-            repReturnOrders.slice().sort((a, b) => (b.repReturnAt || 0) - (a.repReturnAt || 0)).forEach(o => (o.repReturns || []).forEach(r => {
+            repReturnOrders.slice().sort((a, b) => (b.repReturnAt || 0) - (a.repReturnAt || 0)).forEach(o => repRetLines(o).forEach(r => {
                 const got = o.repReturnReceived ? ((o.repReturnReceived.items || []).find(x => x.productCode === r.productCode && x.unit === r.unit) || {}).received : '';
-                rows.push([o.repReturnRepName || '', o.customerName || '', o.id.slice(-6), o.repReturnKind === 'full' ? 'الطلب كله' : 'جزئي', r.productName, r.qty, r.unit || '', Number(r.value) || 0, r.reason || '', new Date(o.repReturnAt).toLocaleString('ar-EG'), o.repReturnPending ? 'مع المندوب' : 'اتسلّم', got, o.repReturnReceived ? (o.repReturnReceived.by || '') : '']);
+                rows.push([o.repReturnRepName || '', o.customerName || '', o.id.slice(-6), r.prev ? 'من طلب قديم' : (o.repReturnKind === 'full' ? 'الطلب كله' : 'جزئي'), r.productName, r.qty, r.unit || '', Number(r.value) || 0, r.reason || '', new Date(o.repReturnAt).toLocaleString('ar-EG'), o.repReturnPending ? 'مع المندوب' : 'اتسلّم', got, o.repReturnReceived ? (o.repReturnReceived.by || '') : '']);
             }));
             xlWrite('مرتجعات_المناديب', [{ name: 'المرتجعات', rows, widths: [16, 24, 10, 10, 30, 8, 8, 10, 18, 20, 12, 12, 16] }]);
         }
@@ -10324,7 +10368,7 @@
             const o = repReturnOrders.find(x => x.id === id); if (!o) return;
             receivingReturnId = id;
             document.getElementById('rrInfo').innerHTML = `<strong>${escapeHtml(o.repReturnRepName || '')}</strong> — من ${escapeHtml(o.customerName || '')} (#${o.id.slice(-6)}) — ${new Date(o.repReturnAt).toLocaleString('ar-EG')}`;
-            document.getElementById('rrItems').innerHTML = (o.repReturns || []).map((r, i) => `<tr><td>${escapeHtml(r.productName)}</td><td>${r.qty} ${escapeHtml(r.unit || '')}</td><td>${escapeHtml(r.reason || '')}</td><td><input type="number" class="form-control rr-got" data-i="${i}" min="0" max="${r.qty}" step="1" value="${r.qty}" style="width:90px;"></td></tr>`).join('');
+            document.getElementById('rrItems').innerHTML = repRetLines(o).map((r, i) => `<tr><td>${escapeHtml(r.productName)}${r.prev ? ' <span class="badge badge-warning">من طلب قديم</span>' : ''}</td><td>${r.qty} ${escapeHtml(r.unit || '')}</td><td>${escapeHtml(r.reason || '')}</td><td><input type="number" class="form-control rr-got" data-i="${i}" min="0" max="${r.qty}" step="1" value="${r.qty}" style="width:90px;"></td></tr>`).join('');
             openModal('repReturnReceiveModal');
         }
         // (2026-10-10) مرتجع البضاعة بتاعته رجعت المخزن واتعدّت في الجرد قبل ما يتعمل له "استلام":
@@ -10332,7 +10376,7 @@
         function closeRepReturnCounted(id) {
             if (!canCloseRepReturnCounted()) { showToast('قفل المرتجع من غير استلام للمدير بس', 'error'); return; }
             const o0 = repReturnOrders.find(x => x.id === id); if (!o0 || !db) return;
-            const list = (o0.repReturns || []).map(r => `• ${r.productName}: ${r.qty} ${r.unit || ''}`).join('\n');
+            const list = repRetLines(o0).map(r => `• ${r.productName}: ${r.qty} ${r.unit || ''}`).join('\n');
             if (!confirm(`قفل مرتجع ${o0.repReturnRepName || ''} — ${o0.customerName || ''}:\n${list}\n\nالبضاعة دي رجعت المخزن واتعدّت في الجرد؟\nالمرتجع هيتقفل من غير ما المخزون يزيد ومن غير عجز على المندوب.`)) return;
             const by = (currentUser && (currentUser.fullName || currentUser.username)) || '';
             const ref = db.collection('customerOrders').doc(id);
@@ -10341,7 +10385,7 @@
                 if (!snap.exists) throw new Error('الطلب مش موجود');
                 const fresh = snap.data();
                 if (!fresh.repReturnPending) throw new Error('المرتجع ده اتقفل أو اتسلّم قبل كده');
-                const items = (fresh.repReturns || []).map(r => ({ productCode: r.productCode, productName: r.productName, unit: r.unit, expected: Number(r.qty) || 0, received: Number(r.qty) || 0, deductQty: 0, missingValue: 0 }));
+                const items = repRetLines(fresh).map(r => ({ productCode: r.productCode, productName: r.productName, unit: r.unit, prev: !!r.prev, expected: Number(r.qty) || 0, received: Number(r.qty) || 0, deductQty: 0, missingValue: 0 }));
                 rec = { at: Date.now(), by, items, shortageValue: 0, closedByCount: true, note: 'البضاعة اتعدّت في الجرد — اتقفل من غير ما المخزون يتغير' };
                 t.update(ref, { repReturnPending: false, repReturnReceived: rec });
             })).then(() => {
@@ -10365,10 +10409,10 @@
                 if (!snap.exists) throw new Error('الطلب مش موجود');
                 fresh = Object.assign({ id: o0.id }, snap.data());
                 if (!fresh.repReturnPending) throw new Error('المرتجع ده اتسلّم قبل كده');
-                const items = (fresh.repReturns || []).map((r, i) => {
+                const items = repRetLines(fresh).map((r, i) => {
                     const received = Math.min(Number(r.qty) || 0, got[i] != null ? got[i] : (Number(r.qty) || 0));
                     const per = (Number(r.qty) || 0) ? (Number(r.deductQty) || 0) / Number(r.qty) : 0;
-                    return { productCode: r.productCode, productName: r.productName, unit: r.unit, expected: Number(r.qty) || 0, received, deductQty: per * received, missingValue: Math.round((Number(r.price) || 0) * ((Number(r.qty) || 0) - received) * 100) / 100 };
+                    return { productCode: r.productCode, productName: r.productName, unit: r.unit, prev: !!r.prev, expected: Number(r.qty) || 0, received, deductQty: per * received, missingValue: Math.round((Number(r.price) || 0) * ((Number(r.qty) || 0) - received) * 100) / 100 };
                 });
                 const shortageValue = items.reduce((s, x) => s + x.missingValue, 0);
                 rec = { at: Date.now(), by, items, shortageValue };
@@ -14301,7 +14345,7 @@
                 showToast('اتعتمدت الأرصدة ✓ — من دلوقتي العجز بيتحسب أوتوماتيك');
             }).catch(e => { console.error(e); showToast(e.message || 'تعذر الاعتماد', 'error'); });
         }
-        function unsettledFor(code) { return deliveryCollections.filter(r => r.repUsername === code && !r.settledAt && Number(r.amount) > 0); }
+        function unsettledFor(code) { return deliveryCollections.filter(r => r.repUsername === code && !r.settledAt && (Number(r.amount) || 0) !== 0); }
         function renderRepCustody() {
             const reps = salesmen.filter(s => s.repType === 'delivery');
             const known = new Set(reps.map(s => s.code));
