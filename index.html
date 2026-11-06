@@ -1880,7 +1880,7 @@
                     <div style="display:flex;gap:10px;flex-wrap:wrap;">
                         <button class="btn btn-success btn-sm" onclick="openCustomerModal()"><i class="fas fa-plus"></i> إضافة عميل</button>
                         <button class="btn btn-primary btn-sm" id="newCustReqBtn" onclick="showNewCustomerRequests()"><i class="fas fa-user-plus"></i> عملاء جداد من المناديب</button>
-                        <button class="btn btn-info btn-sm" onclick="showCustomerLocations()"><i class="fas fa-map-location-dot"></i> مواقع العملاء</button>
+                        <button class="btn btn-info btn-sm" id="custLocBtn" onclick="showCustomerLocations()"><i class="fas fa-map-location-dot"></i> مواقع العملاء</button>
                         <button class="btn btn-warning btn-sm" onclick="openAppPasswordResetModal()"><i class="fas fa-key"></i> إعادة ضبط رقم سري (أبليكيشن)</button>
                         <button class="btn btn-info btn-sm" onclick="exportCustomersToExcel()"><i class="fas fa-file-export"></i> تصدير العملاء الحاليين</button>
                         <button class="btn btn-primary btn-sm" onclick="document.getElementById('excelFileInput').click()"><i class="fas fa-file-excel"></i> رفع ملف Excel</button>
@@ -4254,7 +4254,7 @@
             db.collection('customerVisitRecords').orderBy('date', 'desc').limit(2000).onSnapshot(function(snap) {
                 customerVisits = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
                 repVisitsStoreLocal();
-                try { updateNewCustBadge(); } catch (e) {}
+                try { updateNewCustBadge(); updateLocReqBadge(); } catch (e) {}
             }, function(err) { console.error('Customer visit records listener error:', err); });
         }
 
@@ -10753,40 +10753,170 @@
             }
         }
 
-        // ==================== (2026-11-06) مواقع العملاء: متأكد / مشكوك فيه / مالوش ====================
+        // ==================== (2026-11-06) مواقع العملاء + كشف التلاعب في الزيارات ====================
         function geoDistM(a, b) {
             if (!a || !b || a.lat == null || b.lat == null) return null;
             const R = 6371000, r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLng = (b.lng - a.lng) * r;
             const x = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLng / 2) ** 2;
             return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
         }
+        const fmtM = m => m >= 1000 ? (m / 1000).toFixed(1) + ' كم' : Math.round(m) + ' م';
+        function locVisits() { return customerVisits.filter(v => v.kind !== 'newCustomer' && v.kind !== 'locationChange' && !v.auto && v.repLocation && v.repLocation.lat != null); }
+        function custByAnyId(id) {
+            if (!id) return null;
+            const c = customers.find(x => x.code === id); if (c) return c;
+            const l = notifLast10(id); return l.length === 10 ? customers.find(x => notifLast10(x.phone) === l) || null : null;
+        }
+        // مواقع التسليم (مندوب التسليم وقت ما سلّم) لكل عميل
+        function deliveryPointsByCustomer() {
+            const m = {};
+            deliveryCollections.forEach(r => {
+                const L = r.deliveryLocation; if (!L || L.lat == null || L.mock === true || (L.acc && L.acc > 100)) return;
+                const c = custByAnyId(r.customerCode) || custByAnyId(r.customerPhone); if (!c) return;
+                (m[c.code] = m[c.code] || []).push({ lat: L.lat, lng: L.lng, rep: r.repUsername, at: L.at || new Date(r.date).getTime() });
+            });
+            return m;
+        }
+        function visitDist(v) {
+            if (v.distM != null) return v.distM;
+            const c = customers.find(x => x.code === v.customerCode);
+            return c && c.location ? geoDistM(c.location, v.repLocation) : null;
+        }
         function custLocationAudit() {
-            const vis = {};
-            customerVisits.forEach(v => { if (v.kind === 'newCustomer' || v.auto || !v.repLocation || v.repLocation.lat == null) return; (vis[v.customerCode] = vis[v.customerCode] || []).push(v); });
+            const vis = {}, dp = deliveryPointsByCustomer();
+            locVisits().forEach(v => (vis[v.customerCode] = vis[v.customerCode] || []).push(v));
+            const withLoc = customers.filter(c => c.location && c.location.lat != null);
             return customers.map(c => {
-                const L = c.location && c.location.lat != null ? c.location : null;
-                if (!L) return { c, st: 'none', why: 'مالوش موقع' };
+                const L = c.location && c.location.lat != null ? c.location : null, d = dp[c.code] || [];
+                if (!L) return { c, st: 'none', why: d.length ? `مالوش موقع — مندوب التسليم سلّمه ${d.length} مرة` : 'مالوش موقع' };
+                const flags = [];
                 const after = (vis[c.code] || []).filter(v => !L.at || new Date(v.date).getTime() > L.at);
-                const far = after.map(v => ({ v, d: geoDistM(L, v.repLocation) })).filter(x => x.d != null && x.d > 300 && (x.v.repLocation.acc == null || x.v.repLocation.acc <= 150));
-                const near = after.filter(v => { const d = geoDistM(L, v.repLocation); return d != null && d <= 120; });
-                if (far.length && far.length >= near.length) { const m = Math.round(Math.min.apply(null, far.map(x => x.d))); return { c, st: 'bad', why: `${far.length} زيارة بعيدة عن الموقع (أقربها ${m >= 1000 ? (m / 1000).toFixed(1) + ' كم' : m + ' م'})` }; }
-                if (L.verified) return { c, st: 'ok', why: `اتأكد${L.byName ? ' من ' + L.byName : ''}${L.acc ? ' بدقة ' + L.acc + ' م' : ''}` };
+                const far = after.filter(v => { const x = geoDistM(L, v.repLocation); return x != null && x > 300 && (v.repLocation.acc == null || v.repLocation.acc <= 150); });
+                const near = after.filter(v => { const x = geoDistM(L, v.repLocation); return x != null && x <= 120; });
+                const mock = (vis[c.code] || []).filter(v => v.mock === true).length;
+                const dFar = d.filter(p => geoDistM(L, p) > 300), dNear = d.filter(p => geoDistM(L, p) <= 120);
+                if (mock) flags.push(`${mock} زيارة بموقع مزيف`);
+                if (dFar.length >= 2 && dFar.length > dNear.length) flags.push(`مندوب التسليم بيسلّم بعيد عنه (${fmtM(geoDistM(L, dFar[0]))})`);
+                if (far.length && far.length >= near.length) flags.push(`${far.length} زيارة بعيدة عن الموقع (${fmtM(Math.min.apply(null, far.map(v => geoDistM(L, v.repLocation))))})`);
+                if ((Number(L.moves) || 0) >= 2) flags.push(`الموقع اتغير ${L.moves} مرات`);
+                if (!L.locked) {
+                    const same = withLoc.filter(o => o.code !== c.code && geoDistM(L, o.location) <= 25 && (o.location.by || '') === (L.by || ''));
+                    if (same.length >= 2) flags.push(`نفس موقع ${same.length} عملاء تانيين (${escapeHtml(same.slice(0, 2).map(o => o.shopName || o.name).join('، '))})`);
+                }
+                if (flags.length) return { c, st: 'bad', why: flags.join(' · ') };
+                if (L.locked) return { c, st: 'ok', why: '🔒 ' + (L.confirmedBy === 'delivery' ? 'اتأكد من مندوب التسليم' : 'اتأكد من الإدارة') };
+                if (L.verified || dNear.length) return { c, st: 'ok', why: dNear.length ? 'مندوب التسليم سلّم عنده' : `اتثبت${L.byName ? ' من ' + L.byName : ''}${L.acc ? ' بدقة ' + L.acc + ' م' : ''}` };
                 if (near.length >= 2) return { c, st: 'ok', why: `${near.length} زيارات عند نفس المكان` };
                 return { c, st: 'bad', why: L.acc && L.acc > 60 ? `دقته ضعيفة (${L.acc} م)` : 'محدش أكده من المحل' };
             });
         }
+        // تقييم كل مندوب: زيارات من المحل ولا من بعيد، نقط متكررة (بيته)، سرعة مستحيلة، موقع مزيف
+        function repLocationIntegrity(days) {
+            const since = Date.now() - (days || 30) * 86400000, out = {};
+            const vs = locVisits().filter(v => new Date(v.date).getTime() >= since);
+            const byRep = {}; vs.forEach(v => (byRep[v.repUsername] = byRep[v.repUsername] || []).push(v));
+            Object.keys(byRep).forEach(rep => {
+                const list = byRep[rep].slice().sort((a, b) => new Date(a.date) - new Date(b.date));
+                const r = { rep, name: list[0].repFullName || repName(rep), total: list.length, near: 0, far: 0, unknown: 0, mock: 0, farList: [], hot: [], speed: [] };
+                list.forEach(v => { const d = visitDist(v); if (v.mock === true) r.mock++; if (d == null) r.unknown++; else if (d <= 150) r.near++; else { r.far++; r.farList.push({ v, d }); } });
+                // نقط متكررة: زيارات لعملاء مختلفين من نفس النقطة (50 متر) وهو بعيد عن محلاتهم
+                const cand = list.filter(v => { const d = visitDist(v); return d == null || d > 150; }), used = new Set();
+                cand.forEach((v, i) => {
+                    if (used.has(i)) return;
+                    const grp = []; cand.forEach((w, j) => { if (!used.has(j) && geoDistM(v.repLocation, w.repLocation) <= 50) grp.push(j); });
+                    const custs = new Set(grp.map(j => cand[j].customerCode));
+                    if (custs.size >= 3) { grp.forEach(j => used.add(j)); r.hot.push({ lat: v.repLocation.lat, lng: v.repLocation.lng, visits: grp.length, custs: Array.from(custs).map(k => { const c = customers.find(x => x.code === k); return c ? (c.shopName || c.name) : k; }) }); }
+                });
+                // سرعة مستحيلة بين زيارتين ورا بعض
+                for (let i = 1; i < list.length; i++) {
+                    const a = list[i - 1], b = list[i], dm = geoDistM(a.repLocation, b.repLocation), dt = (new Date(b.date) - new Date(a.date)) / 3600000;
+                    if (dm > 1000 && dt > 0 && dm / 1000 / dt > 80) r.speed.push({ a, b, dm, min: Math.round(dt * 60) });
+                }
+                out[rep] = r;
+            });
+            return out;
+        }
+        // مندوب التسليم بيأكد المواقع: لو سلّم عند الموقع المتسجل → يتقفل. لو العميل مالوش موقع وسلّمه مرتين في نفس المكان → يتحط
+        function applyDeliveryConfirmations() {
+            if (!db || !currentUser || !['admin', 'accountant'].includes(xlRole()) || !isCloudReady()) return 0;
+            const dp = deliveryPointsByCustomer(); let n = 0;
+            customers.forEach((c, idx) => {
+                const d = dp[c.code]; if (!d || !d.length) return;
+                const L = c.location && c.location.lat != null ? c.location : null;
+                if (L) {
+                    if (L.locked) return;
+                    const ok = d.find(p => geoDistM(L, p) <= 120 && p.rep !== L.by);
+                    if (!ok) return;
+                    customers[idx] = Object.assign({}, c, { location: Object.assign({}, L, { locked: true, verified: true, confirmedBy: 'delivery', confirmedAt: Date.now(), confirmedRep: ok.rep }) }); n++;
+                } else if (d.length >= 2) {
+                    let best = null;
+                    d.forEach(p => { const g = d.filter(q => geoDistM(p, q) <= 100); if (!best || g.length > best.length) best = g; });
+                    if (!best || best.length < 2) return;
+                    const lat = best.reduce((a, p) => a + p.lat, 0) / best.length, lng = best.reduce((a, p) => a + p.lng, 0) / best.length;
+                    customers[idx] = Object.assign({}, c, { location: { lat, lng, acc: null, at: Date.now(), by: best[0].rep, byName: repName(best[0].rep), src: 'delivery', verified: true, locked: true, confirmedBy: 'delivery' } }); n++;
+                }
+            });
+            if (n) { localStorage.setItem('customers', JSON.stringify(customers)); logAction('مواقع العملاء', `مندوب التسليم أكّد/حدد موقع ${n} عميل`); }
+            return n;
+        }
+        setInterval(function() { try { applyDeliveryConfirmations(); } catch (e) { console.error(e); } }, 30 * 60000);
+        setTimeout(function() { try { applyDeliveryConfirmations(); } catch (e) { console.error(e); } }, 150000);
+        function updateLocReqBadge() {
+            const b = document.getElementById('custLocBtn'); if (!b) return;
+            const n = pendingLocationChanges().length;
+            b.innerHTML = `<i class="fas fa-map-location-dot"></i> مواقع العملاء${n ? ` <span style="background:#c0392b;color:#fff;border-radius:99px;padding:0 7px;margin-right:4px;">${n}</span>` : ''}`;
+        }
+        function pendingLocationChanges() { return customerVisits.filter(v => v.kind === 'locationChange' && v.status === 'pending'); }
         let locAuditTab = 'bad';
         function showCustomerLocations(tab) {
             if (tab) locAuditTab = tab;
+            try { applyDeliveryConfirmations(); } catch (e) { console.error(e); }
             const rows = custLocationAudit();
             const cnt = { none: 0, bad: 0, ok: 0 }; rows.forEach(r => cnt[r.st]++);
-            const list = rows.filter(r => r.st === locAuditTab).sort((a, b) => repName(a.c.salesmanCode).localeCompare(repName(b.c.salesmanCode)));
-            const tabBtn = (k, label, col) => `<button class="btn btn-sm ${locAuditTab === k ? 'btn-primary' : 'btn-secondary'}" onclick="showCustomerLocations('${k}')">${label} <b style="color:${locAuditTab === k ? '#fff' : col};">${cnt[k]}</b></button>`;
+            const integ = repLocationIntegrity(30), reqs = pendingLocationChanges();
+            const badReps = Object.values(integ).filter(r => r.hot.length || r.speed.length || r.mock || (r.total >= 5 && r.far / r.total > 0.25)).length;
+            const tabBtn = (k, label, n, col) => `<button class="btn btn-sm ${locAuditTab === k ? 'btn-primary' : 'btn-secondary'}" onclick="showCustomerLocations('${k}')">${label} <b style="color:${locAuditTab === k ? '#fff' : col};">${n}</b></button>`;
             const f = t => t ? new Date(t).toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' }) : '';
-            showReservedModal('📍 مواقع العملاء', `<p style="margin-top:0;font-size:13px;color:var(--text-light);">المندوب بيثبّت الموقع من كارت العميل وهو واقف قدام المحل ("حدّث موقع المحل")، والأبليكشن مش بيقبل غير موقع دقيق. ولو زار عميل وكان بعيد عن موقعه، بيسأله يحدّثه.</p>
-                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${tabBtn('bad', '🟠 مشكوك فيه', '#b26a00')}${tabBtn('none', '🔴 مالوش موقع', '#c0392b')}${tabBtn('ok', '🟢 متأكد', '#0F6E56')}
-                <button class="btn btn-warning btn-sm" onclick="sendLocationTasksToReps()"><i class="fas fa-paper-plane"></i> ابعت للمناديب يثبّتوهم</button></div>` +
-                (list.length ? `<div class="table-container"><table><thead><tr><th>العميل</th><th>المندوب</th><th>الحالة</th><th>آخر تحديث</th><th></th></tr></thead><tbody>${list.slice(0, 400).map(r => { const L = r.c.location; return `<tr><td><b>${escapeHtml(r.c.shopName || r.c.name)}</b><div style="font-size:11px;color:var(--text-light);">${escapeHtml(r.c.code)} · ${escapeHtml(r.c.neighborhood || '')}</div></td><td>${escapeHtml(repName(r.c.salesmanCode))}</td><td style="font-size:12px;">${escapeHtml(r.why)}</td><td style="font-size:11px;">${L ? f(L.at) + (L.byName ? '<br>' + escapeHtml(L.byName) : '') : ''}</td><td style="white-space:nowrap;">${L ? `<a class="btn btn-info btn-sm" href="https://www.google.com/maps?q=${L.lat},${L.lng}" target="_blank">🗺️</a> ` : ''}<button class="btn btn-secondary btn-sm" onclick="setCustomerLocationManual('${escapeHtml(r.c.code)}')">حط موقع</button></td></tr>`; }).join('')}</tbody></table></div>` : '<p>مفيش عملاء هنا 👍</p>'));
+            const ft = t => new Date(t).toLocaleString('ar-EG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+            const map = (lat, lng) => `<a class="btn btn-info btn-sm" href="https://www.google.com/maps?q=${lat},${lng}" target="_blank">🗺️</a>`;
+            let body = '';
+            if (locAuditTab === 'reps') {
+                const list = Object.values(integ).sort((a, b) => (b.hot.length * 10 + b.speed.length * 5 + b.mock * 10 + b.far) - (a.hot.length * 10 + a.speed.length * 5 + a.mock * 10 + a.far));
+                body = !list.length ? '<p>مفيش زيارات بموقع في آخر 30 يوم</p>' : `<p style="margin-top:0;font-size:12.5px;color:var(--text-light);">آخر 30 يوم. "من المحل" = المندوب كان على بُعد 150 متر أو أقل من موقع العميل.</p>` + list.map(r => {
+                    const pct = r.total - r.unknown ? Math.round(r.near / (r.total - r.unknown) * 100) : null;
+                    const col = pct == null ? '#888' : (pct >= 85 ? '#0F6E56' : (pct >= 65 ? '#b26a00' : '#A32D2D'));
+                    return `<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px;">
+                        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;"><b>${escapeHtml(r.name)}</b><span style="font-size:12.5px;">${r.total} زيارة · <b style="color:${col};">من المحل ${pct == null ? '-' : pct + '%'}</b> · من بعيد ${r.far}${r.unknown ? ` · عميل مالوش موقع ${r.unknown}` : ''}</span></div>
+                        ${r.mock ? `<div style="color:#A32D2D;font-size:12.5px;margin-top:6px;">🚨 ${r.mock} زيارة من موبايل عليه برنامج موقع مزيف (Fake GPS)</div>` : ''}
+                        ${r.hot.map(h => `<div style="color:#A32D2D;font-size:12.5px;margin-top:6px;">📍 نقطة متكررة: ${h.visits} زيارة لـ ${h.custs.length} عملاء مختلفين من نفس المكان (${escapeHtml(h.custs.slice(0, 4).join('، '))}${h.custs.length > 4 ? '...' : ''}) ${map(h.lat, h.lng)}</div>`).join('')}
+                        ${r.speed.slice(0, 5).map(s => `<div style="color:#b26a00;font-size:12.5px;margin-top:6px;">⚡ سرعة مستحيلة: ${escapeHtml(s.a.customerName || '')} ← ${escapeHtml(s.b.customerName || '')}: ${fmtM(s.dm)} في ${s.min} دقيقة (${ft(s.b.date)})</div>`).join('')}
+                        ${r.farList.length ? `<details style="margin-top:6px;font-size:12px;"><summary>الزيارات من بعيد (${r.farList.length})</summary>${r.farList.slice(-30).reverse().map(x => `<div style="padding:3px 0;">${ft(x.v.date)} — ${escapeHtml(x.v.customerName || '')} — على بُعد <b>${fmtM(x.d)}</b> ${map(x.v.repLocation.lat, x.v.repLocation.lng)}</div>`).join('')}</details>` : ''}
+                    </div>`;
+                }).join('');
+            } else if (locAuditTab === 'req') {
+                body = !reqs.length ? '<p>مفيش طلبات</p>' : `<p style="margin-top:0;font-size:12.5px;color:var(--text-light);">المندوب عايز يغيّر موقع متأكد (🔒). افتح المكانين على الخريطة قبل ما توافق.</p><div class="table-container"><table><thead><tr><th>إمتى</th><th>المندوب</th><th>العميل</th><th>القديم</th><th>الجديد</th><th>المسافة</th><th></th></tr></thead><tbody>${reqs.map(v => `<tr><td>${ft(v.date)}</td><td>${escapeHtml(v.repFullName || repName(v.repUsername))}</td><td>${escapeHtml(v.customerName || v.customerCode)}</td><td>${v.oldLocation ? map(v.oldLocation.lat, v.oldLocation.lng) : ''}</td><td>${map(v.newLocation.lat, v.newLocation.lng)} ${v.mock === true ? '<span style="color:#A32D2D;">🚨 مزيف</span>' : ''}</td><td>${fmtM(v.movedM || 0)}</td><td><button class="btn btn-success btn-sm" onclick="decideLocationChange('${escapeHtml(v.id)}',true)">موافق</button> <button class="btn btn-danger btn-sm" onclick="decideLocationChange('${escapeHtml(v.id)}',false)">رفض</button></td></tr>`).join('')}</tbody></table></div>`;
+            } else {
+                const list = rows.filter(r => r.st === locAuditTab).sort((a, b) => repName(a.c.salesmanCode).localeCompare(repName(b.c.salesmanCode)));
+                body = list.length ? `<div class="table-container"><table><thead><tr><th>العميل</th><th>المندوب</th><th>الحالة</th><th>آخر تحديث</th><th></th></tr></thead><tbody>${list.slice(0, 400).map(r => { const L = r.c.location; return `<tr><td><b>${escapeHtml(r.c.shopName || r.c.name)}</b><div style="font-size:11px;color:var(--text-light);">${escapeHtml(r.c.code)} · ${escapeHtml(r.c.neighborhood || '')}</div></td><td>${escapeHtml(repName(r.c.salesmanCode))}</td><td style="font-size:12px;">${r.why}</td><td style="font-size:11px;">${L ? f(L.at) + (L.byName ? '<br>' + escapeHtml(L.byName) : '') : ''}</td><td style="white-space:nowrap;">${L ? map(L.lat, L.lng) + ' ' : ''}<button class="btn btn-secondary btn-sm" onclick="setCustomerLocationManual('${escapeHtml(r.c.code)}')">حط موقع</button></td></tr>`; }).join('')}</tbody></table></div>` : '<p>مفيش عملاء هنا 👍</p>';
+            }
+            showReservedModal('📍 مواقع العملاء والزيارات', `<p style="margin-top:0;font-size:12.5px;color:var(--text-light);">الموقع اللي اتأكد من الإدارة أو من مندوب التسليم بيتقفل 🔒، والمندوب مايقدرش يغيّره غير بموافقتك.</p>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${tabBtn('bad', '🟠 مشكوك فيه', cnt.bad, '#b26a00')}${tabBtn('none', '🔴 مالوش موقع', cnt.none, '#c0392b')}${tabBtn('ok', '🟢 متأكد', cnt.ok, '#0F6E56')}${tabBtn('reps', '🕵️ المناديب', badReps, '#A32D2D')}${tabBtn('req', '✋ طلبات تغيير', reqs.length, '#A32D2D')}
+                <button class="btn btn-warning btn-sm" onclick="sendLocationTasksToReps()"><i class="fas fa-paper-plane"></i> ابعت للمناديب يثبّتوهم</button></div>` + body);
+        }
+        function decideLocationChange(id, ok) {
+            if (!requireCloudReady()) return;
+            const v = customerVisits.find(x => x.id === id); if (!v || v.status !== 'pending') return;
+            if (ok) {
+                const idx = customers.findIndex(c => c.code === v.customerCode); if (idx < 0) { showToast('العميل مش موجود', 'error'); return; }
+                const old = customers[idx].location || null;
+                customers[idx] = Object.assign({}, customers[idx], { location: { lat: v.newLocation.lat, lng: v.newLocation.lng, acc: v.newLocation.acc || null, at: Date.now(), by: v.repUsername, byName: v.repFullName || '', src: 'approved', verified: true, locked: true, confirmedBy: 'admin', prev: old ? { lat: old.lat, lng: old.lng, at: old.at || null, by: old.by || '' } : null, moves: (Number(old && old.moves) || 0) + 1 } });
+                localStorage.setItem('customers', JSON.stringify(customers));
+                logAction('تعديل موقع عميل', `موافقة على طلب ${repName(v.repUsername)} — ${v.customerName} (${fmtM(v.movedM || 0)})`);
+            }
+            db.collection('customerVisitRecords').doc(id).update({ status: ok ? 'approved' : 'rejected', decidedAt: Date.now(), decidedBy: currentUser.username || '' }).catch(e => console.error(e));
+            v.status = ok ? 'approved' : 'rejected';
+            notifyRep(v.repUsername, ok ? 'اتوافق على تغيير الموقع ✅' : 'تغيير الموقع اترفض', v.customerName || '');
+            showCustomerLocations('req');
         }
         function parseLatLng(txt) {
             const t = String(txt || '').replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/٫/g, '.');
@@ -10804,12 +10934,12 @@
             const p = parseLatLng(txt);
             if (!p) { showToast('مش عارف أقرا الموقع من اللي اتلزق — جرب الأرقام نفسها', 'error', 5000); return; }
             const old = customers[idx].location && customers[idx].location.lat != null ? customers[idx].location : null;
-            const loc = { lat: p.lat, lng: p.lng, acc: null, at: Date.now(), by: currentUser.username || '', byName: currentUser.name || currentUser.username || '', src: 'admin', verified: true };
-            if (old) loc.prev = { lat: old.lat, lng: old.lng, at: old.at || null, by: old.by || '' };
+            const loc = { lat: p.lat, lng: p.lng, acc: null, at: Date.now(), by: currentUser.username || '', byName: currentUser.name || currentUser.username || '', src: 'admin', verified: true, locked: true, confirmedBy: 'admin' };
+            if (old) { loc.prev = { lat: old.lat, lng: old.lng, at: old.at || null, by: old.by || '' }; loc.moves = Number(old.moves) || 0; }
             customers[idx] = Object.assign({}, customers[idx], { location: loc });
             localStorage.setItem('customers', JSON.stringify(customers));
             logAction('تعديل موقع عميل', `${customers[idx].name} (${code}) → ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`);
-            showToast('اتحفظ الموقع ✓');
+            showToast('اتحفظ الموقع ✓ ومقفول 🔒');
             showCustomerLocations();
         }
         function sendLocationTasksToReps() {
@@ -12234,7 +12364,7 @@
         // أسباب الزيارات اللي ما جابتش طلب
         function showVisitFailReasons() {
             const days = Math.max(1, Number(prompt('آخر كام يوم؟', '30')) || 30), since = Date.now() - days * 86400000;
-            const fails = customerVisits.filter(v => v.kind !== 'newCustomer' && v.status === 'غير ناجحة' && new Date(v.date).getTime() >= since);
+            const fails = customerVisits.filter(v => v.kind !== 'newCustomer' && v.kind !== 'locationChange' && v.status === 'غير ناجحة' && new Date(v.date).getTime() >= since);
             const by = {}, byRep = {}, comp = {};
             fails.forEach(v => {
                 const r = v.failReason || 'مش متسجل'; by[r] = (by[r] || 0) + 1;
