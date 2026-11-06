@@ -1881,6 +1881,7 @@
                         <button class="btn btn-success btn-sm" onclick="openCustomerModal()"><i class="fas fa-plus"></i> إضافة عميل</button>
                         <button class="btn btn-primary btn-sm" id="newCustReqBtn" onclick="showNewCustomerRequests()"><i class="fas fa-user-plus"></i> عملاء جداد من المناديب</button>
                         <button class="btn btn-info btn-sm" id="custLocBtn" onclick="showCustomerLocations()"><i class="fas fa-map-location-dot"></i> مواقع العملاء</button>
+                        <button class="btn btn-success btn-sm" onclick="openRepVisitsExport()"><i class="fas fa-file-excel"></i> زيارات المناديب Excel</button>
                         <button class="btn btn-warning btn-sm" onclick="openAppPasswordResetModal()"><i class="fas fa-key"></i> إعادة ضبط رقم سري (أبليكيشن)</button>
                         <button class="btn btn-info btn-sm" onclick="exportCustomersToExcel()"><i class="fas fa-file-export"></i> تصدير العملاء الحاليين</button>
                         <button class="btn btn-primary btn-sm" onclick="document.getElementById('excelFileInput').click()"><i class="fas fa-file-excel"></i> رفع ملف Excel</button>
@@ -10949,6 +10950,66 @@
             if (!confirm(`هيتبعت إشعار لـ ${codes.length} مندوب بالعملاء اللي محتاجين تثبيت موقع (${rows.length} عميل). تبعت؟`)) return;
             codes.forEach(code => { const l = by[code]; notifyRep(code, `📍 ${l.length} عميل محتاجين تثبيت موقع`, `وانت عندهم افتح كارت العميل ودوس "حدّث موقع المحل": ${l.slice(0, 4).map(c => c.shopName || c.name).join('، ')}${l.length > 4 ? '...' : ''}`); });
             showToast('اتبعت ✓');
+        }
+        // ==================== (2026-11-06) تقرير زيارات المناديب Excel ====================
+        function openRepVisitsExport() {
+            const today = new Date(), from = new Date(Date.now() - 6 * 86400000);
+            const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+            const reps = salesmen.filter(s => s.repType !== 'delivery');
+            showReservedModal('📥 زيارات المناديب — Excel', `
+                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;">
+                    <div class="form-group" style="margin:0;"><label class="form-label">من</label><input type="date" class="form-control" id="rvxFrom" value="${iso(from)}"></div>
+                    <div class="form-group" style="margin:0;"><label class="form-label">إلى</label><input type="date" class="form-control" id="rvxTo" value="${iso(today)}"></div>
+                    <div class="form-group" style="margin:0;"><label class="form-label">المندوب</label><select class="form-control" id="rvxRep"><option value="">كل المناديب</option>${reps.map(s => `<option value="${escapeHtml(s.code)}">${escapeHtml(s.name)}</option>`).join('')}</select></div>
+                    <button class="btn btn-success" onclick="exportRepVisitsExcel()"><i class="fas fa-file-excel"></i> نزّل الشيت</button>
+                </div>
+                <p style="font-size:12.5px;color:var(--text-light);margin-bottom:0;">الشيت فيه كل زيارة بالدقيقة: المندوب، العميل والمحل والتليفون، الحالة والسبب والملاحظات، وموقع المحل وموقع المندوب وقت الزيارة (لينكات بتفتح على الخريطة) والمسافة بينهم. الطلبات اللي اتعملت بالتليفون مش بتتحسب زيارات.</p>`);
+        }
+        function exportRepVisitsExcel() {
+            if (!db) return;
+            const f = document.getElementById('rvxFrom').value, t = document.getElementById('rvxTo').value, rep = document.getElementById('rvxRep').value;
+            if (!f || !t) { showToast('اختار التاريخ', 'error'); return; }
+            const fromMs = new Date(f + 'T00:00:00').getTime(), toMs = new Date(t + 'T23:59:59').getTime();
+            showToast('بيجهّز الشيت...');
+            db.collection('customerVisitRecords').where('date', '>=', new Date(fromMs).toISOString()).get().then(snap => {
+                const vs = snap.docs.map(d => Object.assign({ id: d.id }, d.data()))
+                    .filter(v => v.kind !== 'newCustomer' && v.kind !== 'locationChange' && !v.auto)
+                    .filter(v => { const x = new Date(v.date).getTime(); return x >= fromMs && x <= toMs; })
+                    .filter(v => !rep || v.repUsername === rep)
+                    .sort((a, b) => new Date(a.date) - new Date(b.date));
+                if (!vs.length) { showToast('مفيش زيارات في المدة دي', 'error'); return; }
+                const p2 = n => String(n).padStart(2, '0');
+                const fmtDT = ms => { const d = new Date(ms); let h = d.getHours(); const ap = h >= 12 ? 'م' : 'ص'; h = h % 12 || 12; return { day: `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()}`, time: `${p2(h)}:${p2(d.getMinutes())} ${ap}` }; };
+                const ml = L => L && L.lat != null ? `https://www.google.com/maps?q=${(+L.lat).toFixed(6)},${(+L.lng).toFixed(6)}` : '';
+                const head = ['#', 'التاريخ', 'الوقت', 'اليوم', 'المندوب', 'كود العميل', 'اسم العميل', 'اسم المحل', 'التليفون', 'الحي', 'الحالة', 'سبب عدم الطلب', 'المنافس', 'غرض الزيارة', 'ملاحظات', 'موقع المحل', 'موقع المندوب وقت الزيارة', 'المسافة بينهم (متر)', 'دقة GPS (متر)', 'تنبيه'];
+                const rows = [head], links = [];
+                vs.forEach((v, i) => {
+                    const c = customers.find(x => x.code === v.customerCode) || {};
+                    const ms = new Date(v.date).getTime(), dt = fmtDT(ms);
+                    const custLoc = (c.location && c.location.lat != null) ? c.location : v.customerLocation;
+                    let dist = v.distM != null ? v.distM : (custLoc && v.repLocation ? Math.round(geoDistM(custLoc, v.repLocation)) : '');
+                    const warn = [v.mock === true ? 'موقع مزيف (Fake GPS)' : '', dist !== '' && dist > 150 ? 'الزيارة من بعيد' : '', !v.repLocation ? 'من غير موقع' : ''].filter(Boolean).join(' · ');
+                    const a = ml(custLoc), b = ml(v.repLocation);
+                    rows.push([i + 1, dt.day, dt.time, new Date(ms).toLocaleDateString('ar-EG', { weekday: 'long' }), v.repFullName || repName(v.repUsername), v.customerCode || '', c.name || v.customerName || '', c.shopName || '', c.phone || '', c.neighborhood || '',
+                        v.status || '', v.failReason || '', v.competitor || '', v.purpose || '', v.notes || '', a ? 'افتح الخريطة' : '', b ? 'افتح الخريطة' : '', dist, v.locAcc || (v.repLocation && v.repLocation.acc) || '', warn]);
+                    links.push([a, b]);
+                });
+                // ملخص لكل مندوب
+                const sum = {};
+                vs.forEach(v => { const k = v.repFullName || repName(v.repUsername); const s = sum[k] || (sum[k] = { n: 0, ok: 0, fail: 0, custs: new Set(), far: 0 }); s.n++; if (v.status === 'ناجحة') s.ok++; else s.fail++; s.custs.add(v.customerCode); const d = v.distM; if (d != null && d > 150) s.far++; });
+                const sRows = [['المندوب', 'عدد الزيارات', 'عملاء مختلفين', 'ناجحة', 'ما جابتش طلب', 'من بعيد']].concat(Object.keys(sum).map(k => [k, sum[k].n, sum[k].custs.size, sum[k].ok, sum[k].fail, sum[k].far]));
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.aoa_to_sheet(rows);
+                ws['!cols'] = [5, 12, 10, 10, 18, 10, 22, 22, 14, 14, 11, 18, 14, 16, 30, 14, 20, 12, 10, 22].map(w => ({ wch: w }));
+                links.forEach((l, i) => { [[15, l[0]], [16, l[1]]].forEach(([col, url]) => { if (!url) return; const ref = XLSX.utils.encode_cell({ r: i + 1, c: col }); if (ws[ref]) ws[ref].l = { Target: url }; }); });
+                ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: head.length - 1 } }) };
+                if (!wb.Workbook) wb.Workbook = {}; wb.Workbook.Views = [{ RTL: true }];
+                XLSX.utils.book_append_sheet(wb, ws, 'الزيارات');
+                const ws2 = XLSX.utils.aoa_to_sheet(sRows); ws2['!cols'] = [22, 12, 14, 10, 14, 10].map(w => ({ wch: w }));
+                XLSX.utils.book_append_sheet(wb, ws2, 'ملخص المناديب');
+                XLSX.writeFile(wb, `زيارات_المناديب_${f}_${t}.xlsx`);
+                showToast(`اتنزل الشيت — ${vs.length} زيارة`);
+            }).catch(e => { console.error(e); showToast('تعذر: ' + (e.message || ''), 'error'); });
         }
         function renderCustomers() {
             const tbody = document.getElementById('customersTable');
