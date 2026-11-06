@@ -8533,6 +8533,9 @@
             const sel = document.getElementById('appOfferProduct');
             sel.innerHTML = '<option value="">اختر صنف</option>' + products.map(p => `<option value="${p.code}">${p.name}</option>`).join('');
             sel.value = offer ? offer.productCode : '';
+            // (2026-11-06) خانة بحث بالاسم أو الكود بدل ما تدوّر في كل الأصناف
+            enhanceSelectWithSearch(sel, { fixed: true, placeholder: '🔍 اكتب اسم الصنف أو الكود...' });
+            syncEnhancedSelect(sel);
             document.getElementById('appOfferTitle').value = offer ? offer.title : '';
             document.getElementById('appOfferDesc').value = offer ? (offer.desc || '') : '';
             document.getElementById('appOfferOldPrice').value = offer ? offer.oldPrice : '';
