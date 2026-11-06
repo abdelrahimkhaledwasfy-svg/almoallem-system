@@ -12480,7 +12480,9 @@
         setInterval(function() {
             try {
                 const n = new Date(); if (n.getHours() * 60 + n.getMinutes() < 9 * 60 + 30) return;
-                if (window._repDigestDay === n.toDateString()) return; window._repDigestDay = n.toDateString();
+                if (window._repDigestDay === n.toDateString()) return;
+                if (!db || !currentUser || !['admin', 'accountant'].includes(xlRole()) || !isCloudReady()) return;   // نستنى لحد ما السيستم يحمّل ونحاول تاني
+                window._repDigestDay = n.toDateString();
                 sendRepDailyDigest(false);
             } catch (e) { console.error(e); }
         }, 5 * 60000);
