@@ -11010,16 +11010,16 @@
                 </div>
                 <p style="font-size:12.5px;color:var(--text-light);margin-bottom:0;">الشيت فيه كل زيارة بالدقيقة: المندوب، العميل والمحل والتليفون، الحالة والسبب والملاحظات، وموقع المحل وموقع المندوب وقت الزيارة (لينكات بتفتح على الخريطة) والمسافة بينهم. الطلبات اللي اتعملت بالتليفون مش بتتحسب زيارات.</p>`);
         }
-        // (2026-11-11) تقرير المناديب اليومي: لكل مندوب في كل يوم (اليوم العادي من 12 بالليل لـ 12 بالليل)
+        // (2026-11-11) تقرير المناديب اليومي: لكل مندوب في كل يوم بيع (من 9 الصبح لـ 9 الصبح اليوم اللي بعده — زي باقي السيستم)
         // عدد الزيارات (ناجحة / غير ناجحة) + عدد الفواتير وإجمالي المبيعات لكل العملاء المربوطين باسمه
         function exportRepDailyReport() {
             if (!db) return;
             const f = document.getElementById('rvxFrom').value, t = document.getElementById('rvxTo').value, rep = document.getElementById('rvxRep').value;
             if (!f || !t) { showToast('اختار التاريخ', 'error'); return; }
-            const fromMs = new Date(f + 'T00:00:00').getTime(), toMs = new Date(t + 'T23:59:59.999').getTime();
+            const fromMs = new Date(f + 'T09:00:00').getTime(), toEnd = new Date(t + 'T09:00:00'); toEnd.setDate(toEnd.getDate() + 1); const toMs = toEnd.getTime() - 1;
             if (toMs < fromMs) { showToast('تاريخ البداية بعد النهاية', 'error'); return; }
             const p2 = n => String(n).padStart(2, '0');
-            const dayKey = ms => { const d = new Date(ms); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); };
+            const dayKey = ms => { const d = svSalesDayStart(new Date(ms)); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); };
             const reps = salesmen.filter(s => s.repType !== 'delivery' && (!rep || s.code === rep));
             if (!reps.length) { showToast('مفيش مناديب بيع', 'error'); return; }
             showToast('بيجهّز التقرير...');
@@ -11040,7 +11040,7 @@
                     const ms = saleTimeOf(i); if (!(ms >= fromMs && ms <= toMs)) return;
                     const c = cell(code, dayKey(ms)); c.inv++; c.sales += Number(i.grandTotal) || 0;
                 });
-                const days = []; for (let d = new Date(fromMs); d.getTime() <= toMs; d.setDate(d.getDate() + 1)) days.push(dayKey(d.getTime()));
+                const days = []; for (let d = new Date(fromMs); d.getTime() <= toMs; d.setDate(d.getDate() + 1)) days.push(dayKey(d.getTime() + 60000));
                 const head = ['التاريخ', 'اليوم', 'المندوب', 'عدد الزيارات', 'زيارة ناجحة', 'زيارة غير ناجحة', 'عدد الفواتير', 'إجمالي المبيعات'];
                 const daily = [head], tot = {};
                 days.forEach(day => {
