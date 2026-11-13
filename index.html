@@ -3884,6 +3884,14 @@
                     return migrateMoneyLists().then(() => { startMoneyRecordsListeners(); if (first) scheduleCloudSync(); });
                 });
             }).catch(e => {
+                // (2026-11-13) لو الجهاز كان شغال بالأماكن المنفصلة قبل كده، أي فشل مؤقت (نت / Firebase واقف / فواتير)
+                // مايرجّعوش للمكان القديم — ده كان بيخلي الخزنة والمصروفات تظهر صفر على الجهاز. بنفضل زي ما احنا ونحاول تاني.
+                if (moneySplitActive) {
+                    console.error('money split check failed (temporary?) — keeping split mode and retrying:', e);
+                    try { startMoneyRecordsListeners(); } catch (e2) {}
+                    clearTimeout(window._moneySplitRetry); window._moneySplitRetry = setTimeout(activateMoneySplit, 60000);
+                    return;
+                }
                 console.error('money split not allowed by rules, staying on the old storage:', e);
                 moneySplitActive = false; _origLocalStorageSetItem('_moneySplitActive', '0');
                 window._moneySplitBlocked = true;
