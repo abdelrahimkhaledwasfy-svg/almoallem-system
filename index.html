@@ -1028,6 +1028,7 @@
             <div class="card" style="margin-top:14px;">
                 <div class="card-header"><div class="card-title"><i class="fas fa-user-clock"></i> عملاء محتاجين متابعة (دلوقتي) ونتيجة المتابعة في الفترة</div></div>
                 <p style="font-size:12px;color:var(--text-light);margin:0 0 8px;">👀 فتح الأبليكشن آخر 3 أيام وما طلبش · 1️⃣ طلب مرة واحدة بس من أول الشهر · 😴 طلب الشهر اللي فات وما طلبش الشهر ده. العميل بيختفي من القايمة لما المندوب يسجّل إنه تابعه. دوس على الرقم يطلعلك الأسماء.</p>
+                <div id="rvFeed" style="margin-bottom:10px;"></div>
                 <div class="table-container" id="rvFollow"></div>
             </div>
             <div class="card" style="margin-top:14px;">
@@ -11127,6 +11128,7 @@
             document.getElementById('rvCount').textContent = vs.length;
             try { drawRepDaySection(); } catch (e) { console.error(e); }
             try { drawFollowUpCard(); } catch (e) { console.error(e); }
+            try { if (!window._rvFeedChecked || Date.now() - window._rvFeedChecked > 60000) { window._rvFeedChecked = Date.now(); checkRepDataFeed(); } } catch (e) {}
             document.getElementById('rvTable').innerHTML = !vs.length ? '<p style="padding:14px;color:var(--text-light);">مفيش زيارات بالفلتر ده</p>' : `<table><thead><tr><th>الوقت</th><th>المندوب</th><th>العميل / المحل</th><th>التليفون</th><th>الحالة</th><th>السبب / ملاحظات</th><th>بُعد المندوب عن المحل</th><th>مدة الزيارة</th><th>الموقع</th><th>صورة</th></tr></thead><tbody>${vs.slice(0, 500).map(v => {
                 const c = custBy[v.customerCode] || {}; const L = (c.location && c.location.lat != null) ? c.location : v.customerLocation;
                 const d = v.distM != null ? v.distM : (L && v.repLocation ? Math.round(geoDistM(L, v.repLocation)) : null);
@@ -11298,6 +11300,25 @@
             const L = (window._fuCache || {})[code]; if (!L) return;
             const d = t => t ? new Date(t * 1000).toLocaleString('ar-EG-u-nu-latn', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '—';
             showReservedModal(FU_LISTS[k] + ' — ' + repName(code), `<div class="table-container"><table><thead><tr><th>العميل</th><th>التليفون</th><th>آخر طلب</th><th>الشهر ده</th><th>الشهر اللي فات</th><th>آخر فتح للأبليكشن</th></tr></thead><tbody>${L[k].map(x => `<tr><td><b>${escapeHtml(x.c.shopName || x.c.name)}</b><div style="font-size:11px;">${escapeHtml(x.c.name || '')}</div></td><td>${escapeHtml(x.c.phone || '')}</td><td>${x.s.l ? d(x.s.l) : '—'}</td><td>${x.s.m || 0}</td><td>${x.s.pm || 0}</td><td>${x.s.o ? d(x.s.o) : '—'}</td></tr>`).join('')}</tbody></table></div>`);
+        }
+        // (2026-11-13) فحص: البيانات اللي بتروح لأبليكشن المناديب (خط السير + قوايم المتابعة) اتنشرت إمتى وفيها إيه
+        function checkRepDataFeed(force) {
+            const box = document.getElementById('rvFeed'); if (!box || !db) return;
+            const why = !currentUser ? 'مش داخل' : !['admin', 'accountant', 'sales_supervisor'].includes(xlRole()) ? 'الحساب ده مش مدير/محاسب/مشرف' : !isCloudReady() ? 'السيستم لسه بيحمّل البيانات من السحابة' : '';
+            if (force) { if (why) { showToast('مقدرتش أنشر: ' + why, 'error', 6000); } else { repProgressLastJson = ''; appSeenCache.at = 0; try { refreshAppSeen(); } catch (e) {} setTimeout(() => { publishRepProgress(); setTimeout(() => checkRepDataFeed(), 2500); }, 2500); showToast('بيجهّز البيانات وينشرها...'); return; } }
+            db.collection('meta').doc('repProgress').get().then(sn => {
+                const d = sn.exists ? sn.data() : {}; const cust = d.cust || {}; const keys = Object.keys(cust);
+                const withMonth = keys.filter(k => cust[k].m !== undefined).length, opened = keys.filter(k => cust[k].o).length;
+                const ago = d.updatedAt ? Math.round((Date.now() - d.updatedAt) / 60000) : null;
+                let stats = {}; try { stats = repCustStatsPayload(); } catch (e) {}
+                const tot = { opened: 0, once: 0, lapsed: 0 };
+                salesmen.filter(x => x.repType !== 'delivery').forEach(r => { const L = followUpLists(r.code, stats, []); tot.opened += L.opened.length; tot.once += L.once.length; tot.lapsed += L.lapsed.length; });
+                const ok = ago != null && ago < 30 && withMonth > 0;
+                box.innerHTML = `<div style="padding:10px 12px;border-radius:10px;background:${ok ? '#E8F3EB' : '#FDECEA'};color:${ok ? '#1e6b3a' : '#8a1c1c'};font-size:13px;">
+                    ${ok ? '✅' : '⚠️'} آخر مرة البيانات اتبعتت لأبليكشن المناديب: <b>${ago == null ? 'لسه' : ago < 1 ? 'دلوقتي' : 'من ' + ago + ' دقيقة'}</b> · عملاء ليهم بيانات: <b>${keys.length}</b> · فيهم أرقام الشهر: <b>${withMonth}</b> · فتحوا الأبليكشن: <b>${opened}</b>
+                    <br>حسب الحسابات دلوقتي: 👀 ${tot.opened} · 1️⃣ ${tot.once} · 😴 ${tot.lapsed}${why ? ' · <b>الجهاز ده مش بينشر: ' + why + '</b>' : ''}
+                    <button class="btn btn-sm btn-primary" style="margin-right:8px;" onclick="checkRepDataFeed(true)">انشر دلوقتي</button></div>`;
+            }).catch(e => { box.innerHTML = '<span style="color:var(--danger);">تعذر الفحص: ' + escapeHtml(e.message || '') + '</span>'; });
         }
         function rvExport(kind) {
             const opt = { f: document.getElementById('rvFrom').value, t: document.getElementById('rvTo').value, rep: document.getElementById('rvRep').value };
