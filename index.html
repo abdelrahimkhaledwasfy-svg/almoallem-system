@@ -1825,6 +1825,10 @@
                         <div><button class="btn btn-success btn-sm admin-only" onclick="savePromoSettings()"><i class="fas fa-save"></i> حفظ (بيظهر للعملاء في الأبليكشن)</button></div>
                     </div>
                     <div style="border-top:1px dashed var(--border);margin:12px 0 8px;"></div>
+                    <div style="font-weight:800;margin-bottom:6px;">🤖 إشعارات تلقائية للعملاء</div>
+                    <div style="font-size:12px;color:var(--text-light);margin-bottom:6px;">بتتبعت لوحدها من 10 الصبح لـ 9:30 بالليل. العميل مايوصلوش أكتر من إشعار تسويقي واحد في اليوم، و"وحشتنا" مرة كل 30 يوم بالكتير.</div>
+                    <div id="autoNotifBox" style="display:grid;gap:8px;font-size:13px;"></div>
+                    <div style="border-top:1px dashed var(--border);margin:12px 0 8px;"></div>
                     <div style="font-size:12.5px;color:var(--text-light);margin-bottom:6px;">إشعارات بضغطة (كل واحد برسالته بالاسم — ✏️ لتعديل الرسالة):</div>
                     <div style="display:flex;gap:6px;flex-wrap:wrap;">
                         <span><button class="btn btn-primary btn-sm" onclick="sendAbandonedCartReminders()"><i class="fas fa-shopping-cart"></i> السلة المنسية</button><button class="btn btn-secondary btn-sm" title="تعديل الرسالة" onclick="editPromoTpl('cart')">✏️</button></span>
@@ -9140,6 +9144,7 @@
             notifSettingsListenerStarted = true;
             db.collection('meta').doc('notifSettings').onSnapshot(function(snap) {
                 notifSettingsRaw = (snap.exists && snap.data()) || {};
+                try { renderAutoNotifForm(); } catch (e) {}
                 try { _origLocalStorageSetItem('notifSettings', JSON.stringify(notifSettingsRaw)); } catch (e) {}
                 try { renderStaffBell(); } catch (e) {}
             }, function(e) { console.error('notif settings listener', e); });
@@ -9388,7 +9393,7 @@
             db.collection('appMeta').doc('promoSettings').onSnapshot(s => {
                 const d = (s.exists && s.data()) || {};
                 promoSettings = { referral: Object.assign({ on: false, points: 50 }, d.referral || {}), challenge: Object.assign({ on: false, orders: 4, points: 100 }, d.challenge || {}) };
-                try { renderPromoForm(); } catch (e) {}
+                try { renderPromoForm(); renderAutoNotifForm(); } catch (e) {}
             }, e => console.error('promo settings', e));
         }
         function renderPromoForm() {
@@ -9517,6 +9522,141 @@
                 return reached;
             });
         }
+        // ==================== (2026-11-13) إشعارات تلقائية للعملاء ====================
+        // forgot: "نسيت حاجة؟" بعد الطلب بساعة لو ناقصه صنف بيطلبه دايمًا · offerFav: عرض على صنف بيشتريه
+        // repday: يوم زيارة مندوبه (من خط السير) · winback: "وحشتنا" لعميل بطّل من 21 يوم
+        // بتشتغل من أي جهاز مدير/محاسب فاتح السيستم، وكل إشعار بيتسجل في meta/autoNotif_<الشهر> عشان مايتكررش لو أكتر من جهاز فاتح.
+        // التسويقي (عرض/مندوب/وحشتنا) مرة واحدة بس في اليوم لكل عميل.
+        Object.assign(PROMO_TPL, {
+            forgot: { title: 'نسيت حاجة؟ 🤔', body: 'يا {الاسم}، طلبك اتسجل ✓ بس ناقصه {الأصناف} اللي بتطلبهم دايمًا. تحب تضيفهم قبل ما الطلب يخرج؟' },
+            offerFav: { title: '🔥 عرض على {الصنف}', body: 'يا {الاسم}، {الصنف} اللي بتطلبه عليه عرض دلوقتي: {السعر} ج بدل {القديم} ج. الحق قبل ما العرض يخلص!' },
+            repday: { title: 'مندوبك عندك النهارده 🚶', body: 'يا {الاسم}، {المندوب} مندوب المعلم معدّي عليك النهارده. جهّز طلباتك، أو اطلب من الأبليكشن على طول 📲' },
+            winback: { title: 'وحشتنا يا {الاسم} 💛', body: 'بقالنا {الأيام} يوم ما شفناش طلبك. عندنا عروض جديدة مستنياك — افتح الأبليكشن وشوف!' }
+        });
+        const AUTO_NOTIF_DEF = { forgot: 'نسيت حاجة؟ (بعد الطلب بساعة)', offerFav: 'عرض على صنف بيشتريه', repday: 'مندوبك عندك النهارده (الساعة 10 الصبح)', winback: 'وحشتنا (ما طلبش من 21 يوم)' };
+        function autoNotifCfg() { return Object.assign({ forgot: false, offerFav: false, repday: false, winback: false }, ((notifSettingsRaw || {}).autoNotif) || {}); }
+        function renderAutoNotifForm() {
+            const box = document.getElementById('autoNotifBox'); if (!box) return;
+            const c = autoNotifCfg(), st = window._autoNotifLast;
+            box.innerHTML = Object.keys(AUTO_NOTIF_DEF).map(k => `<label style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><input type="checkbox" id="autoN_${k}" ${c[k] ? 'checked' : ''}> <b>${AUTO_NOTIF_DEF[k]}</b> <button class="btn btn-secondary btn-sm" type="button" title="تعديل الرسالة" onclick="editPromoTpl('${k}')">✏️</button></label>`).join('') +
+                `<div><button class="btn btn-success btn-sm admin-only" onclick="saveAutoNotif()"><i class="fas fa-save"></i> حفظ</button> <span style="font-size:12px;color:var(--text-light);">${st ? 'آخر تشغيل ' + new Date(st.at).toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit' }) + ' — اتبعت ' + st.sent : 'بتشتغل لوحدها كل 10 دقايق من أي جهاز مدير/محاسب فاتح السيستم'}</span></div>`;
+        }
+        function saveAutoNotif() {
+            if (!nacIsAdmin()) { showToast('للمدير بس', 'error'); return; }
+            const v = {}; Object.keys(AUTO_NOTIF_DEF).forEach(k => v[k] = !!(document.getElementById('autoN_' + k) || {}).checked);
+            notifSettingsRaw = Object.assign({}, notifSettingsRaw || {}, { autoNotif: v });
+            db.collection('meta').doc('notifSettings').set({ autoNotif: v }, { merge: true }).then(() => {
+                logAction('إشعارات تلقائية', Object.keys(v).map(k => AUTO_NOTIF_DEF[k] + ': ' + (v[k] ? 'شغال' : 'مقفول')).join(' — '));
+                showToast('اتحفظ ✓'); setTimeout(autoNotifTick, 2000);
+            }).catch(e => showToast('تعذر الحفظ: ' + (e.message || ''), 'error'));
+        }
+        function autoMonthKey(ms) { const d = new Date(ms || Date.now()); return d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0'); }
+        // بيحجز المفاتيح دي في السجل (اللي اتحجز قبل كده بيتشال) — عشان مفيش إشعار يتبعت مرتين من جهازين
+        function autoClaim(keys) {
+            if (!keys.length) return Promise.resolve([]);
+            const ref = db.collection('meta').doc('autoNotif_' + autoMonthKey());
+            return db.runTransaction(t => t.get(ref).then(s => {
+                const d = (s.exists && s.data()) || {}, now = Date.now(), got = [];
+                keys.forEach(k => { if (!d[k]) got.push(k); });
+                if (got.length) { const upd = {}; got.forEach(k => upd[k] = now); t.set(ref, upd, { merge: true }); }
+                return got;
+            }));
+        }
+        let autoNotifBusy = false, autoPrevMonth = { key: '', data: {} };
+        function autoNotifTick() {
+            try {
+                if (autoNotifBusy || !db || !currentUser || !['admin', 'accountant'].includes(xlRole()) || !isCloudReady()) return;
+                const c = autoNotifCfg(); if (!Object.keys(AUTO_NOTIF_DEF).some(k => c[k])) return;
+                const now = new Date(), h = now.getHours() + now.getMinutes() / 60;
+                if (h < 10 || h >= 21.5) return;   // مفيش إشعارات بدري أو متأخر
+                autoNotifBusy = true;
+                const L10 = x => notifLast10(x), today = rvIso(new Date(Date.now() - 4 * 3600000));
+                const custByL = {}; customers.forEach(cu => { const l = L10(cu.phone); if (l.length === 10) custByL[l] = cu; });
+                const nameOf = cu => (cu && (cu.shopName || cu.name)) || 'عميلنا';
+                const sales = invoices.filter(i => i.type === 'sale' && i.customerCode);
+                const invByCust = {}; sales.forEach(i => (invByCust[i.customerCode] = invByCust[i.customerCode] || []).push(i));
+                Object.values(invByCust).forEach(a => a.sort((x, y) => saleTimeOf(y) - saleTimeOf(x)));
+                const jobs = [];   // {key, mkt, phone, kind, vars, extra}
+                fetchOrdersSince(svSalesDayStart().getTime() - 3 * 3600000).then(recent => {
+                    const orderedToday = new Set(recent.filter(o => o.status !== 'rejected' && o.status !== 'cancelled').map(orderL10));
+                    // 1) نسيت حاجة؟
+                    if (c.forgot) recent.forEach(o => {
+                        const age = Date.now() - (o.createdAt || 0);
+                        if (age < 60 * 60000 || age > 4 * 3600000 || o.source === 'rep' || o.repCode || o.repDelivery) return;
+                        if (['out', 'delivered', 'rejected', 'cancelled', 'returned', 'merged'].includes(o.status)) return;
+                        const l = orderL10(o), cu = custByL[l] || customers.find(x => x.code === o.customerCode); if (!cu) return;
+                        const hist = (invByCust[cu.code] || []).slice(0, 6); if (hist.length < 3) return;
+                        const cnt = {}; hist.forEach(i => new Set((i.items || []).map(x => x.productCode)).forEach(pc => cnt[pc] = (cnt[pc] || 0) + 1));
+                        const inOrder = new Set((o.items || []).map(x => x.productCode));
+                        const miss = Object.keys(cnt).filter(pc => cnt[pc] >= 3 && !inOrder.has(pc) && (Number((inventory[pc] || {}).qty) || 0) > 0 && (products.find(p => p.code === pc) || {}).showInApp !== false)
+                            .sort((a, b) => cnt[b] - cnt[a]).slice(0, 3);
+                        if (!miss.length) return;
+                        const pn = pc => (products.find(p => p.code === pc) || {}).name || pc;
+                        jobs.push({ key: 'forgot_' + o.id, phone: o.phone || cu.phone, kind: 'forgot', vars: { 'الاسم': nameOf(cu), 'الأصناف': miss.map(pn).join(' و') }, extra: { kind: 'promo', productCode: miss[0] } });
+                    });
+                    // 2) عرض على صنف بيشتريه
+                    if (c.offerFav) {
+                        const live = (appOffers || []).filter(of => of.active && of.productCode && (!of.endDate || new Date(of.endDate + 'T23:59:59') >= new Date()));
+                        const since = Date.now() - 60 * 86400000;
+                        live.forEach(of => {
+                            Object.keys(invByCust).forEach(code => {
+                                const cu = customers.find(x => x.code === code); if (!cu) return; const l = L10(cu.phone); if (l.length !== 10 || orderedToday.has(l)) return;
+                                if (!invByCust[code].some(i => saleTimeOf(i) >= since && (i.items || []).some(x => x.productCode === of.productCode))) return;
+                                jobs.push({ key: 'offer_' + of.id + '_' + l, mkt: 'day_' + today + '_' + l, phone: cu.phone, kind: 'offerFav', vars: { 'الاسم': nameOf(cu), 'الصنف': of.productName || of.title || '', 'السعر': of.newPrice, 'القديم': of.oldPrice }, extra: { kind: 'promo', productCode: of.productCode } });
+                            });
+                        });
+                    }
+                    // 3) مندوبك عندك النهارده
+                    if (c.repday && h < 13) {
+                        const wd = new Date(Date.now() - 4 * 3600000).getDay();
+                        customers.forEach(cu => {
+                            if (!cu.salesmanCode || !Array.isArray(cu.visitDays) || cu.visitDays.indexOf(wd) === -1) return;
+                            const rp = salesmen.find(s => s.code === cu.salesmanCode); if (!rp || (rp.status && rp.status !== 'نشط')) return;
+                            const l = L10(cu.phone); if (l.length !== 10 || orderedToday.has(l)) return;
+                            jobs.push({ key: 'repday_' + today + '_' + l, mkt: 'day_' + today + '_' + l, phone: cu.phone, kind: 'repday', vars: { 'الاسم': nameOf(cu), 'المندوب': String(rp.name || '').split(' ')[0] || 'المندوب' }, extra: { kind: 'promo' } });
+                        });
+                    }
+                    // 4) وحشتنا
+                    if (c.winback) {
+                        Object.keys(invByCust).forEach(code => {
+                            const a = invByCust[code], last = saleTimeOf(a[0]), days = Math.floor((Date.now() - last) / 86400000);
+                            if (days < 21 || days > 75 || a.filter(i => saleTimeOf(i) >= Date.now() - 120 * 86400000).length < 2) return;
+                            const cu = customers.find(x => x.code === code); if (!cu) return; const l = L10(cu.phone); if (l.length !== 10 || orderedToday.has(l)) return;
+                            jobs.push({ key: 'winback_' + l + '_' + Math.floor(last / 86400000), wb: l, mkt: 'day_' + today + '_' + l, phone: cu.phone, kind: 'winback', vars: { 'الاسم': nameOf(cu), 'الأيام': days }, extra: { kind: 'promo' } });
+                        });
+                    }
+                    if (!jobs.length) return 0;
+                    // وحشتنا: مرة كل 30 يوم بس (بنبص على سجل الشهر اللي فات كمان)
+                    const pmKey = autoMonthKey(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 15).getTime());
+                    const prevP = autoPrevMonth.key === pmKey ? Promise.resolve(autoPrevMonth.data) : db.collection('meta').doc('autoNotif_' + pmKey).get().then(s => { autoPrevMonth = { key: pmKey, data: (s.exists && s.data()) || {} }; return autoPrevMonth.data; }).catch(() => ({}));
+                    return Promise.all([prevP, db.collection('meta').doc('autoNotif_' + autoMonthKey()).get().then(s => (s.exists && s.data()) || {})]).then(([prev, cur]) => {
+                        const recentWb = l => [prev, cur].some(d => Object.keys(d).some(k => k.indexOf('wbl_' + l) === 0 && Date.now() - d[k] < 30 * 86400000));
+                        const seenMkt = new Set(), list = [];
+                        jobs.forEach(j => {
+                            if (cur[j.key]) return;
+                            if (j.wb && recentWb(j.wb)) return;
+                            if (j.mkt) { if (cur[j.mkt] || seenMkt.has(j.mkt)) return; seenMkt.add(j.mkt); }
+                            list.push(j);
+                        });
+                        const batch = list.slice(0, 60);   // بالراحة: 60 إشعار كل 10 دقايق بالكتير
+                        const keys = []; batch.forEach(j => { keys.push(j.key); if (j.mkt) keys.push(j.mkt); if (j.wb) keys.push('wbl_' + j.wb); });
+                        return autoClaim(keys).then(got => {
+                            const gs = new Set(got), send = batch.filter(j => gs.has(j.key) && (!j.mkt || gs.has(j.mkt)));
+                            let i = 0, sent = 0;
+                            const worker = () => { if (i >= send.length) return Promise.resolve(); const j = send[i++]; const t = promoTpl(j.kind);
+                                return notifyCustomerPhone(j.phone, nsFill(t.title, j.vars), nsFill(t.body, j.vars), Object.assign({ auto: j.kind }, j.extra || {})).then(n => { sent += n || 0; }).catch(() => {}).then(worker); };
+                            return Promise.all([worker(), worker(), worker()]).then(() => {
+                                if (send.length) logAction('إشعارات تلقائية', `اتبعت ${sent} من ${send.length}: ` + Object.keys(AUTO_NOTIF_DEF).map(k => { const n = send.filter(j => j.kind === k).length; return n ? AUTO_NOTIF_DEF[k] + ' ' + n : ''; }).filter(Boolean).join('، '));
+                                return sent;
+                            });
+                        });
+                    });
+                }).then(n => { window._autoNotifLast = { at: Date.now(), sent: n || 0 }; try { renderAutoNotifForm(); } catch (e) {} })
+                  .catch(e => console.error('auto notif', e)).then(() => { autoNotifBusy = false; });
+            } catch (e) { console.error('auto notif', e); autoNotifBusy = false; }
+        }
+        setInterval(autoNotifTick, 10 * 60000);
+        setTimeout(autoNotifTick, 120000);
         function custNameByL10(l) { const c = customers.find(x => notifLast10(x.phone) === l || notifLast10(x.code) === l); const r = (appRegistrations || []).find(x => notifLast10(x.phone) === l); return (c && (c.shopName || c.name)) || (r && (r.shopName || r.customerName)) || ''; }
         // ---------- 1) السلة المنسية ----------
         function sendAbandonedCartReminders() {
