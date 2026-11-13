@@ -1020,6 +1020,13 @@
             </div>
             <div class="card" style="margin-top:14px;">
                 <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                    <div class="card-title"><i class="fas fa-business-time"></i> يوم المندوب: البداية والنهاية والتزامه بخط السير</div>
+                    <button class="btn btn-primary btn-sm" onclick="openRoutePlanner()"><i class="fas fa-calendar-week"></i> خط السير الأسبوعي</button>
+                </div>
+                <div class="table-container" id="rvDays"></div>
+            </div>
+            <div class="card" style="margin-top:14px;">
+                <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
                     <div class="card-title"><i class="fas fa-route"></i> الزيارات (<span id="rvCount">0</span>)</div>
                     <button class="btn btn-success btn-sm" onclick="rvExport('visits')"><i class="fas fa-file-excel"></i> نزّل شيت الزيارات Excel</button>
                 </div>
@@ -10852,7 +10859,7 @@
             return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
         }
         const fmtM = m => m >= 1000 ? (m / 1000).toFixed(1) + ' كم' : Math.round(m) + ' م';
-        function locVisits() { return customerVisits.filter(v => v.kind !== 'newCustomer' && v.kind !== 'locationChange' && !v.auto && v.repLocation && v.repLocation.lat != null); }
+        function locVisits() { return customerVisits.filter(v => !v.kind && !v.auto && v.repLocation && v.repLocation.lat != null); }
         function custByAnyId(id) {
             if (!id) return null;
             const c = customers.find(x => x.code === id); if (c) return c;
@@ -11090,8 +11097,9 @@
             const draw = () => drawRepVisitsSection(fromMs, toMs);
             if (!force && rvCache.key === key) { draw(); return; }
             document.getElementById('rvTable').innerHTML = '<p style="padding:14px;color:var(--text-light);">بيحمّل الزيارات...</p>';
-            db.collection('customerVisitRecords').where('date', '>=', new Date(fromMs).toISOString()).get().then(snap => {
-                rvCache = { key, list: snap.docs.map(d => Object.assign({ id: d.id }, d.data())).filter(v => v.kind !== 'newCustomer' && v.kind !== 'locationChange' && !v.auto).filter(v => { const ms = new Date(v.date).getTime(); return ms >= fromMs && ms <= toMs; }).sort((a, b) => new Date(b.date) - new Date(a.date)) };
+            db.collection('customerVisitRecords').where('date', '>=', new Date(fromMs - 6 * 3600000).toISOString()).get().then(snap => {
+                const all = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+                rvCache = { key, all, list: all.filter(v => !v.kind && !v.auto).filter(v => { const ms = new Date(v.date).getTime(); return ms >= fromMs && ms <= toMs; }).sort((a, b) => new Date(b.date) - new Date(a.date)) };
                 draw();
             }).catch(e => { console.error(e); document.getElementById('rvTable').innerHTML = '<p style="color:var(--danger);padding:14px;">تعذر تحميل الزيارات: ' + escapeHtml(e.message || '') + '</p>'; });
         }
@@ -11112,7 +11120,8 @@
             const ml = L => L && L.lat != null ? `https://www.google.com/maps?q=${(+L.lat).toFixed(6)},${(+L.lng).toFixed(6)}` : '';
             const ft = d => new Date(d).toLocaleString('ar-EG-u-nu-latn', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
             document.getElementById('rvCount').textContent = vs.length;
-            document.getElementById('rvTable').innerHTML = !vs.length ? '<p style="padding:14px;color:var(--text-light);">مفيش زيارات بالفلتر ده</p>' : `<table><thead><tr><th>الوقت</th><th>المندوب</th><th>العميل / المحل</th><th>التليفون</th><th>الحالة</th><th>السبب / ملاحظات</th><th>بُعد المندوب عن المحل</th><th>الموقع</th><th>صورة</th></tr></thead><tbody>${vs.slice(0, 500).map(v => {
+            try { drawRepDaySection(); } catch (e) { console.error(e); }
+            document.getElementById('rvTable').innerHTML = !vs.length ? '<p style="padding:14px;color:var(--text-light);">مفيش زيارات بالفلتر ده</p>' : `<table><thead><tr><th>الوقت</th><th>المندوب</th><th>العميل / المحل</th><th>التليفون</th><th>الحالة</th><th>السبب / ملاحظات</th><th>بُعد المندوب عن المحل</th><th>مدة الزيارة</th><th>الموقع</th><th>صورة</th></tr></thead><tbody>${vs.slice(0, 500).map(v => {
                 const c = custBy[v.customerCode] || {}; const L = (c.location && c.location.lat != null) ? c.location : v.customerLocation;
                 const d = v.distM != null ? v.distM : (L && v.repLocation ? Math.round(geoDistM(L, v.repLocation)) : null);
                 const ok = v.status === 'ناجحة';
@@ -11120,9 +11129,105 @@
                     <td style="white-space:nowrap;"><span class="badge ${ok ? 'badge-success' : 'badge-danger'}">${escapeHtml(v.status || '')}</span>${v.mock === true ? ' <span class="badge badge-danger">موقع مزيف</span>' : ''}</td>
                     <td style="font-size:12px;">${escapeHtml([v.failReason, v.competitor ? 'منافس: ' + v.competitor : '', v.purpose, v.notes].filter(Boolean).join(' · '))}</td>
                     <td>${d == null ? '<span style="color:var(--text-light);">—</span>' : (d > 150 ? `<span class="badge badge-warning">${fmtM(d)}</span>` : `<span style="color:#0F6E56;">${fmtM(d)}</span>`)}</td>
+                    <td style="white-space:nowrap;">${v.durationMin == null ? '<span style="color:var(--text-light);font-size:12px;">ما سجّلش وصول</span>' : (v.durationMin < 3 ? `<span class="badge badge-warning">${v.durationMin} د</span>` : v.durationMin + ' د')}</td>
                     <td style="white-space:nowrap;">${v.repLocation ? `<a class="btn btn-info btn-sm" href="${ml(v.repLocation)}" target="_blank" title="مكان المندوب وقت الزيارة">📍 الزيارة</a>` : '<span style="color:var(--text-light);font-size:12px;">من غير موقع</span>'} ${L ? `<a class="btn btn-secondary btn-sm" href="${ml(L)}" target="_blank" title="موقع المحل المتسجل">🏪 المحل</a>` : ''}</td>
                     <td>${v.photo ? `<img src="${v.photo}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;cursor:pointer;" onclick="window.open().document.write('<img src=&quot;'+this.src+'&quot; style=&quot;max-width:100%&quot;>')">` : ''}</td></tr>`;
             }).join('')}</tbody></table>${vs.length > 500 ? '<p style="padding:8px;color:var(--text-light);">ظاهر أول 500 زيارة — نزّل الشيت للكل</p>' : ''}`;
+        }
+        // ==================== (2026-11-13) تنظيم يوم المندوب: بداية/نهاية اليوم + خط السير الثابت + مدة الزيارة ====================
+        const RV_WEEK = [[6, 'السبت'], [0, 'الحد'], [1, 'الاتنين'], [2, 'التلات'], [3, 'الأربع'], [4, 'الخميس'], [5, 'الجمعة']];
+        function rvDayKeyOfSales(ms) { return rvIso(svSalesDayStart(new Date(ms))); }
+        // بداية/نهاية اليوم + التزام بخط السير، لكل مندوب في كل يوم في الفترة
+        function repDayCompliance(list, f, t, reps) {
+            const out = [], vis = list.filter(v => !v.kind && !v.auto);
+            const days = []; for (let d = new Date(f + 'T12:00:00'); rvIso(d) <= t; d.setDate(d.getDate() + 1)) days.push(rvIso(d));
+            days.forEach(day => {
+                const wd = new Date(day + 'T12:00:00').getDay();
+                reps.forEach(r => {
+                    const st = list.find(v => v.kind === 'dayStart' && v.repUsername === r.code && v.dayKey === day);
+                    const en = list.find(v => v.kind === 'dayEnd' && v.repUsername === r.code && v.dayKey === day);
+                    const dv = vis.filter(v => v.repUsername === r.code && rvDayKeyOfSales(new Date(v.date).getTime()) === day);
+                    const planned = customers.filter(c => c.salesmanCode === r.code && Array.isArray(c.visitDays) && c.visitDays.indexOf(wd) !== -1);
+                    const vset = new Set(dv.map(v => String(v.customerCode)));
+                    const plannedDone = planned.filter(c => vset.has(String(c.code))).length;
+                    const durs = dv.map(v => v.durationMin).filter(x => x != null);
+                    if (!st && !dv.length && !planned.length) return;
+                    out.push({ day, wd, r, st, en, visits: dv.length, planned: planned.length, plannedDone, extra: dv.filter(v => !planned.some(c => String(c.code) === String(v.customerCode))).length,
+                        workMin: st ? Math.round(((en ? new Date(en.date) : (day === rvIso(new Date()) ? new Date() : null)) - new Date(st.date)) / 60000) : null,
+                        avgDur: durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : null, short: durs.filter(x => x < 3).length, noCheckin: dv.filter(v => v.durationMin == null).length });
+                });
+            });
+            return out;
+        }
+        function drawRepDaySection() {
+            const box = document.getElementById('rvDays'); if (!box) return;
+            const f = document.getElementById('rvFrom').value, t = document.getElementById('rvTo').value, rep = document.getElementById('rvRep').value;
+            const reps = salesmen.filter(s => s.repType !== 'delivery' && (!rep || s.code === rep));
+            const rows = repDayCompliance(rvCache.all || [], f, t, reps);
+            const tm = v => v ? new Date(v.date).toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit' }) : '';
+            const ml = v => v && v.repLocation && v.repLocation.lat != null ? ` <a href="https://www.google.com/maps?q=${v.repLocation.lat},${v.repLocation.lng}" target="_blank">📍</a>` : '';
+            const hm = m => m == null || isNaN(m) ? '—' : Math.floor(m / 60) + ' س ' + (m % 60) + ' د';
+            box.innerHTML = !rows.length ? '<p style="padding:14px;color:var(--text-light);">مفيش بيانات في الفترة دي</p>' : `<table><thead><tr><th>اليوم</th><th>المندوب</th><th>بدأ</th><th>خلص</th><th>ساعات الشغل</th><th>الزيارات</th><th>خط السير</th><th>زيارات برّه الخط</th><th>متوسط مدة الزيارة</th><th>زيارات أقل من 3 د</th><th>من غير "وصلت"</th></tr></thead><tbody>${rows.map(x => {
+                const pct = x.planned ? Math.round(x.plannedDone / x.planned * 100) : null;
+                return `<tr><td style="white-space:nowrap;">${new Date(x.day + 'T12:00:00').toLocaleDateString('ar-EG-u-nu-latn', { weekday: 'short', day: 'numeric', month: 'short' })}</td><td><b>${escapeHtml(x.r.name)}</b></td>
+                    <td style="white-space:nowrap;">${x.st ? tm(x.st) + ml(x.st) + (x.st.mock === true ? ' <span class="badge badge-danger">مزيف</span>' : '') : '<span class="badge badge-danger">ما بدأش</span>'}</td>
+                    <td style="white-space:nowrap;">${x.en ? tm(x.en) + ml(x.en) : (x.st ? '<span style="color:var(--text-light);">لسه</span>' : '')}</td><td>${hm(x.workMin)}</td><td>${x.visits}</td>
+                    <td>${x.planned ? `<b style="color:${pct >= 85 ? '#0F6E56' : pct >= 60 ? '#b26a00' : '#A32D2D'};">${x.plannedDone} من ${x.planned} (${pct}%)</b>` : '<span style="color:var(--text-light);">مفيش خط</span>'}</td>
+                    <td>${x.extra}</td><td>${x.avgDur == null ? '—' : x.avgDur + ' د'}</td><td>${x.short ? `<span class="badge badge-warning">${x.short}</span>` : 0}</td><td>${x.noCheckin}</td></tr>`;
+            }).join('')}</tbody></table>`;
+        }
+        // ---------- محرر خط السير الأسبوعي ----------
+        let rpDraft = {};
+        function openRoutePlanner() {
+            const reps = salesmen.filter(s => s.repType !== 'delivery');
+            if (!reps.length) { showToast('مفيش مناديب بيع', 'error'); return; }
+            rpDraft = {};
+            showReservedModal('🗓️ خط السير الأسبوعي للمناديب', `
+                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:10px;">
+                    <div class="form-group" style="margin:0;"><label class="form-label">المندوب</label><select class="form-control" id="rpRep" onchange="rpDraft={};drawRoutePlanner()">${reps.map(s => `<option value="${escapeHtml(s.code)}">${escapeHtml(s.name)}</option>`).join('')}</select></div>
+                    <div class="form-group" style="margin:0;"><label class="form-label">حي كامل</label><select class="form-control" id="rpNb"></select></div>
+                    <div class="form-group" style="margin:0;"><label class="form-label">ليوم</label><select class="form-control" id="rpNbDay">${RV_WEEK.map(w => `<option value="${w[0]}">${w[1]}</option>`).join('')}</select></div>
+                    <button class="btn btn-secondary" onclick="rpAssignNeighborhood()">حط الحي في اليوم ده</button>
+                    <button class="btn btn-success" onclick="saveRoutePlanner()"><i class="fas fa-save"></i> احفظ</button>
+                </div>
+                <p style="font-size:12px;color:var(--text-light);margin:0 0 8px;">علّم الأيام اللي المندوب لازم يزور فيها كل عميل. المندوب هيلاقي "خط سير النهارده" جاهز في الأبليكشن، والتقرير هيقولك التزم بيه بنسبة كام.</p>
+                <div id="rpCounts" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"></div>
+                <div class="table-container" id="rpTable"></div>`);
+            drawRoutePlanner();
+        }
+        function rpDays(c) { return rpDraft[c.code] !== undefined ? rpDraft[c.code] : (Array.isArray(c.visitDays) ? c.visitDays.slice() : []); }
+        function drawRoutePlanner() {
+            const code = document.getElementById('rpRep').value;
+            const list = customers.filter(c => c.salesmanCode === code).sort((a, b) => String(a.neighborhood || '').localeCompare(String(b.neighborhood || '')) || String(a.name).localeCompare(String(b.name)));
+            const nbs = Array.from(new Set(list.map(c => c.neighborhood || 'بدون حي')));
+            const nbSel = document.getElementById('rpNb'); const keep = nbSel.value;
+            nbSel.innerHTML = nbs.map(n => `<option>${escapeHtml(n)}</option>`).join(''); if (keep && nbs.includes(keep)) nbSel.value = keep;
+            const cnt = {}; RV_WEEK.forEach(w => cnt[w[0]] = 0); list.forEach(c => rpDays(c).forEach(d => cnt[d] = (cnt[d] || 0) + 1));
+            document.getElementById('rpCounts').innerHTML = RV_WEEK.map(w => `<span class="badge ${cnt[w[0]] ? 'badge-info' : 'badge-secondary'}" style="font-size:12px;">${w[1]}: ${cnt[w[0]]} عميل</span>`).join('') + `<span class="badge badge-warning" style="font-size:12px;">مالهمش يوم: ${list.filter(c => !rpDays(c).length).length}</span>`;
+            document.getElementById('rpTable').innerHTML = !list.length ? '<p>المندوب ده مالوش عملاء</p>' : `<table><thead><tr><th>العميل</th><th>الحي</th>${RV_WEEK.map(w => `<th>${w[1]}</th>`).join('')}</tr></thead><tbody>${list.map(c => {
+                const ds = rpDays(c);
+                return `<tr><td><b>${escapeHtml(c.shopName || c.name)}</b><div style="font-size:11px;color:var(--text-light);">${escapeHtml(c.name || '')}</div></td><td style="font-size:12px;">${escapeHtml(c.neighborhood || '')}</td>${RV_WEEK.map(w => `<td style="text-align:center;"><input type="checkbox" style="width:18px;height:18px;" ${ds.indexOf(w[0]) !== -1 ? 'checked' : ''} onchange="rpToggle('${escapeHtml(c.code)}',${w[0]},this.checked)"></td>`).join('')}</tr>`;
+            }).join('')}</tbody></table>`;
+        }
+        function rpToggle(code, d, on) {
+            const c = customers.find(x => x.code === code); if (!c) return;
+            let ds = rpDays(c).filter(x => x !== d); if (on) ds.push(d); rpDraft[code] = ds.sort();
+            drawRoutePlanner();
+        }
+        function rpAssignNeighborhood() {
+            const code = document.getElementById('rpRep').value, nb = document.getElementById('rpNb').value, d = Number(document.getElementById('rpNbDay').value);
+            const list = customers.filter(c => c.salesmanCode === code && (c.neighborhood || 'بدون حي') === nb);
+            list.forEach(c => { const ds = rpDays(c).filter(x => x !== d); ds.push(d); rpDraft[c.code] = ds.sort(); });
+            showToast(`اتحط ${list.length} عميل من ${nb} في يوم ${RV_WEEK.find(w => w[0] === d)[1]} — متنساش "احفظ"`);
+            drawRoutePlanner();
+        }
+        function saveRoutePlanner() {
+            if (!requireCloudReady()) return;
+            const codes = Object.keys(rpDraft); if (!codes.length) { showToast('مفيش تغييرات'); return; }
+            let n = 0;
+            codes.forEach(code => { const i = customers.findIndex(c => c.code === code); if (i < 0) return; const ds = rpDraft[code]; if (JSON.stringify(customers[i].visitDays || []) === JSON.stringify(ds)) return; customers[i] = Object.assign({}, customers[i], { visitDays: ds }); n++; });
+            if (n) { localStorage.setItem('customers', JSON.stringify(customers)); logAction('خط سير المناديب', `اتعدل خط السير لـ ${n} عميل`); }
+            rpDraft = {}; showToast(n ? `اتحفظ خط السير لـ ${n} عميل ✓` : 'مفيش تغييرات'); drawRoutePlanner();
         }
         function rvExport(kind) {
             const opt = { f: document.getElementById('rvFrom').value, t: document.getElementById('rvTo').value, rep: document.getElementById('rvRep').value };
@@ -11139,12 +11244,12 @@
             const reps = salesmen.filter(s => s.repType !== 'delivery' && (!rep || s.code === rep));
             if (!reps.length) { showToast('مفيش مناديب بيع', 'error'); return; }
             showToast('بيجهّز التقرير...');
-            db.collection('customerVisitRecords').where('date', '>=', new Date(fromMs).toISOString()).get().then(snap => {
+            db.collection('customerVisitRecords').where('date', '>=', new Date(fromMs - 6 * 3600000).toISOString()).get().then(snap => {
                 const rows = {}; // rep|day -> stats
                 const cell = (code, day) => rows[code + '|' + day] || (rows[code + '|' + day] = { v: 0, ok: 0, no: 0, inv: 0, sales: 0 });
                 snap.docs.forEach(d => {
                     const v = d.data();
-                    if (v.kind === 'newCustomer' || v.kind === 'locationChange' || v.auto) return;
+                    if (v.kind || v.auto) return;
                     const ms = new Date(v.date).getTime(); if (!(ms >= fromMs && ms <= toMs)) return;
                     if (!reps.some(r => r.code === v.repUsername)) return;
                     const c = cell(v.repUsername, dayKey(ms)); c.v++; if (v.status === 'ناجحة') c.ok++; else c.no++;
@@ -11180,6 +11285,14 @@
                 const ws2 = XLSX.utils.aoa_to_sheet(sum); ws2['!cols'] = [22, 13, 13, 15, 13, 16, 13, 20, 20].map(w => ({ wch: w }));
                 for (let rr = 1; rr < sum.length; rr++) { const ref = XLSX.utils.encode_cell({ r: rr, c: 5 }); if (ws2[ref]) ws2[ref].z = '#,##0.00'; }
                 XLSX.utils.book_append_sheet(wb, ws2, 'الإجمالي');
+                try {
+                    const comp = repDayCompliance(snap.docs.map(d => d.data()), f, t, reps);
+                    const tm = v => v ? new Date(v.date).toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit' }) : '';
+                    const cRows = [['التاريخ', 'اليوم', 'المندوب', 'بدأ الساعة', 'خلص الساعة', 'ساعات الشغل', 'الزيارات', 'في خط السير', 'زارهم من خط السير', 'نسبة الالتزام', 'زيارات برّه الخط', 'متوسط مدة الزيارة (د)', 'زيارات أقل من 3 د']]
+                        .concat(comp.map(x => [x.day.split('-').reverse().join('/'), new Date(x.day + 'T12:00:00').toLocaleDateString('ar-EG', { weekday: 'long' }), x.r.name, x.st ? tm(x.st) : 'ما بدأش', x.en ? tm(x.en) : '', x.workMin == null ? '' : Math.floor(x.workMin / 60) + ':' + String(x.workMin % 60).padStart(2, '0'), x.visits, x.planned, x.plannedDone, x.planned ? Math.round(x.plannedDone / x.planned * 100) + '%' : '', x.extra, x.avgDur == null ? '' : x.avgDur, x.short]));
+                    const ws3 = XLSX.utils.aoa_to_sheet(cRows); ws3['!cols'] = [12, 11, 20, 11, 11, 11, 10, 12, 16, 12, 14, 18, 16].map(w => ({ wch: w }));
+                    XLSX.utils.book_append_sheet(wb, ws3, 'يوم المندوب وخط السير');
+                } catch (e) { console.error(e); }
                 XLSX.writeFile(wb, `تقرير_المناديب_اليومي_${f}_${t}.xlsx`);
                 showToast(`اتنزل التقرير — ${days.length} يوم × ${reps.length} مندوب`);
             }).catch(e => { console.error(e); showToast('تعذر: ' + (e.message || ''), 'error'); });
@@ -11192,7 +11305,7 @@
             showToast('بيجهّز الشيت...');
             db.collection('customerVisitRecords').where('date', '>=', new Date(fromMs).toISOString()).get().then(snap => {
                 const vs = snap.docs.map(d => Object.assign({ id: d.id }, d.data()))
-                    .filter(v => v.kind !== 'newCustomer' && v.kind !== 'locationChange' && !v.auto)
+                    .filter(v => !v.kind && !v.auto)
                     .filter(v => { const x = new Date(v.date).getTime(); return x >= fromMs && x <= toMs; })
                     .filter(v => !rep || v.repUsername === rep)
                     .sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -11200,7 +11313,7 @@
                 const p2 = n => String(n).padStart(2, '0');
                 const fmtDT = ms => { const d = new Date(ms); let h = d.getHours(); const ap = h >= 12 ? 'م' : 'ص'; h = h % 12 || 12; return { day: `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()}`, time: `${p2(h)}:${p2(d.getMinutes())} ${ap}` }; };
                 const ml = L => L && L.lat != null ? `https://www.google.com/maps?q=${(+L.lat).toFixed(6)},${(+L.lng).toFixed(6)}` : '';
-                const head = ['#', 'التاريخ', 'الوقت', 'اليوم', 'المندوب', 'كود العميل', 'اسم العميل', 'اسم المحل', 'التليفون', 'الحي', 'الحالة', 'سبب عدم الطلب', 'المنافس', 'غرض الزيارة', 'ملاحظات', 'موقع المحل', 'موقع المندوب وقت الزيارة', 'المسافة بينهم (متر)', 'دقة GPS (متر)', 'تنبيه'];
+                const head = ['#', 'التاريخ', 'الوقت', 'اليوم', 'المندوب', 'كود العميل', 'اسم العميل', 'اسم المحل', 'التليفون', 'الحي', 'الحالة', 'سبب عدم الطلب', 'المنافس', 'غرض الزيارة', 'ملاحظات', 'موقع المحل', 'موقع المندوب وقت الزيارة', 'المسافة بينهم (متر)', 'دقة GPS (متر)', 'تنبيه', 'مدة الزيارة (دقيقة)'];
                 const rows = [head], links = [];
                 vs.forEach((v, i) => {
                     const c = customers.find(x => x.code === v.customerCode) || {};
@@ -11210,7 +11323,7 @@
                     const warn = [v.mock === true ? 'موقع مزيف (Fake GPS)' : '', dist !== '' && dist > 150 ? 'الزيارة من بعيد' : '', !v.repLocation ? 'من غير موقع' : ''].filter(Boolean).join(' · ');
                     const a = ml(custLoc), b = ml(v.repLocation);
                     rows.push([i + 1, dt.day, dt.time, new Date(ms).toLocaleDateString('ar-EG', { weekday: 'long' }), v.repFullName || repName(v.repUsername), v.customerCode || '', c.name || v.customerName || '', c.shopName || '', c.phone || '', c.neighborhood || '',
-                        v.status || '', v.failReason || '', v.competitor || '', v.purpose || '', v.notes || '', a ? 'افتح الخريطة' : '', b ? 'افتح الخريطة' : '', dist, v.locAcc || (v.repLocation && v.repLocation.acc) || '', warn]);
+                        v.status || '', v.failReason || '', v.competitor || '', v.purpose || '', v.notes || '', a ? 'افتح الخريطة' : '', b ? 'افتح الخريطة' : '', dist, v.locAcc || (v.repLocation && v.repLocation.acc) || '', warn, v.durationMin == null ? 'ما سجّلش وصول' : v.durationMin]);
                     links.push([a, b]);
                 });
                 // ملخص لكل مندوب
@@ -12644,7 +12757,7 @@
         // أسباب الزيارات اللي ما جابتش طلب
         function showVisitFailReasons() {
             const days = Math.max(1, Number(prompt('آخر كام يوم؟', '30')) || 30), since = Date.now() - days * 86400000;
-            const fails = customerVisits.filter(v => v.kind !== 'newCustomer' && v.kind !== 'locationChange' && v.status === 'غير ناجحة' && new Date(v.date).getTime() >= since);
+            const fails = customerVisits.filter(v => !v.kind && v.status === 'غير ناجحة' && new Date(v.date).getTime() >= since);
             const by = {}, byRep = {}, comp = {};
             fails.forEach(v => {
                 const r = v.failReason || 'مش متسجل'; by[r] = (by[r] || 0) + 1;
