@@ -1026,6 +1026,11 @@
                 <div class="table-container" id="rvDays"></div>
             </div>
             <div class="card" style="margin-top:14px;">
+                <div class="card-header"><div class="card-title"><i class="fas fa-user-clock"></i> عملاء محتاجين متابعة (دلوقتي) ونتيجة المتابعة في الفترة</div></div>
+                <p style="font-size:12px;color:var(--text-light);margin:0 0 8px;">👀 فتح الأبليكشن آخر 3 أيام وما طلبش · 1️⃣ طلب مرة واحدة بس من أول الشهر · 😴 طلب الشهر اللي فات وما طلبش الشهر ده. العميل بيختفي من القايمة لما المندوب يسجّل إنه تابعه. دوس على الرقم يطلعلك الأسماء.</p>
+                <div class="table-container" id="rvFollow"></div>
+            </div>
+            <div class="card" style="margin-top:14px;">
                 <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
                     <div class="card-title"><i class="fas fa-route"></i> الزيارات (<span id="rvCount">0</span>)</div>
                     <button class="btn btn-success btn-sm" onclick="rvExport('visits')"><i class="fas fa-file-excel"></i> نزّل شيت الزيارات Excel</button>
@@ -11121,6 +11126,7 @@
             const ft = d => new Date(d).toLocaleString('ar-EG-u-nu-latn', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
             document.getElementById('rvCount').textContent = vs.length;
             try { drawRepDaySection(); } catch (e) { console.error(e); }
+            try { drawFollowUpCard(); } catch (e) { console.error(e); }
             document.getElementById('rvTable').innerHTML = !vs.length ? '<p style="padding:14px;color:var(--text-light);">مفيش زيارات بالفلتر ده</p>' : `<table><thead><tr><th>الوقت</th><th>المندوب</th><th>العميل / المحل</th><th>التليفون</th><th>الحالة</th><th>السبب / ملاحظات</th><th>بُعد المندوب عن المحل</th><th>مدة الزيارة</th><th>الموقع</th><th>صورة</th></tr></thead><tbody>${vs.slice(0, 500).map(v => {
                 const c = custBy[v.customerCode] || {}; const L = (c.location && c.location.lat != null) ? c.location : v.customerLocation;
                 const d = v.distM != null ? v.distM : (L && v.repLocation ? Math.round(geoDistM(L, v.repLocation)) : null);
@@ -11228,6 +11234,41 @@
             codes.forEach(code => { const i = customers.findIndex(c => c.code === code); if (i < 0) return; const ds = rpDraft[code]; if (JSON.stringify(customers[i].visitDays || []) === JSON.stringify(ds)) return; customers[i] = Object.assign({}, customers[i], { visitDays: ds }); n++; });
             if (n) { localStorage.setItem('customers', JSON.stringify(customers)); logAction('خط سير المناديب', `اتعدل خط السير لـ ${n} عميل`); }
             rpDraft = {}; showToast(n ? `اتحفظ خط السير لـ ${n} عميل ✓` : 'مفيش تغييرات'); drawRoutePlanner();
+        }
+        // ==================== (2026-11-13) عملاء محتاجين متابعة (نفس قواعد أبليكشن المندوب) ====================
+        // 👀 فتح الأبليكشن آخر 3 أيام وما طلبش بعدها · 1️⃣ طلب مرة واحدة بس الشهر ده · 😴 طلب الشهر اللي فات وما طلبش الشهر ده
+        const FU_LISTS = { opened: '👀 فتحوا الأبليكشن وما طلبوش', once: '1️⃣ طلبوا مرة واحدة الشهر ده', lapsed: '😴 بطّلوا الشهر ده' };
+        function followUpLists(repCode, stats, followUps) {
+            const out = { opened: [], once: [], lapsed: [] }, now = Date.now(), mStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+            customers.filter(c => c.salesmanCode === repCode).forEach(c => {
+                const s = stats[c.code]; if (!s) return;
+                const l = (s.l || 0) * 1000, o = (s.o || 0) * 1000;
+                const fu = followUps.filter(f => String(f.customerCode) === String(c.code)).map(f => new Date(f.date).getTime());
+                const doneAfter = t => fu.some(x => x > t);
+                if (o && now - o < 3 * 86400000 && l < o && !doneAfter(o)) out.opened.push({ c, s });
+                if (s.m === 1 && !doneAfter(Math.max(l, mStart))) out.once.push({ c, s });
+                if ((s.pm || 0) >= 1 && !s.m && !doneAfter(mStart)) out.lapsed.push({ c, s });
+            });
+            return out;
+        }
+        function drawFollowUpCard() {
+            const box = document.getElementById('rvFollow'); if (!box) return;
+            const rep = document.getElementById('rvRep').value;
+            const reps = salesmen.filter(s => s.repType !== 'delivery' && (!rep || s.code === rep));
+            let stats = {}; try { stats = repCustStatsPayload(); } catch (e) {}
+            const fuAll = customerVisits.filter(v => v.kind === 'followUp');
+            const inPeriod = (rvCache.all || []).filter(v => v.kind === 'followUp');
+            window._fuCache = {};
+            box.innerHTML = `<table><thead><tr><th>المندوب</th>${Object.keys(FU_LISTS).map(k => `<th>${FU_LISTS[k]}</th>`).join('')}<th>اتابعهم في الفترة</th><th>طلب</th><th>هيطلب بعدين</th><th>مش عايز</th></tr></thead><tbody>${reps.map(r => {
+                const L = followUpLists(r.code, stats, fuAll.filter(f => f.repUsername === r.code)); window._fuCache[r.code] = L;
+                const p = inPeriod.filter(f => f.repUsername === r.code), cnt = k => p.filter(f => f.result === k).length;
+                return `<tr><td><b>${escapeHtml(r.name)}</b></td>${Object.keys(FU_LISTS).map(k => `<td>${L[k].length ? `<a href="javascript:void(0)" onclick="showFollowUpList('${escapeHtml(r.code)}','${k}')"><b>${L[k].length}</b></a>` : '0'}</td>`).join('')}<td>${p.length}</td><td style="color:#0F6E56;">${cnt('ordered')}</td><td>${cnt('later')}</td><td style="color:#A32D2D;">${cnt('no')}</td></tr>`;
+            }).join('')}</tbody></table>`;
+        }
+        function showFollowUpList(code, k) {
+            const L = (window._fuCache || {})[code]; if (!L) return;
+            const d = t => t ? new Date(t * 1000).toLocaleString('ar-EG-u-nu-latn', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '—';
+            showReservedModal(FU_LISTS[k] + ' — ' + repName(code), `<div class="table-container"><table><thead><tr><th>العميل</th><th>التليفون</th><th>آخر طلب</th><th>الشهر ده</th><th>الشهر اللي فات</th><th>آخر فتح للأبليكشن</th></tr></thead><tbody>${L[k].map(x => `<tr><td><b>${escapeHtml(x.c.shopName || x.c.name)}</b><div style="font-size:11px;">${escapeHtml(x.c.name || '')}</div></td><td>${escapeHtml(x.c.phone || '')}</td><td>${x.s.l ? d(x.s.l) : '—'}</td><td>${x.s.m || 0}</td><td>${x.s.pm || 0}</td><td>${x.s.o ? d(x.s.o) : '—'}</td></tr>`).join('')}</tbody></table></div>`);
         }
         function rvExport(kind) {
             const opt = { f: document.getElementById('rvFrom').value, t: document.getElementById('rvTo').value, rep: document.getElementById('rvRep').value };
@@ -12689,24 +12730,39 @@
             return m;
         }
         // إحصائيات العملاء اللي بتروح للمندوب (آخر شراء + يومه المعتاد) — بتتبعت مع repProgress
+        // (2026-11-13) مين فتح الأبليكشن آخر 3 أيام (بنقرا بس المستندات الحديثة، ومرة كل نص ساعة عشان القراية)
+        let appSeenCache = { at: 0, map: {} }, appSeenLoading = false;
+        function refreshAppSeen() {
+            if (!db || appSeenLoading || Date.now() - appSeenCache.at < 30 * 60000) return;
+            appSeenLoading = true;
+            db.collection('customerCarts').where('lastSeenAt', '>=', Date.now() - 3 * 86400000).get().then(snap => {
+                const m = {}; snap.docs.forEach(d => { if (d.id.indexOf('seen_') !== 0) return; const x = d.data() || {}; const l = notifLast10(x.phone || d.id.slice(5)); if (l) m[l] = Math.max(m[l] || 0, Number(x.lastSeenAt) || 0); });
+                appSeenCache = { at: Date.now(), map: m };
+            }).catch(e => console.error('app seen', e)).then(() => { appSeenLoading = false; });
+        }
         function repCustStatsPayload() {
+            try { refreshAppSeen(); } catch (e) {}
             const since = Date.now() - 70 * 86400000, by = {};
+            const now = new Date(), mStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime(), pmStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
             invoices.forEach(i => {
                 if (i.type !== 'sale' || !i.customerCode) return;
                 const t = saleTimeOf(i); if (!t) return;
-                const r = by[i.customerCode] || (by[i.customerCode] = { l: 0, n: 0, wd: {} });
+                const r = by[i.customerCode] || (by[i.customerCode] = { l: 0, n: 0, wd: {}, m: 0, pm: 0 });
                 if (t > r.l) r.l = t;
+                if (t >= mStart) r.m++; else if (t >= pmStart) r.pm++;
                 if (t >= since) { r.n++; const d = svSalesDayStart(new Date(t)).toDateString(); r.wd[d] = 1; }
             });
             const out = {};
             customers.forEach(c => {
                 if (!c.salesmanCode) return;
-                const r = by[c.code]; if (!r) return;
+                const seen = appSeenCache.map[notifLast10(c.phone)] || 0;
+                const r = by[c.code]; if (!r) { if (seen) out[c.code] = { l: 0, u: -1, n: 0, m: 0, pm: 0, o: Math.floor(seen / 1000) }; return; }
                 const cnt = [0, 0, 0, 0, 0, 0, 0]; let days = 0;
                 Object.keys(r.wd).forEach(d => { cnt[new Date(d).getDay()]++; days++; });
                 let u = -1, best = 0; cnt.forEach((v, k) => { if (v > best) { best = v; u = k; } });
                 if (best < 3 || best / Math.max(1, days) < 0.4) u = -1;
-                out[c.code] = { l: Math.floor(r.l / 1000), u, n: r.n };
+                out[c.code] = { l: Math.floor(r.l / 1000), u, n: r.n, m: r.m, pm: r.pm };
+                if (seen) out[c.code].o = Math.floor(seen / 1000);
             });
             return out;
         }
@@ -12801,6 +12857,7 @@
                     const d = map[code], parts = [];
                     if (d.opened.length) parts.push(`👀 ${d.opened.length} فتحوا الأبليكشن ومطلبوش: ${d.opened.slice(0, 3).map(nm).join('، ')}`);
                     if (d.dormant.length) parts.push(`😴 ${d.dormant.length} مطلبوش من 10 أيام أو أكتر: ${d.dormant.slice(0, 3).map(nm).join('، ')}${d.dormant.length > 3 ? '...' : ''}`);
+                    try { const lp = followUpLists(code, repCustStatsPayload(), customerVisits.filter(v => v.kind === 'followUp' && v.repUsername === code)).lapsed; if (lp.length) parts.push(`📉 ${lp.length} كانوا بيطلبوا الشهر اللي فات وما طلبوش الشهر ده: ${lp.slice(0, 3).map(x => nm(x.c)).join('، ')}${lp.length > 3 ? '...' : ''}`); } catch (e) {}
                     notifyRep(code, 'صباح الخير يا ' + String(d.name || '').split(' ')[0] + ' ☀️ عملاء محتاجين زيارتك', parts.join('\n')); sent++;
                 });
                 if (manual) showToast(sent ? `اتبعت ملخص لـ ${sent} مندوب` : 'مفيش مناديب عندهم عملاء محتاجين متابعة النهارده');
