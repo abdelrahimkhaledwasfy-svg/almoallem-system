@@ -11187,19 +11187,48 @@
         function openRoutePlanner() {
             const reps = salesmen.filter(s => s.repType !== 'delivery');
             if (!reps.length) { showToast('مفيش مناديب بيع', 'error'); return; }
-            rpDraft = {};
+            rpDraft = {}; rpSuggested = {};
             showReservedModal('🗓️ خط السير الأسبوعي للمناديب', `
                 <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:10px;">
-                    <div class="form-group" style="margin:0;"><label class="form-label">المندوب</label><select class="form-control" id="rpRep" onchange="rpDraft={};drawRoutePlanner()">${reps.map(s => `<option value="${escapeHtml(s.code)}">${escapeHtml(s.name)}</option>`).join('')}</select></div>
+                    <div class="form-group" style="margin:0;"><label class="form-label">المندوب</label><select class="form-control" id="rpRep" onchange="rpDraft={};rpSuggested={};drawRoutePlanner()">${reps.map(s => `<option value="${escapeHtml(s.code)}">${escapeHtml(s.name)}</option>`).join('')}</select></div>
                     <div class="form-group" style="margin:0;"><label class="form-label">حي كامل</label><select class="form-control" id="rpNb"></select></div>
                     <div class="form-group" style="margin:0;"><label class="form-label">ليوم</label><select class="form-control" id="rpNbDay">${RV_WEEK.map(w => `<option value="${w[0]}">${w[1]}</option>`).join('')}</select></div>
                     <button class="btn btn-secondary" onclick="rpAssignNeighborhood()">حط الحي في اليوم ده</button>
+                    <button class="btn btn-info" onclick="suggestRoutePlan()"><i class="fas fa-wand-magic-sparkles"></i> اقترح من الزيارات</button>
                     <button class="btn btn-success" onclick="saveRoutePlanner()"><i class="fas fa-save"></i> احفظ</button>
                 </div>
                 <p style="font-size:12px;color:var(--text-light);margin:0 0 8px;">علّم الأيام اللي المندوب لازم يزور فيها كل عميل. المندوب هيلاقي "خط سير النهارده" جاهز في الأبليكشن، والتقرير هيقولك التزم بيه بنسبة كام.</p>
                 <div id="rpCounts" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"></div>
                 <div class="table-container" id="rpTable"></div>`);
             drawRoutePlanner();
+        }
+        // (2026-11-13) اقتراح خط السير من الزيارات (آخر 6 أسابيع) — ولو زيارات العميل قليلة من أيام طلباته
+        let rpSuggested = {};
+        function rpWorkDay(ms) { return new Date(ms - 4 * 3600000).getDay(); }
+        function suggestRoutePlan() {
+            if (!db) return;
+            const code = document.getElementById('rpRep').value;
+            const list = customers.filter(c => c.salesmanCode === code);
+            if (!list.length) { showToast('المندوب ده مالوش عملاء', 'error'); return; }
+            const since = Date.now() - 42 * 86400000;
+            showToast('بيحلل زيارات آخر 6 أسابيع...');
+            db.collection('customerVisitRecords').where('date', '>=', new Date(since).toISOString()).get().then(snap => {
+                const vis = {}, invs = {};
+                snap.docs.forEach(d => { const v = d.data(); if (v.kind || v.auto || v.repUsername !== code) return; const ms = new Date(v.date).getTime(); const k = String(v.customerCode); const dayKey = new Date(ms - 4 * 3600000).toDateString(); (vis[k] = vis[k] || {})[dayKey] = rpWorkDay(ms); });
+                const isince = Date.now() - 70 * 86400000;
+                invoices.forEach(i => { if (i.type !== 'sale' || !i.customerCode) return; const ms = saleTimeOf(i); if (!ms || ms < isince) return; const k = String(i.customerCode); const dayKey = new Date(ms - 4 * 3600000).toDateString(); (invs[k] = invs[k] || {})[dayKey] = rpWorkDay(ms); });
+                const pick = m => { if (!m) return null; const cnt = [0, 0, 0, 0, 0, 0, 0]; const days = Object.values(m); days.forEach(d => cnt[d]++); let best = -1, n = 0; cnt.forEach((v, d) => { if (v > n) { n = v; best = d; } }); return (n >= 2 && n / days.length >= 0.4) ? { d: best, n, of: days.length } : null; };
+                rpSuggested = {}; let byVisits = 0, byOrders = 0, none = 0;
+                list.forEach(c => {
+                    const k = String(c.code); const pv = pick(vis[k]); const p = pv || pick(invs[k]);
+                    if (!p) { none++; return; }
+                    if (pv) byVisits++; else byOrders++;
+                    const ds = rpDays(c); if (ds.indexOf(p.d) === -1) { rpDraft[c.code] = ds.concat([p.d]).sort(); }
+                    rpSuggested[c.code] = (pv ? 'زيارات' : 'طلبات') + ': ' + p.n + ' من ' + p.of + ' يوم';
+                });
+                drawRoutePlanner();
+                showToast(`اتقترح يوم لـ ${byVisits + byOrders} عميل (${byVisits} من الزيارات · ${byOrders} من الطلبات) — ${none} من غير نمط واضح. راجع ودوس "احفظ"`, 'success', 7000);
+            }).catch(e => { console.error(e); showToast('تعذر تحميل الزيارات: ' + (e.message || ''), 'error'); });
         }
         function rpDays(c) { return rpDraft[c.code] !== undefined ? rpDraft[c.code] : (Array.isArray(c.visitDays) ? c.visitDays.slice() : []); }
         function drawRoutePlanner() {
@@ -11212,7 +11241,7 @@
             document.getElementById('rpCounts').innerHTML = RV_WEEK.map(w => `<span class="badge ${cnt[w[0]] ? 'badge-info' : 'badge-secondary'}" style="font-size:12px;">${w[1]}: ${cnt[w[0]]} عميل</span>`).join('') + `<span class="badge badge-warning" style="font-size:12px;">مالهمش يوم: ${list.filter(c => !rpDays(c).length).length}</span>`;
             document.getElementById('rpTable').innerHTML = !list.length ? '<p>المندوب ده مالوش عملاء</p>' : `<table><thead><tr><th>العميل</th><th>الحي</th>${RV_WEEK.map(w => `<th>${w[1]}</th>`).join('')}</tr></thead><tbody>${list.map(c => {
                 const ds = rpDays(c);
-                return `<tr><td><b>${escapeHtml(c.shopName || c.name)}</b><div style="font-size:11px;color:var(--text-light);">${escapeHtml(c.name || '')}</div></td><td style="font-size:12px;">${escapeHtml(c.neighborhood || '')}</td>${RV_WEEK.map(w => `<td style="text-align:center;"><input type="checkbox" style="width:18px;height:18px;" ${ds.indexOf(w[0]) !== -1 ? 'checked' : ''} onchange="rpToggle('${escapeHtml(c.code)}',${w[0]},this.checked)"></td>`).join('')}</tr>`;
+                return `<tr style="${rpSuggested[c.code] ? 'background:rgba(46,125,66,0.08);' : ''}"><td><b>${escapeHtml(c.shopName || c.name)}</b><div style="font-size:11px;color:var(--text-light);">${escapeHtml(c.name || '')}${rpSuggested[c.code] ? ` · <span style="color:#2E7D42;">✨ مقترح (${escapeHtml(rpSuggested[c.code])})</span>` : ''}</div></td><td style="font-size:12px;">${escapeHtml(c.neighborhood || '')}</td>${RV_WEEK.map(w => `<td style="text-align:center;"><input type="checkbox" style="width:18px;height:18px;" ${ds.indexOf(w[0]) !== -1 ? 'checked' : ''} onchange="rpToggle('${escapeHtml(c.code)}',${w[0]},this.checked)"></td>`).join('')}</tr>`;
             }).join('')}</tbody></table>`;
         }
         function rpToggle(code, d, on) {
@@ -11233,7 +11262,7 @@
             let n = 0;
             codes.forEach(code => { const i = customers.findIndex(c => c.code === code); if (i < 0) return; const ds = rpDraft[code]; if (JSON.stringify(customers[i].visitDays || []) === JSON.stringify(ds)) return; customers[i] = Object.assign({}, customers[i], { visitDays: ds }); n++; });
             if (n) { localStorage.setItem('customers', JSON.stringify(customers)); logAction('خط سير المناديب', `اتعدل خط السير لـ ${n} عميل`); }
-            rpDraft = {}; showToast(n ? `اتحفظ خط السير لـ ${n} عميل ✓` : 'مفيش تغييرات'); drawRoutePlanner();
+            rpDraft = {}; rpSuggested = {}; showToast(n ? `اتحفظ خط السير لـ ${n} عميل ✓` : 'مفيش تغييرات'); drawRoutePlanner();
         }
         // ==================== (2026-11-13) عملاء محتاجين متابعة (نفس قواعد أبليكشن المندوب) ====================
         // 👀 فتح الأبليكشن آخر 3 أيام وما طلبش بعدها · 1️⃣ طلب مرة واحدة بس الشهر ده · 😴 طلب الشهر اللي فات وما طلبش الشهر ده
