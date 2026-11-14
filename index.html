@@ -12988,7 +12988,17 @@
             logAction('إضافة عميل', `العميل "${nc.name}" (${code}) — جاي من المندوب ${repName(v.repUsername)}`);
             db.collection('customerVisitRecords').doc(id).update({ status: 'approved', customerCode: code, decidedAt: Date.now(), decidedBy: currentUser.username || '' }).catch(e => console.error(e));
             v.status = 'approved'; v.customerCode = code;
-            notifyRep(v.repUsername, 'اتضاف عميلك الجديد ✅', `${nc.shopName || nc.name} بقى من عملاءك — كوده ${code}`);
+            // (2026-11-14) لو المندوب كتب رقم سري للعميل: بنعمله حساب الأبليكشن على طول (لو مالوش حساب)
+            if (n.passHash && /^01[0-9]{9}$/.test(String(n.phone || ''))) {
+                const accRef = db.collection('appCustomers').doc(String(n.phone));
+                accRef.get().then(sn => {
+                    if (sn.exists) return;
+                    return accRef.set({ phone: String(n.phone), passwordHash: n.passHash, createdAt: Date.now(), createdByRep: v.repUsername || '', createdFrom: 'rep-new-customer',
+                        profile: { customerName: nc.name || '', shopName: nc.shopName || nc.name || '', addressDetail: nc.address || '', neighborhood: nc.neighborhood || '', city: 'أسوان', governorate: 'أسوان', location: nc.location ? { lat: nc.location.lat, lng: nc.location.lng } : null } })
+                        .then(() => showToast('واتعمل للعميل حساب على الأبليكشن بالرقم السري اللي كتبه المندوب ✓'));
+                }).catch(e => { console.error('app account', e); showToast('العميل اتضاف، بس حساب الأبليكشن ماتعملش: ' + (e.message || ''), 'error', 6000); });
+            }
+            notifyRep(v.repUsername, 'اتضاف عميلك الجديد ✅', `${nc.shopName || nc.name} بقى من عملاءك — كوده ${code}${n.passHash ? ' — ويقدر يدخل الأبليكشن برقمه والرقم السري اللي كتبته' : ''}`);
             renderCustomers(); updateInvoiceDropdowns(); updateNewCustBadge(); showNewCustomerRequests();
             showToast('اتضاف العميل ' + code);
         }
