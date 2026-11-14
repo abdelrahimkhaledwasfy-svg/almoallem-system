@@ -16685,8 +16685,14 @@
               <div class="grid">
                 <div class="box"><div class="h">فاتورة إلى</div><div style="font-size:14px;font-weight:900;">${esc(shop || name)}</div>${shop ? `<div>${esc(name)}</div>` : ''}${phone ? `<div>${esc(phone)}</div>` : ''}${addr ? `<div>${esc(addr)}</div>` : ''}</div>
                 <div class="box"><div class="h">بيانات الفاتورة</div>
-                  <div class="kv"><span>التاريخ</span><b>${d.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}</b></div>
-                  <div class="kv"><span>الساعة</span><span>${d.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit' })}</span></div>
+                  ${(() => {
+                      // (2026-11-14) التاريخين بوضوح: تاريخ الطلب + تاريخ التسليم (لو اتسلّم)
+                      const od = inv.orderCreatedAt ? new Date(inv.orderCreatedAt) : (inv.sourceOrderId ? null : d);
+                      const orderD = od || d, delivered = !!inv.sourceOrderId && inv.orderCreatedAt;
+                      const fd = x => x.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }), ft = x => x.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit' });
+                      return `<div class="kv"><span>${inv.sourceOrderId && !inv.orderCreatedAt ? 'التاريخ' : 'تاريخ الطلب'}</span><b>${fd(orderD)}</b></div><div class="kv"><span>الساعة</span><span>${ft(orderD)}</span></div>` +
+                          (delivered ? `<div class="kv"><span>تاريخ التسليم</span><b>${fd(d)} — ${ft(d)}</b></div>` : '');
+                  })()}
                   ${rep ? `<div class="kv"><span>المندوب</span><span>${esc(rep)}</span></div>` : ''}
                   <div class="kv"><span>الدفع</span><span>${esc(inv.paymentMethod === 'دفع عند الاستلام' ? 'كاش عند الاستلام' : (inv.paymentMethod || 'نقدي'))}</span></div>
                   ${inv.sourceOrderId && inv.number ? `<div class="kv"><span>رقم الطلب</span><span>${esc(inv.sourceOrderId.slice(-6))}</span></div>` : ''}</div>
