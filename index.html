@@ -11214,6 +11214,26 @@
         // ==================== (2026-11-11) قسم زيارات المناديب (للمدير ومشرف المبيعات) ====================
         // فلتر بالتاريخ (يوم بيع من 9 الصبح لـ 9 الصبح) + المندوب + الحالة، وجدول الزيارات بالموقع، وملخص البيع لكل مندوب
         let rvCache = { key: '', list: [] };
+        // (2026-11-18) مبيعات المندوب = الطلبات اللي اتعملت في الفترة (حتى لو لسه ماتسلّمتش) + الفواتير اليدوية.
+        // قبل كده كانت بتتحسب من فواتير التسليم بس، فاليوم اللي طلباته لسه مع مناديب التسليم كان بيطلع صفر.
+        function repSalesRows(orders, fromMs, toMs) {
+            const out = [], invByOrder = {};
+            invoices.forEach(i => { if (i.type === 'sale' && i.sourceOrderId) invByOrder[i.sourceOrderId] = i; });
+            const byPhone = {}; customers.forEach(c => { const l = notifLast10(c.phone); if (l.length === 10) byPhone[l] = c.code; });
+            (orders || []).forEach(o => {
+                if (['rejected', 'cancelled', 'merged'].includes(o.status)) return;
+                const ms = o.createdAt || 0; if (!(ms >= fromMs && ms <= toMs)) return;
+                let code = resolveCustomerCode(o.customerCode); if (!customers.some(c => c.code === code)) code = byPhone[notifLast10(o.phone || o.customerCode)] || code;
+                const inv = invByOrder[o.id];
+                out.push({ code, ms, total: inv ? (Number(inv.grandTotal) || 0) : (Number(o.total) || 0), delivered: !!inv || o.status === 'delivered' });
+            });
+            invoices.forEach(i => {   // الفواتير اليدوية (من السيستم مش من الأبليكشن)
+                if (i.type !== 'sale' || !i.customerCode || i.sourceOrderId) return;
+                const ms = saleTimeOf(i); if (!(ms >= fromMs && ms <= toMs)) return;
+                out.push({ code: i.customerCode, ms, total: Number(i.grandTotal) || 0, delivered: true });
+            });
+            return out;
+        }
         function rvIso(d) { const p2 = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
         function rvRange(f, t) { const a = new Date(f + 'T09:00:00').getTime(); const e = new Date(t + 'T09:00:00'); e.setDate(e.getDate() + 1); return [a, e.getTime() - 1]; }
         function rvQuick(k) {
@@ -11243,9 +11263,9 @@
             const draw = () => drawRepVisitsSection(fromMs, toMs);
             if (!force && rvCache.key === key) { draw(); return; }
             document.getElementById('rvTable').innerHTML = '<p style="padding:14px;color:var(--text-light);">بيحمّل الزيارات...</p>';
-            db.collection('customerVisitRecords').where('date', '>=', new Date(fromMs - 6 * 3600000).toISOString()).get().then(snap => {
+            Promise.all([db.collection('customerVisitRecords').where('date', '>=', new Date(fromMs - 6 * 3600000).toISOString()).get(), fetchOrdersSince(fromMs)]).then(([snap, orders]) => {
                 const all = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
-                rvCache = { key, all, list: all.filter(v => !v.kind && !v.auto).filter(v => { const ms = new Date(v.date).getTime(); return ms >= fromMs && ms <= toMs; }).sort((a, b) => new Date(b.date) - new Date(a.date)) };
+                rvCache = { key, all, orders, list: all.filter(v => !v.kind && !v.auto).filter(v => { const ms = new Date(v.date).getTime(); return ms >= fromMs && ms <= toMs; }).sort((a, b) => new Date(b.date) - new Date(a.date)) };
                 draw();
             }).catch(e => { console.error(e); document.getElementById('rvTable').innerHTML = '<p style="color:var(--danger);padding:14px;">تعذر تحميل الزيارات: ' + escapeHtml(e.message || '') + '</p>'; });
         }
@@ -11258,7 +11278,7 @@
             // ملخص البيع لكل مندوب
             const sum = {}; reps.forEach(r => sum[r.code] = { v: 0, ok: 0, no: 0, inv: 0, sales: 0, far: 0 });
             rvCache.list.forEach(v => { const s = sum[v.repUsername]; if (!s) return; s.v++; if (v.status === 'ناجحة') s.ok++; else s.no++; if (v.distM != null && v.distM > 150) s.far++; });
-            invoices.forEach(i => { if (i.type !== 'sale' || !i.customerCode) return; const c = custBy[i.customerCode]; if (!c || !sum[c.salesmanCode]) return; const ms = saleTimeOf(i); if (!(ms >= fromMs && ms <= toMs)) return; sum[c.salesmanCode].inv++; sum[c.salesmanCode].sales += Number(i.grandTotal) || 0; });
+            repSalesRows(rvCache.orders || [], fromMs, toMs).forEach(x => { const c = custBy[x.code]; if (!c || !sum[c.salesmanCode]) return; sum[c.salesmanCode].inv++; sum[c.salesmanCode].sales += x.total; });
             const T = Object.values(sum).reduce((a, s) => { a.v += s.v; a.ok += s.ok; a.no += s.no; a.inv += s.inv; a.sales += s.sales; return a; }, { v: 0, ok: 0, no: 0, inv: 0, sales: 0 });
             const fm = n => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
             document.getElementById('rvStats').innerHTML = [['عدد الزيارات', T.v], ['زيارة ناجحة', T.ok], ['زيارة غير ناجحة', T.no], ['عدد الفواتير', T.inv], ['إجمالي المبيعات', fm(T.sales) + ' ج']].map(x => `<div style="flex:1;min-width:130px;background:var(--bg-white,#fff);border:1px solid var(--border-color,#eee);border-radius:12px;padding:12px 14px;"><div style="font-size:12px;color:var(--text-light);">${x[0]}</div><div style="font-size:22px;font-weight:700;margin-top:4px;">${x[1]}</div></div>`).join('');
@@ -11475,7 +11495,7 @@
             const reps = salesmen.filter(s => s.repType !== 'delivery' && (!rep || s.code === rep));
             if (!reps.length) { showToast('مفيش مناديب بيع', 'error'); return; }
             showToast('بيجهّز التقرير...');
-            db.collection('customerVisitRecords').where('date', '>=', new Date(fromMs - 6 * 3600000).toISOString()).get().then(snap => {
+            Promise.all([db.collection('customerVisitRecords').where('date', '>=', new Date(fromMs - 6 * 3600000).toISOString()).get(), fetchOrdersSince(fromMs)]).then(([snap, orders]) => {
                 const rows = {}; // rep|day -> stats
                 const cell = (code, day) => rows[code + '|' + day] || (rows[code + '|' + day] = { v: 0, ok: 0, no: 0, inv: 0, sales: 0 });
                 snap.docs.forEach(d => {
@@ -11486,11 +11506,9 @@
                     const c = cell(v.repUsername, dayKey(ms)); c.v++; if (v.status === 'ناجحة') c.ok++; else c.no++;
                 });
                 const repOfCust = {}; customers.forEach(c => { if (c.salesmanCode) repOfCust[c.code] = c.salesmanCode; });
-                invoices.forEach(i => {
-                    if (i.type !== 'sale' || !i.customerCode) return;
-                    const code = repOfCust[i.customerCode]; if (!code || !reps.some(r => r.code === code)) return;
-                    const ms = saleTimeOf(i); if (!(ms >= fromMs && ms <= toMs)) return;
-                    const c = cell(code, dayKey(ms)); c.inv++; c.sales += Number(i.grandTotal) || 0;
+                repSalesRows(orders, fromMs, toMs).forEach(x => {
+                    const code = repOfCust[x.code]; if (!code || !reps.some(r => r.code === code)) return;
+                    const c = cell(code, dayKey(x.ms)); c.inv++; c.sales += x.total;
                 });
                 const days = []; for (let d = new Date(fromMs); d.getTime() <= toMs; d.setDate(d.getDate() + 1)) days.push(dayKey(d.getTime() + 60000));
                 const head = ['التاريخ', 'اليوم', 'المندوب', 'عدد الزيارات', 'زيارة ناجحة', 'زيارة غير ناجحة', 'عدد الفواتير', 'إجمالي المبيعات'];
