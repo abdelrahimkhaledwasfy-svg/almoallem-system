@@ -11321,7 +11321,7 @@
                     const durs = dv.map(v => v.durationMin).filter(x => x != null);
                     if (!st && !dv.length && !planned.length) return;
                     out.push({ day, wd, r, st, en, visits: dv.length, planned: planned.length, plannedDone, extra: dv.filter(v => !planned.some(c => String(c.code) === String(v.customerCode))).length,
-                        workMin: st ? Math.round(((en ? new Date(en.date) : (day === rvIso(new Date()) ? new Date() : null)) - new Date(st.date)) / 60000) : null,
+                        workMin: (() => { if (!st) return null; const s0 = new Date(st.date).getTime(); let e0 = en ? new Date(en.date).getTime() : (day === rvIso(new Date()) ? Date.now() : Math.max(0, ...dv.map(v => new Date(v.date).getTime()).filter(x => x > s0))); const m = Math.round((e0 - s0) / 60000); return e0 && m >= 0 && m < 24 * 60 ? m : null; })(),
                         avgDur: durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : null, short: durs.filter(x => x < 3).length, noCheckin: dv.filter(v => v.durationMin == null).length });
                 });
             });
@@ -11538,7 +11538,7 @@
                     const comp = repDayCompliance(snap.docs.map(d => d.data()), f, t, reps);
                     const tm = v => v ? new Date(v.date).toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit' }) : '';
                     const cRows = [['التاريخ', 'اليوم', 'المندوب', 'بدأ الساعة', 'خلص الساعة', 'ساعات الشغل', 'الزيارات', 'في خط السير', 'زارهم من خط السير', 'نسبة الالتزام', 'زيارات برّه الخط', 'متوسط مدة الزيارة (د)', 'زيارات أقل من 3 د']]
-                        .concat(comp.map(x => [x.day.split('-').reverse().join('/'), new Date(x.day + 'T12:00:00').toLocaleDateString('ar-EG', { weekday: 'long' }), x.r.name, x.st ? tm(x.st) : 'ما بدأش', x.en ? tm(x.en) : '', x.workMin == null ? '' : Math.floor(x.workMin / 60) + ':' + String(x.workMin % 60).padStart(2, '0'), x.visits, x.planned, x.plannedDone, x.planned ? Math.round(x.plannedDone / x.planned * 100) + '%' : '', x.extra, x.avgDur == null ? '' : x.avgDur, x.short]));
+                        .concat(comp.map(x => [x.day.split('-').reverse().join('/'), new Date(x.day + 'T12:00:00').toLocaleDateString('ar-EG', { weekday: 'long' }), x.r.name, x.st ? tm(x.st) : 'ما بدأش', x.en ? tm(x.en) : (x.st ? 'ما قفلش اليوم' : ''), x.workMin == null ? '' : Math.floor(x.workMin / 60) + ':' + String(x.workMin % 60).padStart(2, '0'), x.visits, x.planned, x.plannedDone, x.planned ? Math.round(x.plannedDone / x.planned * 100) + '%' : '', x.extra, x.avgDur == null ? '' : x.avgDur, x.short]));
                     const ws3 = XLSX.utils.aoa_to_sheet(cRows); ws3['!cols'] = [12, 11, 20, 11, 11, 11, 10, 12, 16, 12, 14, 18, 16].map(w => ({ wch: w }));
                     XLSX.utils.book_append_sheet(wb, ws3, 'يوم المندوب وخط السير');
                 } catch (e) { console.error(e); }
