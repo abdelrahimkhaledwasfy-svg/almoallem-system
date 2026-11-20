@@ -3467,6 +3467,10 @@
                 body: JSON.stringify(payload)
             }).then(function(res) { return res.json(); })
               .then(function(data) {
+                  // (2026-11-20) "مش مشترك" = العميل شال الأبليكشن أو قافل الإشعارات — مش عطل؛ الإشعار وصله في الجرس جوه الأبليكشن
+                  window._pushUnsub = window._pushUnsub || {};
+                  if (data.errors && /not subscribed/i.test(JSON.stringify(data.errors))) { window._pushUnsub[targetPhone] = Date.now(); window.lastPushError = 'العميل قافل الإشعارات أو شال الأبليكشن'; return false; }
+                  if (!data.errors) delete window._pushUnsub[targetPhone];
                   if (data.errors) { console.error('OneSignal send error:', data.errors); window.lastPushError = JSON.stringify(data.errors).slice(0, 300); return false; }
                   return true;
               })
@@ -9218,7 +9222,7 @@
             return db.runTransaction(t => t.get(ref).then(snap => {
                 const items = ((snap.exists && snap.data().items) || []).filter(x => x && x.id !== item.id);
                 items.unshift(item);
-                t.set(ref, { items: items.slice(0, 40), updatedAt: Date.now() });
+                t.set(ref, { items: items.slice(0, 40), updatedAt: Date.now(), pushOff: (snap.exists && snap.data().pushOff) || 0 });
             })).catch(e => console.error('inbox write failed:', key, e));
         }
         function notifItem(title, body, extra) {
@@ -9229,8 +9233,15 @@
             const item = notifItem(title, body, extra);
             return (knownId ? Promise.resolve([knownId]) : resolveAppIds(phone)).then(ids => {
                 if (!ids.length) return 0;
-                notifInboxWrite(notifInboxKey(phone || ids[0]), item);
-                return Promise.all(ids.map(id => sendPushNotification(id, title, body, extra))).then(r => r.some(Boolean) ? 1 : 0);
+                const key = notifInboxKey(phone || ids[0]);
+                return notifInboxWrite(key, item).then(() => Promise.all(ids.map(id => sendPushNotification(id, title, body, extra)))).then(r => {
+                    // بنعلّم في جرس العميل إن إشعاراته مقفولة، فالأبليكشن يطلعله زرار "فعّل الإشعارات" (وبنشيله أول ما توصله)
+                    const ok = r.some(Boolean), off = !ok && ids.every(id => (window._pushUnsub || {})[id]);
+                    window._pushOffState = window._pushOffState || {};
+                    const st = ok ? 0 : (off ? 1 : null);
+                    if (st !== null && window._pushOffState[key] !== st) { window._pushOffState[key] = st; db.collection('appMeta').doc(key).set({ pushOff: st ? Date.now() : 0 }, { merge: true }).catch(() => {}); }
+                    return ok ? 1 : 0;
+                });
             });
         }
         function notifyRep(code, title, body, extra) {

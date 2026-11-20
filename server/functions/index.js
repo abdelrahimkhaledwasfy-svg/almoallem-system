@@ -8,7 +8,7 @@
 // 3) dailyBackup الساعة 3 الفجر: نسخة كاملة من كل الجداول في backups/<اليوم>
 // كل حاجة هنا بتقرا وبتكتب في نفس الأماكن اللي السيستم بيستخدمها؛ مفيش أي مسح لبيانات.
 process.env.TZ = 'Africa/Cairo';
-const SERVER_VERSION = '2026-11-20-2';   // بيتغير مع كل رفع عشان Firebase يعيد إنشاء المواعيد
+const SERVER_VERSION = '2026-11-20-3';   // بيتغير مع كل رفع عشان Firebase يعيد إنشاء المواعيد
 
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { setGlobalOptions } = require('firebase-functions/v2');
@@ -136,13 +136,15 @@ async function publishRepProgress(D) {
 }
 
 // ---------------------------------------------------------------- الإشعارات (نفس notifyCustomerPhone / notifyRep في السيستم)
+const unsub = {};   // أرقام قافلة الإشعارات أو شالت الأبليكشن (مش عطل)
 async function sendPush(targetPhone, title, message, extra) {
     const payload = { targetPhone, title, message };
     if (extra && typeof extra === 'object') { if (extra.image) payload.image = extra.image; payload.data = { kind: extra.kind || '', orderId: extra.orderId || '', productCode: extra.productCode || '' }; }
     try {
         const r = await fetch(PUSH_PROXY, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Origin': PUSH_ORIGIN }, body: JSON.stringify(payload) });
         const data = await r.json().catch(() => ({}));
-        if (data.errors) { console.error('push errors', data.errors); return false; }
+        if (data.errors) { if (/not subscribed/i.test(JSON.stringify(data.errors))) { unsub[targetPhone] = Date.now(); return false; } console.error('push errors', data.errors); return false; }
+        delete unsub[targetPhone];
         return r.ok;
     } catch (e) { console.error('push failed', e); return false; }
 }
@@ -155,7 +157,7 @@ async function inboxWrite(key, item) {
             const s = await t.get(ref);
             const items = ((s.exists && s.data().items) || []).filter(x => x && x.id !== item.id);
             items.unshift(item);
-            t.set(ref, { items: items.slice(0, 40), updatedAt: Date.now() });
+            t.set(ref, { items: items.slice(0, 40), updatedAt: Date.now(), pushOff: (s.exists && s.data().pushOff) || 0 });
         });
     } catch (e) { console.error('inbox', key, e); }
 }
@@ -168,9 +170,12 @@ async function appIdsByL10() {
 async function notifyCustomerPhone(phone, title, body, extra) {
     const ids = (await appIdsByL10())[last10(phone)] || [];
     if (!ids.length) return 0;
-    await inboxWrite(inboxKey(phone || ids[0]), notifItem(title, body, extra));
+    const key = inboxKey(phone || ids[0]);
+    await inboxWrite(key, notifItem(title, body, extra));
     const r = await Promise.all(ids.map(id => sendPush(id, title, body, extra)));
-    return r.some(Boolean) ? 1 : 0;
+    const ok = r.some(Boolean), off = !ok && ids.every(id => unsub[id]);
+    if (ok || off) { try { await db.collection('appMeta').doc(key).set({ pushOff: off ? Date.now() : 0 }, { merge: true }); } catch (e) {} }
+    return ok ? 1 : 0;
 }
 async function notifyRep(code, title, body, extra) {
     if (!code) return false;
