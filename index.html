@@ -455,7 +455,7 @@
         // عدّاد الأخطاء على الجهاز ده (للوحة صحة السيستم)
         try {
             window.__errLog = [];
-            var ce = console.error; console.error = function(){ try { var m = Array.prototype.map.call(arguments, function(a){ return a && a.message ? a.message : (typeof a === 'string' ? a : (a && a.code) || ''); }).join(' ').slice(0, 160); window.__errLog.push({ t: Date.now(), m: m }); if (window.__errLog.length > 50) window.__errLog.shift(); } catch (e) {} return ce.apply(console, arguments); };
+            var ce = console.error; console.error = function(){ try { var m = Array.prototype.map.call(arguments, function(a){ if (a && a.message) return a.message; if (typeof a === 'string') return a; try { return JSON.stringify(a); } catch (x) { return String(a); } }).join(' ').slice(0, 220); window.__errLog.push({ t: Date.now(), m: m }); if (window.__errLog.length > 50) window.__errLog.shift(); } catch (e) {} return ce.apply(console, arguments); };
             window.addEventListener('error', function(e){ try { window.__errLog.push({ t: Date.now(), m: String(e.message || '').slice(0, 160) }); } catch (x) {} });
         } catch (e) {}
     })();
@@ -15213,7 +15213,11 @@
             if (pr) out.push({ lvl: 'warn', t: `${pr} طلب "قيد التجهيز" من أكتر من يوم`, go: "showSection('customer-orders')" });
             if (rd) out.push({ lvl: 'bad', t: `${rd} طلب خرج للتسليم من أكتر من يومين ولسه ما اتقفلش (البضاعة محجوزة والمبيعات مش محسوبة)`, go: "showSection('customer-orders')" });
             if (localStorage.getItem('_syncOutboxPending') === '1') out.push({ lvl: 'bad', t: 'فيه تعديلات على الجهاز ده لسه ما اترفعتش للسحابة — ما تقفلش الصفحة وشيّك على النت' });
-            const errs = (window.__errLog || []).filter(e => now - e.t < 6 * H && !/ERR_FAILED|favicon|ResizeObserver|Could not reach Cloud Firestore|Chart is not defined/.test(e.m));
+            const all = (window.__errLog || []).filter(e => now - e.t < 6 * H && !/ERR_FAILED|favicon|ResizeObserver|Could not reach Cloud Firestore|Chart is not defined/.test(e.m));
+            // إشعار ما وصلش لأن العميل شال الأبليكشن أو قفل الإشعارات: ده طبيعي، مش عطل
+            const unsub = all.filter(e => /OneSignal send error/.test(e.m) && /not subscribed|no.*recipients|invalid_(player|aliases|external)|All included players/i.test(e.m));
+            const errs = all.filter(e => unsub.indexOf(e) === -1);
+            if (unsub.length) out.push({ lvl: 'info', t: `${unsub.length} إشعار ما وصلش لأن العميل شال الأبليكشن أو قافل الإشعارات (طبيعي)` });
             if (errs.length >= 3) out.push({ lvl: 'warn', t: `${errs.length} خطأ حصلوا على الجهاز ده آخر 6 ساعات`, det: errs.slice(-5).map(e => new Date(e.t).toLocaleTimeString('ar-EG-u-nu-latn', { hour: 'numeric', minute: '2-digit' }) + ' — ' + e.m).join('\n') });
             return out;
         }
@@ -15221,6 +15225,7 @@
             const box = document.getElementById('sysHealthCard'); if (!box) return;
             if (!db || !currentUser || !['admin', 'accountant'].includes(xlRole())) { box.style.display = 'none'; return; }
             const out = sysHealthChecks(), now = Date.now();
+            const realCount = () => out.filter(x => x.lvl !== 'info').length;
             Promise.all([
                 db.collection('backups').orderBy(firebase.firestore.FieldPath.documentId(), 'desc').limit(1).get().then(s => s.docs[0] ? s.docs[0].data() : null).catch(() => undefined),
                 db.collection('meta').doc('repProgress').get().then(s => s.exists ? s.data() : null).catch(() => undefined),
@@ -15236,13 +15241,13 @@
                     else if (bk.rawErrors && bk.rawErrors.length) out.push({ lvl: 'warn', t: `النسخة الاحتياطية فيها ${bk.rawErrors.length} جدول ماتقراش`, go: "showSection('backup')" }); }
                 if (rp && rp.updatedAt && now - rp.updatedAt > 30 * 60000) out.push({ lvl: 'warn', t: `تارجت المناديب آخر تحديث ليه من ${Math.round((now - rp.updatedAt) / 60000)} دقيقة (المفروض كل 10 دقايق)` });
                 if (rs) { const k = 'd' + rvIso(new Date()).replace(/-/g, ''), n = (rs[k] && rs[k].__total) || 0; if (n > 40000) out.push({ lvl: 'warn', t: `قراية Firebase النهارده ${n.toLocaleString('en-US')} من السيستم بس`, go: "showSection('backup')" }); }
-                const bad = out.filter(x => x.lvl === 'bad').length;
+                const bad = out.filter(x => x.lvl === 'bad').length, n = realCount();
                 box.style.display = '';
-                box.style.background = !out.length ? 'rgba(46,125,66,0.08)' : bad ? 'rgba(231,76,60,0.1)' : 'rgba(243,156,18,0.12)';
-                box.style.borderRight = '4px solid ' + (!out.length ? 'var(--success)' : bad ? 'var(--danger)' : 'var(--warning)');
-                const head = !out.length ? '<i class="fas fa-heartbeat" style="color:var(--success);"></i> <strong>صحة السيستم: كل حاجة تمام ✓</strong> <span style="color:var(--text-light);font-size:12px;">(نسخة احتياطية، طلبات، تارجت المناديب، رفع البيانات)</span>'
-                    : `<i class="fas fa-heartbeat" style="color:${bad ? 'var(--danger)' : 'var(--warning)'};"></i> <strong>صحة السيستم: ${out.length} حاجة محتاجة تبص عليها</strong> <span style="font-size:12px;color:var(--text-light);">${sysHealthOpen ? '▲' : '▼ اضغط للتفاصيل'}</span>`;
-                box.innerHTML = `<div style="cursor:${out.length ? 'pointer' : 'default'};" onclick="${out.length ? 'sysHealthOpen=!sysHealthOpen;renderSysHealth()' : ''}">${head}</div>` + (out.length && sysHealthOpen ? '<ul style="margin:8px 0 0;padding-right:20px;line-height:2;">' + out.map(x => `<li style="color:${x.lvl === 'bad' ? 'var(--danger)' : 'inherit'};">${escapeHtml(x.t)}${x.go ? ` <a href="javascript:void(0)" onclick="event.stopPropagation();${x.go}">افتح</a>` : ''}${x.det ? `<pre style="white-space:pre-wrap;font-size:11px;direction:ltr;text-align:left;background:rgba(0,0,0,0.04);padding:6px;border-radius:6px;margin:4px 0;">${escapeHtml(x.det)}</pre>` : ''}</li>`).join('') + '</ul>' : '');
+                box.style.background = !n ? 'rgba(46,125,66,0.08)' : bad ? 'rgba(231,76,60,0.1)' : 'rgba(243,156,18,0.12)';
+                box.style.borderRight = '4px solid ' + (!n ? 'var(--success)' : bad ? 'var(--danger)' : 'var(--warning)');
+                const head = !n ? '<i class="fas fa-heartbeat" style="color:var(--success);"></i> <strong>صحة السيستم: كل حاجة تمام ✓</strong> <span style="color:var(--text-light);font-size:12px;">(نسخة احتياطية، طلبات، تارجت المناديب، رفع البيانات)</span>'
+                    : `<i class="fas fa-heartbeat" style="color:${bad ? 'var(--danger)' : 'var(--warning)'};"></i> <strong>صحة السيستم: ${n} حاجة محتاجة تبص عليها</strong> <span style="font-size:12px;color:var(--text-light);">${sysHealthOpen ? '▲' : '▼ اضغط للتفاصيل'}</span>`;
+                box.innerHTML = `<div style="cursor:${out.length ? 'pointer' : 'default'};" onclick="${out.length ? 'sysHealthOpen=!sysHealthOpen;renderSysHealth()' : ''}">${head}</div>` + (out.length && sysHealthOpen ? '<ul style="margin:8px 0 0;padding-right:20px;line-height:2;">' + out.map(x => `<li style="color:${x.lvl === 'bad' ? 'var(--danger)' : x.lvl === 'info' ? 'var(--text-light)' : 'inherit'};">${escapeHtml(x.t)}${x.go ? ` <a href="javascript:void(0)" onclick="event.stopPropagation();${x.go}">افتح</a>` : ''}${x.det ? `<pre style="white-space:pre-wrap;font-size:11px;direction:ltr;text-align:left;background:rgba(0,0,0,0.04);padding:6px;border-radius:6px;margin:4px 0;">${escapeHtml(x.det)}</pre>` : ''}</li>`).join('') + '</ul>' : '');
             });
         }
         setTimeout(function() { try { renderSysHealth(); } catch (e) {} }, 20000);
