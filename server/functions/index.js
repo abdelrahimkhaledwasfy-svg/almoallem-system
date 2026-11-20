@@ -8,6 +8,7 @@
 // 3) dailyBackup الساعة 3 الفجر: نسخة كاملة من كل الجداول في backups/<اليوم>
 // كل حاجة هنا بتقرا وبتكتب في نفس الأماكن اللي السيستم بيستخدمها؛ مفيش أي مسح لبيانات.
 process.env.TZ = 'Africa/Cairo';
+const SERVER_VERSION = '2026-11-20-2';   // بيتغير مع كل رفع عشان Firebase يعيد إنشاء المواعيد
 
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { setGlobalOptions } = require('firebase-functions/v2');
@@ -283,7 +284,7 @@ async function autoNotifTick(D) {
 exports.tick = onSchedule({ schedule: 'every 10 minutes', timeZone: 'Africa/Cairo' }, async () => {
     const alive = await db.collection('meta').doc('sysAlive').get().then(s => (s.exists && s.data()) || {}).catch(() => ({}));
     const sysOpen = alive.at && Date.now() - alive.at < 20 * 60000;
-    await status('lastTick', { at: Date.now(), sysOpen: !!sysOpen });
+    await status('lastTick', { at: Date.now(), sysOpen: !!sysOpen, v: SERVER_VERSION });
     if (sysOpen) return;   // فيه جهاز مدير/محاسب فاتح — هو بيعمل الشغل ده، والسيرفر مبيقراش حاجة (توفير)
     const errs = [];
     let D = null;
