@@ -426,6 +426,34 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+    <script>
+    // (2026-11-20) عدّاد القراية: بيعدّ كام مستند كل جهاز بيقرا من Firebase ومن أنهي جدول، عشان نعرف الفاتورة رايحة فين
+    // قبل ما نغيّر أي حاجة في طريقة التحميل. مجرد عدّ — مبيغيّرش أي بيانات ولا بيأثر على أي شاشة.
+    (function(){
+        try {
+            var counts = {}; window.__readCounts = counts;
+            function add(coll, n){ if (!coll || !n) return; counts[coll] = (counts[coll] || 0) + n; }
+            function collOfDocs(docs){ try { return docs && docs.length ? docs[0].ref.parent.id : ''; } catch (e) { return ''; } }
+            function wrapQuerySnap(snap){ try { if (snap.metadata && snap.metadata.fromCache) return; var ch = snap.docChanges(); add(collOfDocs(ch.map(function(c){ return c.doc; })) || collOfDocs(snap.docs), ch.length || 1); } catch (e) {} }
+            function wrapDocSnap(snap){ try { if (snap.metadata && snap.metadata.fromCache) return; add(snap.ref.parent.id, 1); } catch (e) {} }
+            var fs = firebase.firestore, Q = fs.Query && fs.Query.prototype, D = fs.DocumentReference && fs.DocumentReference.prototype;
+            function patch(proto, wrap){
+                if (!proto || proto.__counted) return; proto.__counted = true;
+                var on = proto.onSnapshot, get = proto.get;
+                proto.onSnapshot = function(){
+                    var a = Array.prototype.slice.call(arguments);
+                    for (var i = 0; i < a.length; i++) {
+                        if (typeof a[i] === 'function') { var f = a[i]; a[i] = function(snap){ wrap(snap); return f.apply(this, arguments); }; break; }
+                        if (a[i] && typeof a[i] === 'object' && typeof a[i].next === 'function') { var o = a[i], nx = o.next; a[i] = Object.assign({}, o, { next: function(snap){ wrap(snap); return nx.apply(o, arguments); } }); break; }
+                    }
+                    return on.apply(this, a);
+                };
+                proto.get = function(){ return get.apply(this, arguments).then(function(snap){ wrap(snap); return snap; }); };
+            }
+            patch(Q, wrapQuerySnap); patch(D, wrapDocSnap);
+        } catch (e) { console.error('read meter', e); }
+    })();
+    </script>
 <style>
 /* (2026-10-10) مديونية العملاء اتشالت من البرنامج */
 .nav-item[data-section="collections"], #collections-section, [data-role-card="credit"], [data-role-card="topDebts"], #customerStatementCard,
@@ -2271,8 +2299,12 @@
                 <p style="font-size:13px;color:var(--text-light);margin:0 0 10px;">بيراجع البيانات الحقيقية ويطلعلك أي حاجة مش مظبوطة: أرقام مكررة، فلوس مش متسجلة، مخزون سالب، وغيرهم. قراءة بس.</p>
                 <div id="healthResult"></div>
             </div>
+            <div class="card" style="border-right:4px solid var(--warning);">
+                <div class="card-header"><div class="card-title"><i class="fas fa-tachometer-alt"></i> استهلاك Firebase (القراية)</div><button class="btn btn-secondary btn-sm" onclick="renderReadStats()"><i class="fas fa-sync"></i> تحديث</button></div>
+                <div id="readStatsBox"></div>
+            </div>
             <div class="card" style="border-right:4px solid var(--accent);">
-                <div class="card-header"><div class="card-title"><i class="fas fa-cloud"></i> النسخ الاحتياطية الأوتوماتيك (آخر 14 يوم)</div><button class="btn btn-secondary btn-sm" onclick="renderCloudBackups()"><i class="fas fa-sync"></i> تحديث</button></div>
+                <div class="card-header"><div class="card-title"><i class="fas fa-cloud"></i> النسخ الاحتياطية الأوتوماتيك (آخر 14 يوم)</div><div style="display:flex;gap:6px;align-items:center;"><span id="cloudBackupStatus"></span><button class="btn btn-primary btn-sm" onclick="runDailyBackup(true)"><i class="fas fa-cloud-upload-alt"></i> اعمل نسخة دلوقتي</button><button class="btn btn-secondary btn-sm" onclick="renderCloudBackups()"><i class="fas fa-sync"></i> تحديث</button></div></div>
                 <p style="font-size:13px;color:var(--text-light);margin:0 0 10px;">كل يوم بتتعمل نسخة كاملة من البيانات لوحدها على السحابة، أول ما المدير أو المحاسب يفتح السيستم. الاسترجاع مش أوتوماتيك عشان الأمان.</p>
                 <div class="table-container"><table><thead><tr><th>اليوم</th><th>الساعة</th><th>اتعملت من</th><th>فيها</th><th>الحجم</th><th></th></tr></thead><tbody id="cloudBackupsTable"></tbody></table></div>
             </div>
@@ -13470,7 +13502,7 @@
             const origShow = showSection;
             showSection = function(name) {
                 const r = origShow.apply(this, arguments);
-                if (name === 'backup') { try { renderCloudBackups(); } catch (e) {} }
+                if (name === 'backup') { try { renderCloudBackups(); } catch (e) {} try { renderReadStats(); } catch (e) {} }
                 if (name === 'rep-custody') { try { renderRepCustody(); } catch (e) {} }
                 if (name === 'daily-sales') { try { renderDailySales(); } catch (e) { console.error(e); } }
                 if (name === 'inventory') { try { renderExpiry(); } catch (e) {} }
@@ -15077,28 +15109,48 @@
         setInterval(function() { try { renderExpiry(); } catch (e) {} }, 300000);
 
         // ==================== نسخة احتياطية أوتوماتيك يومية على السحابة ====================
-        const BACKUP_KEEP = 14, BACKUP_CHUNK = 700000;
+        // (2026-11-20) v2: النسخة بقت كاملة — بتقرا الجداول اللي السيستم مش بيحملها كلها (الطلبات كلها، العهد، حركات المخزن،
+        // الزيارات، النقاط، حسابات العملاء، ...) من السحابة مباشرة + القيود اليومية. والقطعة بقت أصغر عشان الكلام العربي
+        // بياخد ضعف المساحة وكان ممكن القطعة تعدّي حد الـ 1 ميجا فالنسخة تفشل من غير ما حد يحس.
+        const BACKUP_KEEP = 14, BACKUP_CHUNK = 300000;
+        const BACKUP_RAW_COLLECTIONS = ['customerOrders', 'deliveryCollectionRecords', 'stockMovementRecords', 'customerVisitRecords', 'customerLoyaltyPoints',
+            'appCustomers', 'repSettlements', 'orderReservationLedger', 'storeData', 'meta', 'appMeta', 'purchaseDrafts', 'systemRoles', 'counters', 'customerPublic', 'supplierRecords'];
         function backupPayload() {
             return { invoices, purchaseInvoices, salesReturns, purchaseReturns, supplierAdjustments, products, customers, suppliers, inventory,
                 treasury, expenses, salesmen, stockMovements, customerOrders, deliveryCollections, repSettlements, appBrands, appCategories,
-                deliveryZones, neighborhoodZoneMap, salesTargets, users: (users || []).map(u => ({ username: u.username, fullName: u.fullName, role: u.role, active: u.active })) };
+                deliveryZones, neighborhoodZoneMap, salesTargets, journalEntries: accJournals || [],
+                users: (users || []).map(u => ({ username: u.username, fullName: u.fullName, role: u.role, active: u.active })) };
         }
-        function runDailyBackup() {
+        function backupReadRaw() {
+            const raw = {}, errs = [];
+            return Promise.all(BACKUP_RAW_COLLECTIONS.map(c => db.collection(c).get().then(snap => {
+                const m = {}; snap.docs.forEach(d => { m[d.id] = d.data(); }); raw[c] = m;
+            }).catch(e => { errs.push(c + ': ' + ((e && e.code) || e.message || 'خطأ')); }))).then(() => ({ raw, errs }));
+        }
+        function runDailyBackup(force) {
             if (!db || !currentUser || !['admin', 'accountant'].includes(xlRole())) return;
             if (!products.length || (!invoices.length && !purchaseInvoices.length)) return;   // البيانات لسه ماتحملتش
             const day = new Date().toISOString().slice(0, 10);
-            if (localStorage.getItem('_lastBackupDay') === day) return;
+            if (!force && localStorage.getItem('_lastBackupDay2') === day) return;
+            if (window._backupRunning) return; window._backupRunning = true;
             const ref = db.collection('backups').doc(day);
             ref.get().then(function(snap) {
-                if (snap.exists) { localStorage.setItem('_lastBackupDay', day); return; }
-                const payload = backupPayload();
-                const json = JSON.stringify(payload);
-                const parts = []; for (let i = 0; i < json.length; i += BACKUP_CHUNK) parts.push(json.slice(i, i + BACKUP_CHUNK));
-                const counts = {}; Object.keys(payload).forEach(k => { const v = payload[k]; counts[k] = Array.isArray(v) ? v.length : (v && typeof v === 'object' ? Object.keys(v).length : 0); });
-                const writes = parts.map((p, i) => ref.collection('parts').doc(String(i).padStart(3, '0')).set({ i, data: p }));
-                return Promise.all(writes).then(() => ref.set({ day, createdAt: Date.now(), by: pdUser(), parts: parts.length, sizeKB: Math.round(json.length / 1024), counts, complete: true }))
-                    .then(() => { localStorage.setItem('_lastBackupDay', day); logAction('نسخة احتياطية أوتوماتيك', `${day} — ${Math.round(json.length / 1024)} KB`); pruneOldBackups(); renderCloudBackups(); });
-            }).catch(e => console.error('daily backup failed:', e));
+                if (!force && snap.exists && snap.data().complete && snap.data().v === 2) { localStorage.setItem('_lastBackupDay2', day); return; }
+                return backupReadRaw().then(function(r) {
+                    const payload = backupPayload(); payload.raw = r.raw; payload.backupVersion = 2;
+                    const json = JSON.stringify(payload, (k, v) => (v && typeof v === 'object' && v.firestore && typeof v.path === 'string') ? { __ref: v.path } : v);
+                    const parts = []; for (let i = 0; i < json.length; i += BACKUP_CHUNK) parts.push(json.slice(i, i + BACKUP_CHUNK));
+                    const counts = {}; Object.keys(payload).forEach(k => { const v = payload[k]; if (k === 'raw') return; counts[k] = Array.isArray(v) ? v.length : (v && typeof v === 'object' ? Object.keys(v).length : 0); });
+                    Object.keys(r.raw).forEach(c => { counts['raw_' + c] = Object.keys(r.raw[c]).length; });
+                    // القطع القديمة (لو النهارده اتعملت نسخة قديمة) بنمسح الزيادة بعد ما الجديدة تتكتب كلها
+                    const writeAll = () => { let p = Promise.resolve(); for (let i = 0; i < parts.length; i += 8) { const grp = parts.slice(i, i + 8); p = p.then(() => Promise.all(grp.map((d, j) => ref.collection('parts').doc(String(i + j).padStart(3, '0')).set({ i: i + j, data: d })))); } return p; };
+                    return writeAll()
+                        .then(() => ref.set({ day, v: 2, createdAt: Date.now(), by: pdUser(), parts: parts.length, sizeKB: Math.round(json.length / 1024), counts, rawErrors: r.errs, complete: true }))
+                        .then(() => ref.collection('parts').get()).then(ps => Promise.all(ps.docs.filter(d => Number(d.id) >= parts.length).map(d => d.ref.delete())))
+                        .then(() => { localStorage.setItem('_lastBackupDay2', day); logAction('نسخة احتياطية أوتوماتيك', `${day} — ${Math.round(json.length / 1024)} KB${r.errs.length ? ' — جداول ماتقريتش: ' + r.errs.join('، ') : ''}`); pruneOldBackups(); renderCloudBackups(); if (force) showToast('النسخة اتعملت ✓ (' + Math.round(json.length / 1024) + ' KB)'); });
+                });
+            }).catch(e => { console.error('daily backup failed:', e); try { localStorage.setItem('_lastBackupErr', new Date().toISOString() + ' — ' + ((e && (e.code || e.message)) || 'خطأ')); } catch (x) {} if (force) showToast('النسخة فشلت: ' + ((e && (e.code || e.message)) || ''), 'error'); })
+              .finally(() => { window._backupRunning = false; });
         }
         function pruneOldBackups() {
             db.collection('backups').get().then(snap => {
@@ -15114,8 +15166,12 @@
             if (!tb || !db) return;
             db.collection('backups').get().then(snap => {
                 const rows = snap.docs.map(d => d.data()).filter(b => b.complete).sort((a, b) => String(b.day).localeCompare(String(a.day)));
-                tb.innerHTML = rows.map(b => `<tr><td><strong>${escapeHtml(b.day)}</strong></td><td>${new Date(b.createdAt).toLocaleTimeString('ar-EG')}</td><td>${escapeHtml((b.by && b.by.name) || '')}</td><td>${b.counts ? `${b.counts.invoices || 0} بيع · ${b.counts.purchaseInvoices || 0} شراء · ${b.counts.products || 0} صنف` : ''}</td><td>${b.sizeKB} KB</td><td style="white-space:nowrap;"><button class="btn btn-info btn-sm" onclick="downloadCloudBackup('${escapeHtml(b.day)}')"><i class="fas fa-download"></i> تحميل</button> <button class="btn btn-warning btn-sm admin-only" onclick="restoreMissingFromBackup('${escapeHtml(b.day)}')"><i class="fas fa-undo"></i> رجّع الناقص</button></td></tr>`).join('')
+                tb.innerHTML = rows.map(b => `<tr><td><strong>${escapeHtml(b.day)}</strong></td><td>${new Date(b.createdAt).toLocaleTimeString('ar-EG')}</td><td>${escapeHtml((b.by && b.by.name) || '')}</td><td>${b.counts ? `${b.counts.invoices || 0} بيع · ${b.counts.purchaseInvoices || 0} شراء · ${b.counts.products || 0} صنف` + (b.v === 2 ? ` · ${b.counts.raw_customerOrders || 0} طلب · ${b.counts.raw_customerVisitRecords || 0} زيارة · ${b.counts.journalEntries || 0} قيد <span class="badge badge-success">كاملة</span>` : ' <span class="badge badge-warning">قديمة (ناقصة)</span>') + (b.rawErrors && b.rawErrors.length ? ` <span class="badge badge-danger" title="${escapeHtml(b.rawErrors.join(' | '))}">${b.rawErrors.length} جدول ماتقراش</span>` : '') : ''}</td><td>${b.sizeKB} KB</td><td style="white-space:nowrap;"><button class="btn btn-info btn-sm" onclick="downloadCloudBackup('${escapeHtml(b.day)}')"><i class="fas fa-download"></i> تحميل</button> <button class="btn btn-warning btn-sm admin-only" onclick="restoreMissingFromBackup('${escapeHtml(b.day)}')"><i class="fas fa-undo"></i> رجّع الناقص</button></td></tr>`).join('')
                     || '<tr><td colspan="6" style="text-align:center;color:var(--text-light);padding:15px;">أول نسخة هتتعمل تلقائي النهارده</td></tr>';
+                const last = rows[0], st = document.getElementById('cloudBackupStatus');
+                if (st) { const age = last ? Math.floor((Date.now() - last.createdAt) / 86400000) : null; const le = localStorage.getItem('_lastBackupErr');
+                    st.innerHTML = !last ? '<span class="badge badge-danger">مفيش ولا نسخة لسه</span>' : age >= 2 ? `<span class="badge badge-danger">آخر نسخة من ${age} يوم — في مشكلة</span>` : '<span class="badge badge-success">آخر نسخة النهارده/امبارح ✓</span>';
+                    if (le && (!last || new Date(le.slice(0, 24)).getTime() > last.createdAt)) st.innerHTML += ` <span style="color:var(--danger);font-size:12px;">آخر محاولة فشلت: ${escapeHtml(le)}</span>`; }
             }).catch(e => { tb.innerHTML = '<tr><td colspan="6" style="color:var(--danger);">تعذر قراءة النسخ: ' + escapeHtml(e.message || '') + '</td></tr>'; });
         }
         function downloadCloudBackup(day) {
@@ -15127,6 +15183,41 @@
             }).catch(e => { console.error(e); showToast('تعذر تحميل النسخة', 'error'); });
         }
         setInterval(function() { try { runDailyBackup(); } catch (e) { console.error(e); } }, 120000);
+
+        // ==================== عدّاد القراية من Firebase ====================
+        // كل جهاز بيبعت كل 10 دقايق هو قرا كام مستند ومن أنهي جدول (معمول بـ increment فمفيش جهاز بيمسح عدّ التاني)
+        function readStatsDayKey() { return 'd' + rvIso(new Date()).replace(/-/g, ''); }
+        function flushReadStats() {
+            const c = window.__readCounts; if (!db || !currentUser || !c) return;
+            const keys = Object.keys(c).filter(k => c[k] > 0); if (!keys.length) return;
+            const inc = firebase.firestore.FieldValue.increment, day = readStatsDayKey(), snap = {}; let total = 0;
+            keys.forEach(k => { snap[k] = inc(c[k]); total += c[k]; });
+            const who = String(currentUser.username || 'x').replace(/[.~*\/\[\]]/g, '_');
+            snap['__u_' + who] = inc(total); snap['__total'] = inc(total);
+            keys.forEach(k => { c[k] = 0; });
+            db.collection('meta').doc('readStats').set({ [day]: snap, updatedAt: Date.now() }, { merge: true }).catch(e => { console.error('readStats', e); });
+        }
+        setInterval(function() { try { flushReadStats(); } catch (e) {} }, 600000);
+        window.addEventListener('pagehide', function() { try { flushReadStats(); } catch (e) {} });
+        function renderReadStats() {
+            const box = document.getElementById('readStatsBox'); if (!box || !db) return;
+            try { flushReadStats(); } catch (e) {}
+            db.collection('meta').doc('readStats').get().then(snap => {
+                const d = snap.exists ? snap.data() : {};
+                const days = Object.keys(d).filter(k => /^d\d{8}$/.test(k)).sort().reverse();
+                // تنضيف: بنسيب آخر 21 يوم بس
+                if (days.length > 21 && ['admin', 'accountant'].includes(xlRole())) { const del = {}; days.slice(21).forEach(k => { del[k] = firebase.firestore.FieldValue.delete(); }); snap.ref.update(del).catch(() => {}); }
+                const show = days.slice(0, 7);
+                if (!show.length) { box.innerHTML = '<p style="color:var(--text-light);">لسه مفيش أرقام — الأجهزة بتبعت كل 10 دقايق، ارجع بعد شوية</p>'; return; }
+                const colls = {}; show.forEach(k => Object.keys(d[k] || {}).forEach(c => { if (!/^__/.test(c)) colls[c] = (colls[c] || 0) + (d[k][c] || 0); }));
+                const top = Object.keys(colls).sort((a, b) => colls[b] - colls[a]).slice(0, 12);
+                const fmt = n => Number(n || 0).toLocaleString('en-US'), lbl = k => k.slice(7, 9) + '/' + k.slice(5, 7);
+                const users = {}; show.forEach(k => Object.keys(d[k] || {}).forEach(c => { if (/^__u_/.test(c)) users[c.slice(4)] = (users[c.slice(4)] || 0) + d[k][c]; }));
+                box.innerHTML = `<div class="table-container"><table><thead><tr><th>اليوم</th><th>الإجمالي</th>${top.map(c => `<th>${escapeHtml(c)}</th>`).join('')}</tr></thead><tbody>${show.map(k => `<tr><td><strong>${lbl(k)}</strong></td><td><strong>${fmt(d[k].__total)}</strong></td>${top.map(c => `<td>${fmt((d[k] || {})[c])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+                    <p style="font-size:12px;color:var(--text-light);margin:8px 0 0;">حسب المستخدم (آخر ${show.length} يوم): ${Object.keys(users).sort((a, b) => users[b] - users[a]).map(u => `${escapeHtml(u)} ${fmt(users[u])}`).join(' · ')}</p>
+                    <p style="font-size:12px;color:var(--text-light);margin:4px 0 0;">ده قراية السيستم بس (أجهزة الإدارة). أبليكيشن العملاء والمناديب مش محسوب هنا. المجاني من Firebase 50,000 قراية في اليوم.</p>`;
+            }).catch(e => { box.innerHTML = '<p style="color:var(--danger);">تعذر: ' + escapeHtml(e.message || '') + '</p>'; });
+        }
         setTimeout(function() { try { runDailyBackup(); } catch (e) {} }, 90000);
 
 
