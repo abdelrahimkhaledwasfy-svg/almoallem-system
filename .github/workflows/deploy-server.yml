@@ -35,3 +35,17 @@ jobs:
           npx --yes firebase-tools@14 deploy --only functions --project almoallem-system --force --non-interactive \
             || { echo "محاولة تانية بعد دقيقتين (الخدمات الجديدة بتاخد وقت تشتغل)"; sleep 120; npx --yes firebase-tools@14 deploy --only functions --project almoallem-system --force --non-interactive; }
           rm -f "$RUNNER_TEMP/sa.json"
+      - name: Verify (status + logs)
+        if: always() && env.skip != '1'
+        env: { SA: '${{ secrets.FIREBASE_SA }}' }
+        run: |
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/sa.json" --quiet || true
+          echo "== functions"; gcloud functions list --project almoallem-system --format="table(name,state,environment)" 2>&1 || true
+          echo "== scheduler"; gcloud scheduler jobs list --project almoallem-system --location europe-west1 --format="table(name,schedule,state,lastAttemptTime,status.code)" 2>&1 || true
+          echo "== tick logs"; gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="tick"' --project almoallem-system --limit 15 --freshness=2h --format="value(timestamp,severity,textPayload,httpRequest.status)" 2>&1 || true
+          echo "== status"; cd server/functions && node -e "
+            const a=require('firebase-admin');a.initializeApp({projectId:'almoallem-system'});
+            const db=a.firestore();Promise.all(['serverStatus','sysAlive'].map(d=>db.collection('meta').doc(d).get())).then(r=>{r.forEach(s=>console.log(s.id,JSON.stringify(s.data()||null)));process.exit(0)}).catch(e=>{console.log('read failed',e.message);process.exit(0)})" || true
+          rm -f "$RUNNER_TEMP/sa.json"
