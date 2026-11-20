@@ -18,7 +18,7 @@ jobs:
           if [ -z "$SA" ]; then echo "::warning::المفتاح FIREBASE_SA لسه مش متحط في GitHub Secrets — مفيش رفع"; echo "skip=1" >> "$GITHUB_ENV"; fi
       - uses: actions/setup-node@v4
         if: env.skip != '1'
-        with: { node-version: '20' }
+        with: { node-version: '22' }
       - name: Install
         if: env.skip != '1'
         run: cd server/functions && npm install --no-audit --no-fund
@@ -29,5 +29,5 @@ jobs:
           printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
           cd server
-          npx --yes firebase-tools@13 deploy --only functions --project almoallem-system --force --non-interactive
+          npx --yes firebase-tools@14 deploy --only functions --project almoallem-system --force --non-interactive
           rm -f "$RUNNER_TEMP/sa.json"
