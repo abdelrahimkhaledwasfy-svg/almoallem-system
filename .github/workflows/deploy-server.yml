@@ -28,6 +28,10 @@ jobs:
         run: |
           printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          # خدمات Google اللي الرفع محتاجها ومش بتتفعّل لوحدها
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/sa.json" --quiet || true
+          gcloud services enable cloudbilling.googleapis.com cloudscheduler.googleapis.com run.googleapis.com eventarc.googleapis.com --project almoallem-system --quiet || true
           cd server
-          npx --yes firebase-tools@14 deploy --only functions --project almoallem-system --force --non-interactive
+          npx --yes firebase-tools@14 deploy --only functions --project almoallem-system --force --non-interactive \
+            || { echo "محاولة تانية بعد دقيقتين (الخدمات الجديدة بتاخد وقت تشتغل)"; sleep 120; npx --yes firebase-tools@14 deploy --only functions --project almoallem-system --force --non-interactive; }
           rm -f "$RUNNER_TEMP/sa.json"
