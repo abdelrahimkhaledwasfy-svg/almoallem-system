@@ -1,0 +1,33 @@
+# بيرفع كود السيرفر (server/functions) على Firebase لوحده كل ما الكود يتغير.
+# المفتاح بيتقري من GitHub Secrets (FIREBASE_SA) ومبيظهرش في أي مكان.
+name: Deploy server (Firebase Functions)
+on:
+  push:
+    branches: [main]
+    paths: ['server/**', '.github/workflows/deploy-server.yml']
+  workflow_dispatch:
+concurrency: deploy-server
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check key
+        env: { SA: '${{ secrets.FIREBASE_SA }}' }
+        run: |
+          if [ -z "$SA" ]; then echo "::warning::المفتاح FIREBASE_SA لسه مش متحط في GitHub Secrets — مفيش رفع"; echo "skip=1" >> "$GITHUB_ENV"; fi
+      - uses: actions/setup-node@v4
+        if: env.skip != '1'
+        with: { node-version: '20' }
+      - name: Install
+        if: env.skip != '1'
+        run: cd server/functions && npm install --no-audit --no-fund
+      - name: Deploy
+        if: env.skip != '1'
+        env: { SA: '${{ secrets.FIREBASE_SA }}' }
+        run: |
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          cd server
+          npx --yes firebase-tools@13 deploy --only functions --project almoallem-system --force --non-interactive
+          rm -f "$RUNNER_TEMP/sa.json"

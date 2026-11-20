@@ -13164,6 +13164,14 @@
             db.collection('meta').doc('repProgress').set(Object.assign({ updatedAt: Date.now() }, payload)).catch(e => { repProgressLastJson = ''; console.error('rep progress publish failed:', e); });
         }
         setInterval(function() { try { publishRepProgress(); } catch (e) { console.error(e); } }, 10 * 60000);
+        // (2026-11-20) "أنا فاتح": جهاز المدير/المحاسب بيقول للسيرفر إنه شغال، فالسيرفر يسيبله الشغل (توفير قراية).
+        // لو مفيش جهاز قال كده من 20 دقيقة، السيرفر بيعمل التارجت والإشعارات التلقائية بنفسه.
+        function sysAliveBeat() {
+            try { if (!db || !currentUser || !isCloudReady() || !['admin', 'accountant'].includes(xlRole()) || document.hidden) return;
+                db.collection('meta').doc('sysAlive').set({ at: Date.now(), by: currentUser.username || '' }).catch(e => console.error('sysAlive', e)); } catch (e) {}
+        }
+        setInterval(sysAliveBeat, 8 * 60000);
+        setTimeout(sysAliveBeat, 60000);
         setTimeout(function() { try { publishRepProgress(); } catch (e) { console.error(e); } }, 90000);
 
         function renderSupervisorDashboard() {
@@ -15216,8 +15224,11 @@
             Promise.all([
                 db.collection('backups').orderBy(firebase.firestore.FieldPath.documentId(), 'desc').limit(1).get().then(s => s.docs[0] ? s.docs[0].data() : null).catch(() => undefined),
                 db.collection('meta').doc('repProgress').get().then(s => s.exists ? s.data() : null).catch(() => undefined),
-                db.collection('meta').doc('readStats').get().then(s => s.exists ? s.data() : null).catch(() => undefined)
-            ]).then(([bk, rp, rs]) => {
+                db.collection('meta').doc('readStats').get().then(s => s.exists ? s.data() : null).catch(() => undefined),
+                db.collection('meta').doc('serverStatus').get().then(s => s.exists ? s.data() : null).catch(() => undefined)
+            ]).then(([bk, rp, rs, ss]) => {
+                if (ss && ss.lastTick && now - ss.lastTick.at > 40 * 60000) out.push({ lvl: 'bad', t: `السيرفر واقف من ${Math.round((now - ss.lastTick.at) / 60000)} دقيقة (التارجت والإشعارات مش هتشتغل لما الأجهزة تقفل)` });
+                if (ss && ss.lastErrors && now - ss.lastErrors.at < 6 * 3600000) out.push({ lvl: 'warn', t: 'السيرفر قابل أخطاء آخر 6 ساعات', det: (ss.lastErrors.errs || []).join('\n') });
                 if (bk === null) out.push({ lvl: 'bad', t: 'مفيش ولا نسخة احتياطية على السحابة', go: "showSection('backup')" });
                 else if (bk) { const d = Math.floor((now - (bk.createdAt || 0)) / 86400000);
                     if (d >= 2) out.push({ lvl: 'bad', t: `آخر نسخة احتياطية من ${d} يوم`, go: "showSection('backup')" });
