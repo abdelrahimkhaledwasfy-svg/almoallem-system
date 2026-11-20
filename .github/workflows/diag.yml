@@ -1,0 +1,15 @@
+# تشخيص يدوي (قراية بس) — بيشتغل لما يتطلب
+name: Diagnose
+on: { workflow_dispatch: {} }
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - env: { SA: '${{ secrets.FIREBASE_SA }}' }
+        run: |
+          cd server/functions && npm install --no-audit --no-fund >/dev/null 2>&1; cd ../..
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"; export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          node server/tools/diag.js; rm -f "$RUNNER_TEMP/sa.json"
