@@ -1,0 +1,6 @@
+{
+  "name": "almoallem-system-tests",
+  "private": true,
+  "description": "Automatic checks to run before every update: cd tests && npm install && node run.js",
+  "dependencies": { "firebase": "10.12.2" }
+}
